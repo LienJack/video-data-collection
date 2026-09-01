@@ -14,3 +14,9 @@ export async function requireApiAdmin(): Promise<Viewer> {
   if (viewer.role !== "admin") throw new DomainError("FORBIDDEN", "无权执行该操作", 403);
   return viewer;
 }
+
+export async function requireApiParticipant(): Promise<Viewer> {
+  const viewer = await requireApiViewer();
+  if (viewer.role !== "participant") throw new DomainError("FORBIDDEN", "无权执行该操作", 403);
+  return viewer;
+}

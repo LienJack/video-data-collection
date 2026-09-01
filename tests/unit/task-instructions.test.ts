@@ -1,5 +1,10 @@
 import { describe, expect, it } from "vitest";
-import { taskContentHash, type TaskInstructions } from "@/src/domain/task-instructions";
+import {
+  criterionDisplayStatus,
+  taskContentHash,
+  taskInstructionsSchema,
+  type TaskInstructions,
+} from "@/src/domain/task-instructions";
 
 const instructions: TaskInstructions = {
   schemaVersion: "ego-task/1",
@@ -29,5 +34,15 @@ describe("task instructions", () => {
   it("produces a stable content hash", () => {
     expect(taskContentHash(instructions)).toBe(taskContentHash(structuredClone(instructions)));
     expect(taskContentHash(instructions)).toHaveLength(64);
+  });
+
+  it("enforces ordered steps, unique codes and explicit future capability labels", () => {
+    const invalid = structuredClone(instructions);
+    invalid.recordingGuide.steps[0].order = 2;
+    invalid.requiredObjects.push({ code: "desk", label: "重复桌面", mustBeVisible: false });
+    expect(taskInstructionsSchema.safeParse(invalid).success).toBe(false);
+    expect(criterionDisplayStatus("metadata")).toBe("not_checked");
+    expect(criterionDisplayStatus("manual")).toBe("manual_review");
+    expect(criterionDisplayStatus("future_cv")).toBe("future_capability");
   });
 });

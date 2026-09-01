@@ -1,7 +1,7 @@
 import { createHash } from "node:crypto";
 import { z } from "zod";
 
-export const taskInstructionsSchema = z.object({
+const taskInstructionsBaseSchema = z.object({
   schemaVersion: z.literal("ego-task/1"),
   title: z.string().min(1).max(120),
   description: z.string().min(1).max(2_000),
@@ -40,6 +40,43 @@ export const taskInstructionsSchema = z.object({
   })).max(40),
   privacyChecklist: z.array(z.string().min(1).max(500)).max(30),
 });
+
+export const taskInstructionsSchema = taskInstructionsBaseSchema.superRefine((value, context) => {
+  const expectedOrders = value.recordingGuide.steps.map((_, index) => index + 1);
+  const actualOrders = value.recordingGuide.steps.map((step) => step.order);
+  if (actualOrders.some((order, index) => order !== expectedOrders[index])) {
+    context.addIssue({
+      code: "custom",
+      path: ["recordingGuide", "steps"],
+      message: "录制步骤必须按 1 开始连续排序",
+    });
+  }
+  for (const [path, codes] of [
+    [["requiredObjects"], value.requiredObjects.map((item) => item.code)],
+    [["completionCriteria"], value.completionCriteria.map((item) => item.code)],
+  ] as const) {
+    if (new Set(codes).size !== codes.length) {
+      context.addIssue({ code: "custom", path: [...path], message: "code 必须唯一" });
+    }
+  }
+});
+
+export const criterionDisplayStatusSchema = z.enum([
+  "checked",
+  "not_checked",
+  "manual_review",
+  "future_capability",
+]);
+
+export type CriterionDisplayStatus = z.infer<typeof criterionDisplayStatusSchema>;
+
+export function criterionDisplayStatus(
+  validator: TaskInstructions["completionCriteria"][number]["validator"],
+): CriterionDisplayStatus {
+  if (validator === "future_cv") return "future_capability";
+  if (validator === "manual") return "manual_review";
+  return "not_checked";
+}
 
 export type TaskInstructions = z.infer<typeof taskInstructionsSchema>;
 

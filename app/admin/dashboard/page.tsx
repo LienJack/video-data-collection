@@ -1,10 +1,14 @@
 import { Activity, Database, ShieldCheck } from "lucide-react";
 import { requireAdmin } from "@/src/server/auth";
+import { database } from "@/src/server/database";
 
 export const dynamic = "force-dynamic";
 
 export default async function AdminDashboardPage() {
   const viewer = await requireAdmin();
+  const [migration] = await database()<{ count: number }[]>`
+    select count(*)::integer as count from egocapture.schema_migrations
+  `;
   return (
     <main className="min-h-screen px-6 py-8 sm:px-10">
       <header className="flex flex-wrap items-center justify-between gap-6 border-b border-[var(--line)] pb-6">
@@ -17,7 +21,7 @@ export default async function AdminDashboardPage() {
       <section className="grid gap-4 py-10 md:grid-cols-3">
         {[
           [ShieldCheck, "身份与 RLS", "已启用"],
-          [Database, "Migration", "3 / 3"],
+          [Database, "Migration", `${migration.count} applied`],
           [Activity, "业务数据", "等待 Demo Seed"],
         ].map(([Icon, label, value]) => (
           <article key={String(label)} className="border border-[var(--line)] bg-white/35 p-6">
