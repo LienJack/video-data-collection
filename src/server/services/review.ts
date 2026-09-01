@@ -644,6 +644,7 @@ export async function getAdminUpload(viewer: Viewer, uploadPublicId: string) {
   uploadPublicIdSchema.parse(uploadPublicId);
   const db = database();
   const [upload] = await db<{
+    id: string;
     publicId: string;
     originalFilename: string;
     contentType: string;
@@ -652,6 +653,15 @@ export async function getAdminUpload(viewer: Viewer, uploadPublicId: string) {
     metadataStatus: string;
     objectKey: string | null;
     storageDeletedAt: Date | null;
+    localModifiedAt: Date | null;
+    claimedSessionPublicId: string | null;
+    unableToDetermine: boolean;
+    participantNote: string | null;
+    fingerprintV1: string;
+    failureCode: string | null;
+    verifiedAt: Date | null;
+    expectedExpiresAt: Date;
+    videoAssetId: string | null;
     videoAssetPublicId: string | null;
     decisionType: string | null;
     deviceConsistency: string | null;
@@ -659,9 +669,12 @@ export async function getAdminUpload(viewer: Viewer, uploadPublicId: string) {
     participantAlias: string;
     createdAt: Date;
   }[]>`
-    select intent.public_id, intent.original_filename, intent.content_type, intent.size_bytes::integer,
+    select intent.id, intent.public_id, intent.original_filename, intent.content_type, intent.size_bytes::integer,
       intent.transfer_status, intent.metadata_status, object.object_key, object.deleted_at as storage_deleted_at,
-      asset.public_id as video_asset_public_id, decision.decision_type,
+      intent.local_modified_at, claimed_session.public_id as claimed_session_public_id,
+      intent.unable_to_determine, intent.participant_note, intent.fingerprint_v1,
+      intent.failure_code, intent.verified_at, intent.expected_expires_at,
+      asset.id as video_asset_id, asset.public_id as video_asset_public_id, decision.decision_type,
       metadata.device_consistency, participant.public_id as participant_public_id,
       participant.display_alias as participant_alias, intent.created_at
     from egocapture.upload_intents intent
@@ -671,12 +684,105 @@ export async function getAdminUpload(viewer: Viewer, uploadPublicId: string) {
     left join egocapture.video_assets asset on asset.upload_intent_id = intent.id
     left join egocapture.asset_files asset_file on asset_file.video_asset_id = asset.id and asset_file.file_role = 'source'
     left join egocapture.stored_objects object on object.id = asset_file.stored_object_id
+    left join egocapture.recording_sessions claimed_session on claimed_session.id = intent.claimed_session_id
     left join egocapture.current_match_decisions decision on decision.video_asset_id = asset.id
     left join egocapture.video_file_metadata metadata on metadata.video_asset_id = asset.id
     where intent.public_id = ${uploadPublicId}
   `;
   if (!upload) throw new DomainError("NOT_FOUND", "Upload 或资源不存在", 404);
-  return upload;
+  const attempts = await db<{
+    publicId: string;
+    attemptNumber: number;
+    provider: string;
+    status: string;
+    bytesUploaded: number;
+    expiresAt: Date | null;
+    startedAt: Date | null;
+    completedAt: Date | null;
+    errorCode: string | null;
+  }[]>`
+    select public_id, attempt_number, provider, status, bytes_uploaded::integer,
+      expires_at, started_at, completed_at, error_code
+    from egocapture.upload_attempts
+    where upload_intent_id = ${upload.id}::uuid
+    order by attempt_number desc
+  `;
+  const [metadata] = upload.videoAssetId ? await db<{
+    parserName: string;
+    parserVersion: string;
+    containerFormat: string | null;
+    durationMs: number | null;
+    fileSizeBytes: number | null;
+    videoCodec: string | null;
+    width: number | null;
+    height: number | null;
+    frameRate: number | null;
+    bitrate: number | null;
+    audioCodec: string | null;
+    audioChannels: number | null;
+    normalizedCaptureTime: Date | null;
+    captureTimeSource: string | null;
+    captureTimeConfidence: string;
+    timezoneOffset: string | null;
+    cameraManufacturer: string | null;
+    cameraModel: string | null;
+    cameraSerialHash: string | null;
+    gpsMetadataPresent: boolean;
+    projectionType: string | null;
+    is360: boolean | null;
+    deviceConsistency: string;
+    extractedAt: Date;
+  }[]>`
+    select parser_name, parser_version, container_format, duration_ms::integer,
+      file_size_bytes::integer, video_codec, width, height, frame_rate::float8,
+      bitrate::integer, audio_codec, audio_channels, normalized_capture_time,
+      capture_time_source, capture_time_confidence, timezone_offset,
+      camera_manufacturer, camera_model, camera_serial_hash,
+      gps_metadata_present, projection_type, is_360, device_consistency, extracted_at
+    from egocapture.video_file_metadata
+    where video_asset_id = ${upload.videoAssetId}::uuid
+  ` : [];
+  const metadataAttempts = upload.videoAssetId ? await db<{
+    attemptNumber: number;
+    parserName: string;
+    parserVersion: string;
+    status: string;
+    rangeRequestCount: number;
+    bytesRead: number;
+    startedAt: Date;
+    completedAt: Date | null;
+    errorCode: string | null;
+  }[]>`
+    select attempt_number, parser_name, parser_version, status, range_request_count,
+      bytes_read::integer, started_at, completed_at, error_code
+    from egocapture.metadata_attempts
+    where video_asset_id = ${upload.videoAssetId}::uuid
+    order by attempt_number desc
+  ` : [];
+  const evidence = upload.videoAssetId ? await db<{
+    fieldName: string;
+    normalizedValue: unknown;
+    parserName: string;
+    source: string;
+  }[]>`
+    select field_name, normalized_value, parser_name, source
+    from egocapture.metadata_evidence
+    where video_asset_id = ${upload.videoAssetId}::uuid
+    order by field_name
+  ` : [];
+  const relatedReviews = await db<{
+    publicId: string;
+    caseType: string;
+    status: string;
+    isFixture: boolean;
+  }[]>`
+    select public_id, case_type, status, is_fixture
+    from egocapture.review_cases
+    where upload_intent_id = ${upload.id}::uuid
+      or (${upload.videoAssetId}::uuid is not null and video_asset_id = ${upload.videoAssetId}::uuid)
+    order by created_at desc, public_id desc
+  `;
+  return { ...upload, attempts, metadata: metadata ?? null, metadataAttempts, evidence, relatedReviews };
 }
 
 export async function adminUploadSignedUrl(viewer: Viewer, uploadPublicId: string) {
