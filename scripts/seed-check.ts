@@ -147,7 +147,42 @@ async function main() {
       if (error !== rollbackMarker) throw error;
     }
 
-    console.log("Demo Seed 验证通过：基线、Missing accepted-asset 语义与不可变 current MatchDecision");
+    const optionalSerialRollback = new Error("ROLLBACK_OPTIONAL_SERIAL_CHECK");
+    try {
+      await db.begin(async (transaction) => {
+        await transaction`
+          insert into egocapture.devices (
+            id, public_id, study_id, manufacturer, model, device_type, serial_hmac
+          ) values
+            (${randomUUID()}::uuid, 'DEV-TESTAB', '10000000-0000-4000-8000-000000000001'::uuid, 'Test', 'No Serial A', 'camera', null),
+            (${randomUUID()}::uuid, 'DEV-TESTAC', '10000000-0000-4000-8000-000000000001'::uuid, 'Test', 'No Serial B', 'camera', null)
+        `;
+        throw optionalSerialRollback;
+      });
+    } catch (error) {
+      if (error !== optionalSerialRollback) throw error;
+    }
+
+    let duplicateSerialRejected = false;
+    try {
+      await db.begin(async (transaction) => {
+        const duplicateSerial = "a".repeat(64);
+        await transaction`
+          insert into egocapture.devices (
+            id, public_id, study_id, manufacturer, model, device_type, serial_hmac
+          ) values
+            (${randomUUID()}::uuid, 'DEV-TESTAD', '10000000-0000-4000-8000-000000000001'::uuid, 'Test', 'Duplicate Serial A', 'camera', ${duplicateSerial}),
+            (${randomUUID()}::uuid, 'DEV-TESTAE', '10000000-0000-4000-8000-000000000001'::uuid, 'Test', 'Duplicate Serial B', 'camera', ${duplicateSerial})
+        `;
+      });
+    } catch (error) {
+      duplicateSerialRejected =
+        typeof error === "object" && error !== null && "code" in error && error.code === "23505";
+      if (!duplicateSerialRejected) throw error;
+    }
+    assert(duplicateSerialRejected, "相同 Study 的重复非空 serial_hmac 必须被拒绝");
+
+    console.log("Demo Seed 验证通过：基线、Missing 语义、可选设备序列号与不可变 current MatchDecision");
   } finally {
     await db.end({ timeout: 2 });
   }
