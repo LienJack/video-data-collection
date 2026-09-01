@@ -14,6 +14,7 @@ import {
 import { createPublicId } from "@/src/domain/public-id";
 import { writeAudit } from "@/src/server/audit";
 import type { Viewer } from "@/src/server/auth";
+import { decodeCreatedAtCursor, encodeCreatedAtCursor } from "@/src/server/cursor";
 import { database } from "@/src/server/database";
 import { serverEnvironment } from "@/src/server/env";
 import { withIdempotency } from "@/src/server/idempotency";
@@ -27,6 +28,13 @@ export const createSessionSchema = z.object({
 });
 
 export const sessionReasonSchema = z.object({ reason: z.string().trim().min(10).max(500) });
+
+export const adminSessionListSchema = z.object({
+  search: z.string().trim().max(160).optional(),
+  status: z.enum(["open", "closed"]).optional(),
+  cursor: z.string().max(512).optional(),
+  limit: z.coerce.number().int().min(1).max(100).default(50),
+});
 
 async function createSignedMarker(input: {
   sessionPublicId: string;
@@ -384,9 +392,13 @@ export async function acknowledgeMarker(viewer: Viewer, sessionPublicId: string,
   });
 }
 
-export async function listAdminSessions(viewer: Viewer) {
+export async function listAdminSessions(
+  viewer: Viewer,
+  input: z.infer<typeof adminSessionListSchema> = adminSessionListSchema.parse({}),
+) {
+  const cursor = decodeCreatedAtCursor(input.cursor);
   const db = database();
-  return await db<{
+  const rows = await db<{
     publicId: string;
     assignmentPublicId: string;
     participantPublicId: string;
@@ -416,8 +428,27 @@ export async function listAdminSessions(viewer: Viewer) {
     join egocapture.devices device on device.id = session.declared_device_id
     join egocapture.study_memberships membership on membership.study_id = session.study_id
     where membership.profile_id = ${viewer.profileId}::uuid and membership.status = 'active'
-    order by session.created_at desc
+      and (${input.search ?? null}::text is null
+        or session.public_id ilike '%' || ${input.search ?? ""} || '%'
+        or assignment.public_id ilike '%' || ${input.search ?? ""} || '%'
+        or participant.public_id ilike '%' || ${input.search ?? ""} || '%'
+        or participant.display_alias ilike '%' || ${input.search ?? ""} || '%'
+        or version.instructions ->> 'title' ilike '%' || ${input.search ?? ""} || '%')
+      and (${input.status ?? null}::text is null or session.status = ${input.status ?? ""})
+      and (
+        ${cursor?.createdAt ?? null}::timestamptz is null
+        or (session.created_at, session.public_id) < (${cursor?.createdAt ?? null}::timestamptz, ${cursor?.publicId ?? ""})
+      )
+    order by session.created_at desc, session.public_id desc
+    limit ${input.limit + 1}
   `;
+  const hasMore = rows.length > input.limit;
+  const items = rows.slice(0, input.limit);
+  const last = items.at(-1);
+  return {
+    items,
+    nextCursor: hasMore && last ? encodeCreatedAtCursor({ createdAt: last.createdAt, publicId: last.publicId }) : null,
+  };
 }
 
 export async function closeSession(

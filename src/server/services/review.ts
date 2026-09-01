@@ -7,6 +7,7 @@ import { DomainError } from "@/src/domain/errors";
 import { compareDeviceConsistency } from "@/src/metadata/device-consistency";
 import { writeAudit } from "@/src/server/audit";
 import type { Viewer } from "@/src/server/auth";
+import { decodeCreatedAtCursor, encodeCreatedAtCursor } from "@/src/server/cursor";
 import { database } from "@/src/server/database";
 import { withIdempotency } from "@/src/server/idempotency";
 import { createSupabaseAdminClient } from "@/src/server/supabase/admin";
@@ -17,7 +18,20 @@ const uploadPublicIdSchema = z.string().regex(/^UP-[23456789ABCDEFGHJKLMNPQRSTUV
 export const reviewListSchema = z.object({
   status: z.enum(["open", "in_review", "resolved", "dismissed"]).optional(),
   caseType: z.enum(["missing", "upload_failed", "metadata_failed", "duplicate_candidate", "unmatched", "device_mismatch", "needs_review"]).optional(),
-  cursor: z.string().datetime().optional(),
+  cursor: z.string().max(512).optional(),
+  limit: z.coerce.number().int().min(1).max(100).default(50),
+});
+
+export const adminUploadListSchema = z.object({
+  search: z.string().trim().max(160).optional(),
+  transferStatus: z.enum(["created", "uploading", "reconciling", "verified", "failed", "aborted", "expired"]).optional(),
+  metadataStatus: z.enum(["pending", "processing", "extracted", "partial", "unsupported", "failed"]).optional(),
+  cursor: z.string().max(512).optional(),
+  limit: z.coerce.number().int().min(1).max(100).default(50),
+});
+
+export const auditListSchema = z.object({
+  cursor: z.string().max(512).optional(),
   limit: z.coerce.number().int().min(1).max(100).default(50),
 });
 
@@ -39,6 +53,7 @@ export const reviewDecisionSchema = z.object({
 type ReviewDecisionInput = z.infer<typeof reviewDecisionSchema>;
 
 export async function listReviewCases(viewer: Viewer, input: z.infer<typeof reviewListSchema>) {
+  const cursor = decodeCreatedAtCursor(input.cursor);
   const db = database();
   const items = await db<{
     publicId: string;
@@ -80,7 +95,10 @@ export async function listReviewCases(viewer: Viewer, input: z.infer<typeof revi
     left join egocapture.participants participant on participant.id = coalesce(asset.participant_id, session_assignment.participant_id, review_assignment.participant_id, direct_upload.participant_id)
     where (${input.status ?? null}::text is null or review.status = ${input.status ?? null})
       and (${input.caseType ?? null}::text is null or review.case_type = ${input.caseType ?? null})
-      and (${input.cursor ?? null}::timestamptz is null or review.created_at < ${input.cursor ?? null}::timestamptz)
+      and (
+        ${cursor?.createdAt ?? null}::timestamptz is null
+        or (review.created_at, review.public_id) < (${cursor?.createdAt ?? null}::timestamptz, ${cursor?.publicId ?? ""})
+      )
     order by review.created_at desc, review.public_id desc
     limit ${input.limit + 1}
   `;
@@ -88,7 +106,7 @@ export async function listReviewCases(viewer: Viewer, input: z.infer<typeof revi
   const page = hasMore ? items.slice(0, input.limit) : items;
   return {
     items: page,
-    nextCursor: hasMore ? page.at(-1)?.createdAt.toISOString() ?? null : null,
+    nextCursor: hasMore && page.at(-1) ? encodeCreatedAtCursor({ createdAt: page.at(-1)!.createdAt, publicId: page.at(-1)!.publicId }) : null,
   };
 }
 
@@ -564,9 +582,13 @@ export async function decideReviewCase(
   }));
 }
 
-export async function listAdminUploads(viewer: Viewer) {
+export async function listAdminUploads(
+  viewer: Viewer,
+  input: z.infer<typeof adminUploadListSchema> = adminUploadListSchema.parse({}),
+) {
+  const cursor = decodeCreatedAtCursor(input.cursor);
   const db = database();
-  return await db<{
+  const rows = await db<{
     publicId: string;
     originalFilename: string;
     transferStatus: string;
@@ -595,9 +617,27 @@ export async function listAdminUploads(viewer: Viewer) {
     left join egocapture.video_assets asset on asset.upload_intent_id = intent.id
     left join egocapture.current_match_decisions decision on decision.video_asset_id = asset.id
     left join egocapture.video_file_metadata metadata on metadata.video_asset_id = asset.id
-    order by intent.created_at desc
-    limit 100
+    where (${input.search ?? null}::text is null
+      or intent.public_id ilike '%' || ${input.search ?? ""} || '%'
+      or intent.original_filename ilike '%' || ${input.search ?? ""} || '%'
+      or participant.public_id ilike '%' || ${input.search ?? ""} || '%'
+      or participant.display_alias ilike '%' || ${input.search ?? ""} || '%')
+      and (${input.transferStatus ?? null}::text is null or intent.transfer_status = ${input.transferStatus ?? ""})
+      and (${input.metadataStatus ?? null}::text is null or intent.metadata_status = ${input.metadataStatus ?? ""})
+      and (
+        ${cursor?.createdAt ?? null}::timestamptz is null
+        or (intent.created_at, intent.public_id) < (${cursor?.createdAt ?? null}::timestamptz, ${cursor?.publicId ?? ""})
+      )
+    order by intent.created_at desc, intent.public_id desc
+    limit ${input.limit + 1}
   `;
+  const hasMore = rows.length > input.limit;
+  const items = rows.slice(0, input.limit);
+  const last = items.at(-1);
+  return {
+    items,
+    nextCursor: hasMore && last ? encodeCreatedAtCursor({ createdAt: last.createdAt, publicId: last.publicId }) : null,
+  };
 }
 
 export async function getAdminUpload(viewer: Viewer, uploadPublicId: string) {
@@ -651,10 +691,13 @@ export async function adminUploadSignedUrl(viewer: Viewer, uploadPublicId: strin
   return { uploadPublicId, signedUrl: data.signedUrl, expiresAt: new Date(Date.now() + 5 * 60 * 1000).toISOString() };
 }
 
-export async function listAuditEvents(viewer: Viewer, cursor: string | null = null) {
-  const parsedCursor = cursor ? z.string().datetime().parse(cursor) : null;
+export async function listAuditEvents(
+  viewer: Viewer,
+  input: z.infer<typeof auditListSchema> = auditListSchema.parse({}),
+) {
+  const cursor = decodeCreatedAtCursor(input.cursor);
   const db = database();
-  return await db<{
+  const rows = await db<{
     id: string;
     action: string;
     entityType: string;
@@ -673,10 +716,20 @@ export async function listAuditEvents(viewer: Viewer, cursor: string | null = nu
     join egocapture.study_memberships membership on membership.study_id = audit.study_id
       and membership.profile_id = ${viewer.profileId}::uuid and membership.status = 'active'
     left join egocapture.profiles profile on profile.id = audit.actor_profile_id
-    where (${parsedCursor}::timestamptz is null or audit.created_at < ${parsedCursor}::timestamptz)
-    order by audit.created_at desc
-    limit 100
+    where (
+      ${cursor?.createdAt ?? null}::timestamptz is null
+      or (audit.created_at, audit.id::text) < (${cursor?.createdAt ?? null}::timestamptz, ${cursor?.publicId ?? ""})
+    )
+    order by audit.created_at desc, audit.id desc
+    limit ${input.limit + 1}
   `;
+  const hasMore = rows.length > input.limit;
+  const items = rows.slice(0, input.limit);
+  const last = items.at(-1);
+  return {
+    items,
+    nextCursor: hasMore && last ? encodeCreatedAtCursor({ createdAt: last.createdAt, publicId: last.id }) : null,
+  };
 }
 
 export async function dashboardSummary(viewer: Viewer) {
@@ -721,6 +774,6 @@ export async function dashboardSummary(viewer: Viewer) {
       and membership.profile_id = ${viewer.profileId}::uuid and membership.status = 'active'
     group by intent.transfer_status order by intent.transfer_status
   `;
-  const audits = await listAuditEvents(viewer);
-  return { summary, assignmentFunnel, uploadFunnel, recentAudits: audits.slice(0, 8) };
+  const audits = await listAuditEvents(viewer, { limit: 8 });
+  return { summary, assignmentFunnel, uploadFunnel, recentAudits: audits.items };
 }
