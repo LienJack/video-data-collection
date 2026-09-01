@@ -1,4 +1,4 @@
-import { createHash, randomBytes, randomUUID } from "node:crypto";
+import { randomBytes, randomUUID } from "node:crypto";
 import { execFileSync } from "node:child_process";
 import { mkdtempSync, readFileSync, rmSync, statSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -43,7 +43,11 @@ function generateSyntheticMp4() {
     "-hide_banner", "-loglevel", "error",
     "-f", "lavfi", "-i", "testsrc2=size=1280x720:rate=30",
     "-t", "5", "-c:v", "libx264", "-preset", "ultrafast", "-crf", "10",
-    "-pix_fmt", "yuv420p", "-movflags", "+faststart", file,
+    "-pix_fmt", "yuv420p",
+    "-metadata", "com.apple.quicktime.make=Synthetic",
+    "-metadata", "com.apple.quicktime.model=TUS Check Cam",
+    "-metadata", "com.apple.quicktime.creationdate=2026-09-01T12:34:56+08:00",
+    "-movflags", "+faststart+use_metadata_tags", file,
   ]);
   return { directory, file };
 }
@@ -86,6 +90,7 @@ async function main() {
   const jar = new CookieJar();
   let participantUserId: string | undefined;
   let uploadPublicId = "";
+  let damagedUploadPublicId = "";
   let sessionPublicId = "";
   try {
     const { data: participant, error } = await supabase.auth.admin.createUser({
@@ -121,7 +126,7 @@ async function main() {
         id, public_id, study_id, manufacturer, model, device_type, serial_hmac, status, is_fixture
       ) values (
         ${deviceId}::uuid, ${devicePublicId}, ${studyId}::uuid, 'Synthetic', 'TUS Check Cam',
-        'phone', ${createHash("sha256").update(suffix).digest("hex")}, 'active', true
+        'phone', null, 'active', true
       )
     `;
     await db`
@@ -337,6 +342,35 @@ async function main() {
         && replay.payload.data.videoAssetPublicId === completed.payload.data.videoAssetPublicId,
       "Upload Complete was not idempotent",
     );
+    const metadata = await api<{ data?: {
+      status: string;
+      containerFormat: string | null;
+      durationMs: number | null;
+      videoCodec: string | null;
+      width: number | null;
+      height: number | null;
+      rangeRequestCount: number;
+      bytesRead: number;
+      deviceConsistency: string;
+    } }>(env.siteUrl, `/api/uploads/${uploadPublicId}/extract-metadata`, { method: "POST", jar });
+    assert(metadata.response.ok && metadata.payload.data?.status === "extracted", "Metadata extraction did not complete");
+    assert(metadata.payload.data.containerFormat === "MPEG-4", "MediaInfo did not identify the MP4 container");
+    assert(metadata.payload.data.videoCodec === "AVC", "MediaInfo did not identify the H.264/AVC track");
+    assert(metadata.payload.data.width === 1280 && metadata.payload.data.height === 720, "MediaInfo resolution mismatch");
+    assert(metadata.payload.data.durationMs && metadata.payload.data.durationMs >= 4_900 && metadata.payload.data.durationMs <= 5_100, "MediaInfo duration mismatch");
+    assert(metadata.payload.data.rangeRequestCount > 0 && metadata.payload.data.rangeRequestCount <= 24, "Metadata Range request budget mismatch");
+    assert(metadata.payload.data.bytesRead > 0 && metadata.payload.data.bytesRead <= 16 * 1024 * 1024, "Metadata byte budget mismatch");
+    assert(metadata.payload.data.deviceConsistency === "matched", "Declared and extracted synthetic device did not match");
+    const metadataReplay = await api<{ data?: { status: string; attemptNumber: number } }>(
+      env.siteUrl,
+      `/api/uploads/${uploadPublicId}/extract-metadata`,
+      { method: "POST", jar },
+    );
+    assert(
+      metadataReplay.response.ok && metadataReplay.payload.data?.status === "extracted"
+        && metadataReplay.payload.data.attemptNumber === 1,
+      "Extract Metadata replay was not idempotent",
+    );
     const [evidence] = await db<{
       storedSize: number;
       assetCount: number;
@@ -346,6 +380,10 @@ async function main() {
       decisionType: string;
       assignmentStatus: string;
       auditCount: number;
+      metadataStatus: string;
+      metadataAttemptStatus: string;
+      evidenceCount: number;
+      metadataReviewCount: number;
     }[]>`
       select
         stored.size_bytes::integer as stored_size,
@@ -355,7 +393,11 @@ async function main() {
         (select count(*)::integer from egocapture.upload_attempts where upload_intent_id = intent.id and status = 'expired') as expired_attempt_count,
         decision.decision_type,
         assignment.status as assignment_status,
-        (select count(*)::integer from egocapture.audit_events where study_id = ${studyId}::uuid) as audit_count
+        (select count(*)::integer from egocapture.audit_events where study_id = ${studyId}::uuid) as audit_count,
+        intent.metadata_status,
+        (select status from egocapture.metadata_attempts where video_asset_id = asset.id order by attempt_number desc limit 1) as metadata_attempt_status,
+        (select count(*)::integer from egocapture.metadata_evidence where video_asset_id = asset.id) as evidence_count,
+        (select count(*)::integer from egocapture.review_cases where video_asset_id = asset.id and case_type = 'metadata_failed') as metadata_review_count
       from egocapture.upload_intents intent
       join egocapture.stored_objects stored on stored.upload_intent_id = intent.id
       join egocapture.video_assets asset on asset.upload_intent_id = intent.id
@@ -371,14 +413,104 @@ async function main() {
       evidence.storedSize === fileSize && evidence.assetCount === 1 &&
       evidence.attemptStatus === "completed" && evidence.attemptCount === 2 && evidence.expiredAttemptCount === 1 &&
       evidence.decisionType === "participant_claim" && evidence.assignmentStatus === "submitted" &&
-      evidence.auditCount >= 4,
+      evidence.auditCount >= 5 && evidence.metadataStatus === "extracted" &&
+      evidence.metadataAttemptStatus === "extracted" && evidence.evidenceCount >= 8 &&
+      evidence.metadataReviewCount === 0,
       "TUS Upload database, match or audit evidence mismatch",
+    );
+
+    const damagedBytes = Buffer.from("This is intentionally not an MP4 container.");
+    const damagedFingerprint = fingerprintV1(
+      damagedBytes.byteLength,
+      new Uint8Array(damagedBytes),
+      new Uint8Array(damagedBytes),
+    );
+    const damagedBatch = await api<{ data?: { batchPublicId: string } }>(env.siteUrl, "/api/upload-batches", {
+      method: "POST", jar, headers: { "idempotency-key": randomUUID() },
+    });
+    assert(damagedBatch.response.status === 201 && damagedBatch.payload.data, "Damaged fixture batch creation failed");
+    const damagedIntent = await api<{ data?: typeof credential }>(env.siteUrl, "/api/upload-intents", {
+      method: "POST", jar,
+      headers: { "content-type": "application/json", "idempotency-key": randomUUID() },
+      body: JSON.stringify({
+        batchPublicId: damagedBatch.payload.data.batchPublicId,
+        originalFilename: "damaged.mp4",
+        sizeBytes: damagedBytes.byteLength,
+        contentType: "video/mp4",
+        extension: "mp4",
+        localModifiedAt: null,
+        claimedSessionPublicId: sessionPublicId,
+        unableToDetermine: false,
+        fingerprintV1: damagedFingerprint,
+      }),
+    });
+    const damagedCredential = damagedIntent.payload.data;
+    assert(damagedIntent.response.status === 201 && damagedCredential, "Damaged fixture UploadIntent failed");
+    damagedUploadPublicId = damagedCredential.uploadPublicId;
+    await new Promise<void>((resolve, reject) => {
+      const upload = new Upload(damagedBytes, {
+        endpoint: damagedCredential.tusEndpoint,
+        retryDelays: [0, 500],
+        headers: {
+          ...(damagedCredential.authMode === "official_signed"
+            ? { "x-signature": damagedCredential.signedUploadToken }
+            : { authorization: `Bearer ${damagedCredential.signedUploadToken}` }),
+          "x-upsert": "false",
+        },
+        uploadDataDuringCreation: true,
+        chunkSize: damagedCredential.chunkSizeBytes,
+        metadata: {
+          bucketName: "egocapture-raw",
+          objectName: damagedCredential.objectKey,
+          contentType: "video/mp4",
+          cacheControl: "3600",
+        },
+        fingerprint: async () => `egocapture:${damagedUploadPublicId}:${damagedFingerprint}`,
+        onError: reject,
+        onSuccess: () => resolve(),
+      });
+      upload.start();
+    });
+    const damagedComplete = await api<{ data?: { transferStatus: string } }>(
+      env.siteUrl,
+      `/api/uploads/${damagedUploadPublicId}/complete`,
+      { method: "POST", jar },
+    );
+    assert(damagedComplete.response.ok && damagedComplete.payload.data?.transferStatus === "verified", "Damaged fixture did not preserve transfer verification");
+    const damagedMetadata = await api<{ error?: { code: string } }>(
+      env.siteUrl,
+      `/api/uploads/${damagedUploadPublicId}/extract-metadata`,
+      { method: "POST", jar },
+    );
+    assert(
+      damagedMetadata.response.status === 422 && damagedMetadata.payload.error?.code === "METADATA_EXTRACTION_FAILED",
+      "Damaged MP4 did not produce a safe metadata failure",
+    );
+    const [damagedEvidence] = await db<{
+      transferStatus: string;
+      metadataStatus: string;
+      metadataAttemptStatus: string;
+      reviewCount: number;
+    }[]>`
+      select intent.transfer_status, intent.metadata_status,
+        attempt.status as metadata_attempt_status,
+        (select count(*)::integer from egocapture.review_cases review
+          where review.video_asset_id = asset.id and review.case_type = 'metadata_failed' and review.status = 'open') as review_count
+      from egocapture.upload_intents intent
+      join egocapture.video_assets asset on asset.upload_intent_id = intent.id
+      join egocapture.metadata_attempts attempt on attempt.video_asset_id = asset.id
+      where intent.public_id = ${damagedUploadPublicId}
+    `;
+    assert(
+      damagedEvidence.transferStatus === "verified" && damagedEvidence.metadataStatus === "failed"
+        && damagedEvidence.metadataAttemptStatus === "failed" && damagedEvidence.reviewCount === 1,
+      "Damaged MP4 transfer/metadata/review state separation failed",
     );
   } finally {
     rmSync(generated.directory, { recursive: true, force: true });
     await db.end({ timeout: 2 });
   }
-  console.log(`Signed TUS direct upload, pause, resume, object reconciliation, idempotent Complete and participant_claim passed; retained Demo Fixture ${uploadPublicId} / ${sessionPublicId}`);
+  console.log(`Signed TUS direct upload, pause, resume, Range metadata, damaged-file isolation and participant_claim passed; retained Demo Fixtures ${uploadPublicId}, ${damagedUploadPublicId} / ${sessionPublicId}`);
 }
 
 main().catch((error) => {

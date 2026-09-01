@@ -282,6 +282,14 @@ export function UploadQueue({ sessions }: { sessions: SessionOption[] }) {
             uploads.current.delete(item.id);
             setRestorableCount(persistedUploadCount());
             update(item.id, { status: "verified", error: "" });
+            try {
+              await api(`/api/uploads/${credential.uploadPublicId}/extract-metadata`, { method: "POST" });
+            } catch (error) {
+              update(item.id, {
+                status: "verified",
+                error: `视频已完成并通过对象对账；Metadata ${error instanceof Error ? error.message : "解析失败"}`,
+              });
+            }
           } catch (error) {
             update(item.id, { status: "failed", error: error instanceof Error ? error.message : "对象对账失败" });
           }

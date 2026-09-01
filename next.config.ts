@@ -9,6 +9,9 @@ const nextConfig: NextConfig = {
     },
   },
   serverExternalPackages: ["mediainfo.js"],
+  outputFileTracingIncludes: {
+    "/api/uploads/*/extract-metadata": ["./node_modules/mediainfo.js/dist/MediaInfoModule.wasm"],
+  },
   async headers() {
     return [
       {

@@ -730,12 +730,42 @@ export async function getParticipantUpload(viewer: Viewer, uploadPublicId: strin
     publicId: string;
     decisionType: string;
     reviewCount: number;
+    containerFormat: string | null;
+    durationMs: number | null;
+    videoCodec: string | null;
+    width: number | null;
+    height: number | null;
+    frameRate: number | null;
+    captureTimeSource: string | null;
+    deviceConsistency: string | null;
   }[]>`
     select asset.public_id, decision.decision_type,
-      (select count(*)::integer from egocapture.review_cases review where review.video_asset_id = asset.id and review.status = 'open') as review_count
+      (select count(*)::integer from egocapture.review_cases review where review.video_asset_id = asset.id and review.status = 'open') as review_count,
+      metadata.container_format,
+      metadata.duration_ms::integer,
+      metadata.video_codec,
+      metadata.width,
+      metadata.height,
+      metadata.frame_rate::float8,
+      metadata.capture_time_source,
+      metadata.device_consistency
     from egocapture.video_assets asset
     left join egocapture.current_match_decisions decision on decision.video_asset_id = asset.id
+    left join egocapture.video_file_metadata metadata on metadata.video_asset_id = asset.id
     where asset.upload_intent_id = ${upload.id}::uuid
+  `;
+  const metadataAttempts = await db<{
+    attemptNumber: number;
+    status: string;
+    rangeRequestCount: number;
+    bytesRead: number;
+    errorCode: string | null;
+    completedAt: Date | null;
+  }[]>`
+    select attempt_number, status, range_request_count, bytes_read::integer, error_code, completed_at
+    from egocapture.metadata_attempts
+    where video_asset_id = (select id from egocapture.video_assets where upload_intent_id = ${upload.id}::uuid)
+    order by attempt_number desc
   `;
   return {
     uploadPublicId: upload.publicId,
@@ -750,6 +780,7 @@ export async function getParticipantUpload(viewer: Viewer, uploadPublicId: strin
     `)[0]?.failureCode ?? null,
     unableToDetermine: upload.unableToDetermine,
     attempts,
+    metadataAttempts,
     asset: asset ?? null,
   };
 }
