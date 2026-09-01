@@ -9,7 +9,7 @@ EgoCapture 是一套第一人称视频数据采集与人工复核系统。它把
 | 项目 | 当前状态 |
 |---|---|
 | Public URL | `WAITING_EXTERNAL`（尚未部署） |
-| Repository | `https://github.com/LienJack/video-data-collection` |
+| Repository | [LienJack/video-data-collection](https://github.com/LienJack/video-data-collection) |
 | Deployed Commit | `WAITING_EXTERNAL` |
 | Admin Demo | `admin.demo@egocapture.invalid`；密码来自 `DEMO_ADMIN_PASSWORD` |
 | Participant Demo | `PT-23456789`；密码来自 `DEMO_PARTICIPANT_PASSWORD` |
@@ -17,7 +17,7 @@ EgoCapture 是一套第一人称视频数据采集与人工复核系统。它把
 | Demo Upload Limit | `50,000,000 bytes` / 文件，5 文件 / 批次 |
 | Deployment Date | `WAITING_EXTERNAL` |
 | NAS Development Smoke | 2026-09-01 通过，详见 [验收记录](docs/acceptance/2026-09-01-nas-smoke.md) |
-| CI Result | Workflow 已实现；远端仓库尚无默认分支，等待首次推送后运行 |
+| CI Result | [GitHub Actions 33530291414](https://github.com/LienJack/video-data-collection/actions/runs/33530291414) 全绿（2026-09-02） |
 
 公开部署完成前不会把 Demo 密码提交到 Git。开发环境的密码和密钥由脚本随机生成并保存在被忽略的 `.runtime/<profile>/`。
 
@@ -221,11 +221,10 @@ pnpm cron:test
 pnpm test:e2e          # Chromium 主流程 + WebKit smoke
 ```
 
-Playwright 的主流程真实上传一个有效 MP4，并验证视频请求目标是 Storage/NAS Gateway，而不是 Next.js。GitHub Actions 包含：
+Playwright 的主流程真实上传一个有效 MP4，并验证视频请求目标是 Storage/NAS Gateway，而不是 Next.js。[GitHub Actions 33530291414](https://github.com/LienJack/video-data-collection/actions/runs/33530291414) 已在 Ubuntu Runner 全绿，包含：
 
 - quality：lint、type、24 个单元测试、production build。
-- database：从空 PostgreSQL 执行全部 Migration、checksum 和 RLS 测试。
-- browser-acceptance：五服务 local Docker + 宿主机 Next.js + Chromium/WebKit。
+- browser-acceptance：从空环境启动五服务 local Docker，在宿主机运行 Next.js，并依次通过全部 Migration/checksum、RLS、Chromium 主流程与 WebKit smoke（3 tests）。
 - repository-safety：明显秘密和大媒体检查。
 
 ## 隐私与安全边界
@@ -254,7 +253,7 @@ Playwright 的主流程真实上传一个有效 MP4，并验证视频请求目�
 9. Preview 部署并运行登录、TUS、metadata、RLS 与 Review smoke。
 10. 通过后发布 Production，并把真实 URL、账号密码、commit、region 和日期更新到本 README。
 
-当前未满足步骤 1，因此云阶段为 `WAITING_EXTERNAL`。不得使用新建 Supabase 项目、NAS 公网映射或关闭隔离规则绕过。
+当前 Vercel CLI 已登录，但仓库尚未绑定 Vercel Project；Supabase CLI 可见的共享项目尚未被本仓库 link、目标 project ref 未获明确确认，并且项目状态为 `INACTIVE`。因此云阶段仍为 `WAITING_EXTERNAL`：确认并恢复既定共享 Supabase 项目后，才能执行冲突检查、Migration、Preview 验收和 Production 发布。不得使用新建 Supabase 项目、NAS 公网映射或关闭隔离规则绕过。
 
 ## 生产演进
 
@@ -281,7 +280,7 @@ MVP 只真实验证到 50 MB，不声称具备数 GB、跨天、跨地区或 4K 
 | TUS 多分片、Pause/Resume、Complete | 已验证 | 约 9.8 MB 合成 MP4 物理上传；浏览器短 MP4 |
 | Range metadata / 360 / 损坏文件 | 已验证 | 手机 MP4、合成 360 MP4、损坏 MP4；16 MiB budget |
 | Admin 不可变纠正与 Audit | 已验证 | Playwright + `review:test` |
-| 本机 Docker 模式 | Workflow 已实现，尚待远端 Runner | 本机因资源限制未启动 |
+| 本机 Docker 模式 | 已验证 | GitHub Ubuntu Runner 启动五服务 Docker；Next.js 在宿主机运行；[CI 33530291414](https://github.com/LienJack/video-data-collection/actions/runs/33530291414) |
 | Public Vercel/Supabase Demo | `WAITING_EXTERNAL` | 尚无公开 URL |
 | 真实 INSV 私有字段 | 未验证 | 无合法样本 |
 | QR 自动识别 / 内容检查 | 未实现 | 仅演进接口文档 |
