@@ -37,6 +37,7 @@
     "session:test": "tsx scripts/session-check.ts",
     "upload:test": "tsx scripts/upload-check.ts",
     "review:test": "tsx scripts/review-check.ts",
+    "cron:test": "tsx scripts/cron-check.ts",
     "build": "next build",
     "start": "next start",
     "lint": "eslint .",

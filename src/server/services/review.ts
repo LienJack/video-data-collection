@@ -611,6 +611,7 @@ export async function getAdminUpload(viewer: Viewer, uploadPublicId: string) {
     transferStatus: string;
     metadataStatus: string;
     objectKey: string | null;
+    storageDeletedAt: Date | null;
     videoAssetPublicId: string | null;
     decisionType: string | null;
     deviceConsistency: string | null;
@@ -619,7 +620,7 @@ export async function getAdminUpload(viewer: Viewer, uploadPublicId: string) {
     createdAt: Date;
   }[]>`
     select intent.public_id, intent.original_filename, intent.content_type, intent.size_bytes::integer,
-      intent.transfer_status, intent.metadata_status, object.object_key,
+      intent.transfer_status, intent.metadata_status, object.object_key, object.deleted_at as storage_deleted_at,
       asset.public_id as video_asset_public_id, decision.decision_type,
       metadata.device_consistency, participant.public_id as participant_public_id,
       participant.display_alias as participant_alias, intent.created_at
@@ -640,7 +641,7 @@ export async function getAdminUpload(viewer: Viewer, uploadPublicId: string) {
 
 export async function adminUploadSignedUrl(viewer: Viewer, uploadPublicId: string) {
   const upload = await getAdminUpload(viewer, uploadPublicId);
-  if (!upload.objectKey || upload.transferStatus !== "verified") {
+  if (!upload.objectKey || upload.storageDeletedAt || upload.transferStatus !== "verified") {
     throw new DomainError("STORAGE_OBJECT_NOT_VERIFIED", "该 Upload 尚无已验证对象", 409);
   }
   const { data, error } = await createSupabaseAdminClient().storage

@@ -316,7 +316,7 @@ async function main() {
         ) values (
           ${ids.storedObject}::uuid, ${ids.upload}::uuid, 'supabase', 'egocapture-raw',
           ${objectKey}, 1000, now()
-        ) on conflict (id) do update set verified_at = now()
+        ) on conflict (id) do update set verified_at = now(), deleted_at = null, delete_reason = null
       `;
       await transaction`
         insert into egocapture.video_assets (

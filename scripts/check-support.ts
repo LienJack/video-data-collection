@@ -26,6 +26,7 @@ export function integrationEnvironment() {
     "SITE_URL",
     "MARKER_PUBLIC_KEY_JWK",
     "MARKER_KEY_ID",
+    "CRON_SECRET",
     "DEMO_ADMIN_PASSWORD",
     "DEMO_PARTICIPANT_PASSWORD",
   ]) {
@@ -39,6 +40,7 @@ export function integrationEnvironment() {
     siteUrl: merged.SITE_URL!,
     markerPublicKeyJwk: JSON.parse(merged.MARKER_PUBLIC_KEY_JWK!) as Record<string, unknown>,
     markerKeyId: merged.MARKER_KEY_ID!,
+    cronSecret: merged.CRON_SECRET!,
     demoAdminPassword: merged.DEMO_ADMIN_PASSWORD!,
     demoParticipantPassword: merged.DEMO_PARTICIPANT_PASSWORD!,
   };
