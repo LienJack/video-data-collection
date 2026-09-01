@@ -18,7 +18,14 @@ export function integrationEnvironment() {
   const local = readEnv(path.join(root, ".env.development.local"));
   const profile = local.EGOCAPTURE_DEV_PROFILE || "local";
   const merged = { ...readEnv(path.join(root, ".runtime", profile, "app.env")), ...process.env };
-  for (const key of ["DATABASE_URL", "NEXT_PUBLIC_SUPABASE_URL", "SUPABASE_SERVICE_ROLE_KEY", "SITE_URL"]) {
+  for (const key of [
+    "DATABASE_URL",
+    "NEXT_PUBLIC_SUPABASE_URL",
+    "SUPABASE_SERVICE_ROLE_KEY",
+    "SITE_URL",
+    "MARKER_PUBLIC_KEY_JWK",
+    "MARKER_KEY_ID",
+  ]) {
     if (!merged[key]) throw new Error(`缺少 ${key}`);
   }
   return {
@@ -26,6 +33,8 @@ export function integrationEnvironment() {
     supabaseUrl: merged.NEXT_PUBLIC_SUPABASE_URL!,
     serviceRoleKey: merged.SUPABASE_SERVICE_ROLE_KEY!,
     siteUrl: merged.SITE_URL!,
+    markerPublicKeyJwk: JSON.parse(merged.MARKER_PUBLIC_KEY_JWK!) as Record<string, unknown>,
+    markerKeyId: merged.MARKER_KEY_ID!,
   };
 }
 

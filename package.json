@@ -30,6 +30,7 @@
     "auth:test": "tsx scripts/auth-check.ts",
     "participant:test": "tsx scripts/participant-check.ts",
     "task:test": "tsx scripts/task-check.ts",
+    "session:test": "tsx scripts/session-check.ts",
     "build": "next build",
     "start": "next start",
     "lint": "eslint .",

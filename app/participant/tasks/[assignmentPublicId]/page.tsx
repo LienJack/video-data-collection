@@ -1,15 +1,21 @@
 import Link from "next/link";
 import { AcknowledgeButton } from "@/app/participant/tasks/[assignmentPublicId]/acknowledge-button";
+import { SessionCreate } from "@/app/participant/tasks/[assignmentPublicId]/session-create";
 import { criterionDisplayStatus } from "@/src/domain/task-instructions";
 import { requireParticipant } from "@/src/server/auth";
 import { getParticipantAssignment } from "@/src/server/services/tasks";
+import { listParticipantDevices, listParticipantSessions } from "@/src/server/services/sessions";
 
 export const dynamic = "force-dynamic";
 
 export default async function ParticipantAssignmentPage({ params }: { params: Promise<{ assignmentPublicId: string }> }) {
   const viewer = await requireParticipant();
   const { assignmentPublicId } = await params;
-  const assignment = await getParticipantAssignment(viewer, assignmentPublicId);
+  const [assignment, devices, sessions] = await Promise.all([
+    getParticipantAssignment(viewer, assignmentPublicId),
+    listParticipantDevices(viewer),
+    listParticipantSessions(viewer, assignmentPublicId),
+  ]);
   const instructions = assignment.instructions;
   return (
     <main className="mx-auto min-h-screen max-w-2xl px-5 py-8">
@@ -32,6 +38,8 @@ export default async function ParticipantAssignmentPage({ params }: { params: Pr
         <h2 className="display text-2xl font-semibold">隐私检查</h2>
         <ul className="mt-4 list-disc space-y-2 pl-5 text-sm">{instructions.privacyChecklist.map((item) => <li key={item}>{item}</li>)}</ul>
         {assignment.status === "assigned" ? <AcknowledgeButton assignmentPublicId={assignment.publicId} contentHash={assignment.contentHash} /> : <p className="mt-8 border-l-4 border-[var(--teal)] px-4 py-3 text-sm">已确认版本：{assignment.acknowledgedAt?.toLocaleString("zh-CN") || assignment.status}</p>}
+        {["acknowledged", "session_created", "rework_required"].includes(assignment.status) ? <SessionCreate assignmentPublicId={assignment.publicId} devices={devices} /> : null}
+        {sessions.length > 0 ? <div className="mt-8"><h2 className="display text-2xl font-semibold">Recording Sessions</h2><div className="mt-4 space-y-3">{sessions.map((session) => <Link key={session.publicId} href={`/participant/sessions/${session.publicId}`} className="block border border-[var(--line)] bg-white/35 p-4"><p className="font-bold">{session.publicId} · {session.status}</p><p className="mt-2 text-xs text-[var(--muted)]">{session.deviceLabel} · Marker {session.markerAcknowledgedAt ? "已确认" : "待确认"}</p></Link>)}</div></div> : null}
       </section>
     </main>
   );

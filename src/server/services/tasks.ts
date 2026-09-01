@@ -671,6 +671,12 @@ export async function cancelAssignment(
       set status = 'canceled', canceled_at = now()
       where id = ${assignment.id}::uuid
     `;
+    const closedSessions = await transaction`
+      update egocapture.recording_sessions
+      set status = 'closed', closed_at = now(), close_reason = ${reason}
+      where assignment_id = ${assignment.id}::uuid and status = 'open'
+      returning id
+    `;
     await writeAudit(transaction, {
       studyId: assignment.studyId,
       actorProfileId: viewer.profileId,
@@ -681,7 +687,7 @@ export async function cancelAssignment(
       reason,
       requestId,
       beforeValues: { status: assignment.status },
-      afterValues: { status: "canceled" },
+      afterValues: { status: "canceled", closedSessionCount: closedSessions.length },
     });
     return { assignmentPublicId, status: "canceled" as const };
   });
