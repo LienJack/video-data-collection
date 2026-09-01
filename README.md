@@ -16,8 +16,8 @@ EgoCapture 是一套第一人称视频数据采集与人工复核系统。它把
 | Supabase Project / Region | `WAITING_EXTERNAL` |
 | Demo Upload Limit | `50,000,000 bytes` / 文件，5 文件 / 批次 |
 | Deployment Date | `WAITING_EXTERNAL` |
-| NAS Development Smoke | 2026-09-01 通过，详见 [验收记录](docs/acceptance/2026-09-01-nas-smoke.md) |
-| CI Result | [GitHub Actions 33530291414](https://github.com/LienJack/video-data-collection/actions/runs/33530291414) 全绿（2026-09-02） |
+| NAS Development Smoke | 2026-09-02 本地 MVP 全链路通过，详见 [验收记录](docs/acceptance/2026-09-02-local-mvp.md) |
+| CI Result | [GitHub Actions CI](https://github.com/LienJack/video-data-collection/actions/workflows/ci.yml)；最终交付以固定 commit 对应的绿色 run 为准 |
 
 公开部署完成前不会把 Demo 密码提交到 Git。开发环境的密码和密钥由脚本随机生成并保存在被忽略的 `.runtime/<profile>/`。
 
@@ -221,10 +221,10 @@ pnpm cron:test
 pnpm test:e2e          # Chromium 主流程 + WebKit smoke
 ```
 
-Playwright 的主流程真实上传一个有效 MP4，并验证视频请求目标是 Storage/NAS Gateway，而不是 Next.js。[GitHub Actions 33530291414](https://github.com/LienJack/video-data-collection/actions/runs/33530291414) 已在 Ubuntu Runner 全绿，包含：
+Playwright 的主流程真实上传一个有效 MP4，并验证视频请求目标是 Storage/NAS Gateway，而不是 Next.js。本轮 [本地验收记录](docs/acceptance/2026-09-02-local-mvp.md) 包含：
 
-- quality：lint、type、24 个单元测试、production build。
-- browser-acceptance：从空环境启动五服务 local Docker，在宿主机运行 Next.js，并依次通过全部 Migration/checksum、RLS、Chromium 主流程与 WebKit smoke（3 tests）。
+- quality：lint、type、27 个单元测试、production build。
+- browser-acceptance：在 NAS 五服务 Docker + Mac 本地 Next.js 上依次通过 13 个 Migration/checksum、RLS、Chromium 主流程与 WebKit 实际 TUS smoke（4 passed，1 个按项目条件 intentional skip）。
 - repository-safety：明显秘密和大媒体检查。
 
 ## 隐私与安全边界
@@ -274,13 +274,13 @@ MVP 只真实验证到 50 MB，不声称具备数 GB、跨天、跨地区或 4K 
 | 能力 | 状态 | 证据边界 |
 |---|---|---|
 | NAS 仅五服务 Docker、Mac 本地 Next.js | 已验证 | 物理 NAS 容器、loopback binding、Tunnel 关闭检查 |
-| Migration / Seed 重跑 | 已验证 | 10 个 Migration checksum；Seed 连续执行两次 |
+| Migration / Seed 重跑 | 已验证 | 13 个 Migration checksum；Seed 幂等恢复与约束检查 |
 | Auth / RLS / Study 隔离 | 已验证 | Integration 与数据库测试 |
 | Ed25519 Marker | 已验证 | 单测、Session Integration、浏览器二维码 |
 | TUS 多分片、Pause/Resume、Complete | 已验证 | 约 9.8 MB 合成 MP4 物理上传；浏览器短 MP4 |
 | Range metadata / 360 / 损坏文件 | 已验证 | 手机 MP4、合成 360 MP4、损坏 MP4；16 MiB budget |
 | Admin 不可变纠正与 Audit | 已验证 | Playwright + `review:test` |
-| 本机 Docker 模式 | 已验证 | GitHub Ubuntu Runner 启动五服务 Docker；Next.js 在宿主机运行；[CI 33530291414](https://github.com/LienJack/video-data-collection/actions/runs/33530291414) |
+| 本机 Docker 模式 | 已验证 | GitHub Ubuntu Runner 启动五服务 Docker；Next.js 在宿主机运行；最终交付以固定 commit 对应的 [CI](https://github.com/LienJack/video-data-collection/actions/workflows/ci.yml) 为准 |
 | Public Vercel/Supabase Demo | `WAITING_EXTERNAL` | 尚无公开 URL |
 | 真实 INSV 私有字段 | 未验证 | 无合法样本 |
 | QR 自动识别 / 内容检查 | 未实现 | 仅演进接口文档 |
