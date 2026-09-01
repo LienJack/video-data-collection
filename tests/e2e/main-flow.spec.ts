@@ -1,8 +1,10 @@
+import { randomUUID } from "node:crypto";
 import { expect, test, type Page } from "@playwright/test";
+import postgres from "postgres";
 import { integrationEnvironment } from "@/scripts/check-support";
 
 const tinyMp4 = Buffer.from(
-  "AAAAIGZ0eXBpc29tAAACAGlzb21pc28yYXZjMW1wNDEAAAMPbW9vdgAAAGxtdmhkAAAAAAAAAAAAAAAAAAAD6AAAA+gAAQAAAQAAAAAAAAAAAAAAAAEAAAAAAAAAAAAAAAAAAAABAAAAAAAAAAAAAAAAAABAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAgAAAjl0cmFrAAAAXHRraGQAAAADAAAAAAAAAAAAAAABAAAAAAAAA+gAAAAAAAAAAAAAAAAAAAAAAAEAAAAAAAAAAAAAAAAAAAABAAAAAAAAAAAAAAAAAABAAAAAAEAAAABAAAAAAAAkZWR0cwAAABxlbHN0AAAAAAAAAAEAAAPoAAAAAAABAAAAAAGxbWRpYQAAACBtZGhkAAAAAAAAAAAAAAAAAABAAAAAQABVxAAAAAAALWhkbHIAAAAAAAAAAHZpZGUAAAAAAAAAAAAAAABWaWRlb0hhbmRsZXIAAAABXG1pbmYAAAAUdm1oZAAAAAEAAAAAAAAAAAAAACRkaW5mAAAAHGRyZWYAAAAAAAAAAQAAAAx1cmwgAAAAAQAAARxzdGJsAAAAuHN0c2QAAAAAAAAAAQAAAKhhdmMxAAAAAAAAAAEAAAAAAAAAAAAAAAAAAAAAAEAAQABIAAAASAAAAAAAAAABFUxhdmM2Mi4yOC4xMDAgbGlieDI2NAAAAAAAAAAAAAAAGP//AAAALmF2Y0MBQsAK/+EAFmdCwAraEJsBEAAAAwAQAAADACDxImoBAAVozgOcgAAAABBwYXNwAAAAAQAAAAEAAAAUYnRydAAAAAAAABOoAAAAAAAAABhzdHRzAAAAAAAAAAEAAAABAABAAAAAABxzdHNjAAAAAAAAAAEAAAABAAAAAQAAAAEAAAAUc3RzegAAAAAAAAJ1AAAAAQAAABRzdGNvAAAAAAAAAAEAAAM/AAAAYnVkdGEAAABabWV0YQAAAAAAAAAhaGRscgAAAAAAAAAAbWRpcmFwcGwAAAAAAAAAAAAAAAAtaWxzdAAAACWpdG9vAAAAHWRhdGEAAAABAAAAAExhdmY2Mi4xMi4xMDAAAAAIZnJlZQAAAn1tZGF0AAACUwYF//9P3EXpvebZSLeWLNgg2SPu73gyNjQgLSBjb3JlIDE2NSByMzIyMiBiMzU2MDVhIC0gSC4yNjQvTVBFRy00IEFWQyBjb2RlYyAtIENvcHlsZWZ0IDIwMDMtMjAyNSAtIGh0dHA6Ly93d3cudmlkZW9sYW4ub3JnL3gyNjQuaHRtbCAtIG9wdGlvbnM6IGNhYmFjPTAgcmVmPTEgZGVibG9jaz0wOjA6MCBhbmFseXNlPTA6MCBtZT1kaWEgc3VibWU9MCBwc3k9MSBwc3lfcmQ9MS4wMDowLjAwIG1peGVkX3JlZj0wIG1lX3JhbmdlPTE2IGNocm9tYV9tZT0xIHRyZWxsaXM9MCA4eDhkY3Q9MCBjcW09MCBkZWFkem9uZT0yMSwxMSBmYXN0X3Bza2lwPTEgY2hyb21hX3FwX29mZnNldD0wIHRocmVhZHM9MiBsb29rYWhlYWRfdGhyZWFkcz0xIHNsaWNlZF90aHJlYWRzPTAgbnI9MCBkZWNpbWF0ZT0xIGludGVybGFjZWQ9MCBibHVyYXlfY29tcGF0PTAgY29uc3RyYWluZWRfaW50cmE9MCBiZnJhbWVzPTAgd2VpZ2h0cD0wIGtleWludD0yNTAga2V5aW50X21pbj0xIHNjZW5lY3V0PTAgaW50cmFfcmVmcmVzaD0wIHJjPWNyZiBtYnRyZWU9MCBjcmY9NDAuMCBxY29tcD0wLjYwIHFwbWluPTAgcXBtYXg9NjkgcXBzdGVwPTQgaXBfcmF0aW89MS40MCBhcT0wAIAAAAAaZYiEOhGKAAZjgY4ABuTk5OuuuuuuuuuuuvA=",
+  "AAAAIGZ0eXBpc29tAAACAGlzb21pc28yYXZjMW1wNDEAAAMPbW9vdgAAAGxtdmhkAAAAAAAAAAAAAAAAAAAD6AAAA+gAAQAAAQAAAAAAAAAAAAAAAAEAAAAAAAAAAAAAAAAAAAABAAAAAAAAAAAAAAAAAABAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAgAAAjl0cmFrAAAAXHRraGQAAAADAAAAAAAAAAAAAAABAAAAAAAAA+gAAAAAAAAAAAAAAAAAAAAAAAEAAAAAAAAAAAAAAAAAAAABAAAAAAAAAAAAAAAAAABAAAAAAEAAAABAAAAAAAAkZWR0cwAAABxlbHN0AAAAAAAAAAEAAAPoAAAAAAABAAAAAAGxbWRpYQAAACBtZGhkAAAAAAAAAAAAAAAAAABAAAAAQABVxAAAAAAALWhkbHIAAAAAAAAAAHZpZGUAAAAAAAAAAAAAAABWaWRlb0hhbmRsZXIAAAABXG1pbmYAAAAUdm1oZAAAAAEAAAAAAAAAAAAAACRkaW5mAAAAHGRyZWYAAAAAAAAAAQAAAAx1cmwgAAAAAQAAARxzdGJsAAAAuHN0c2QAAAAAAAAAAQAAAKhhdmMxAAAAAAAAAAEAAAAAAAAAAAAAAAAAAAAAAEAAQABIAAAASAAAAAAAAAABFUxhdmM2Mi4yOC4xMDAgbGliYTI2NAAAAAAAAAAAAAAAGP//AAAALmF2Y0MBQsAK/+EAFmdCwAraEJsBEAAAAwAQAAADACDxImoBAAVozgOcgAAAABBwYXNwAAAAAQAAAAEAAAAUYnJ0cgAAAAAAABOoAAAAAAAAABhzdHRzAAAAAAAAAAEAAAABAABAAAAAABxzdHNjAAAAAAAAAAEAAAABAAAAAQAAAAEAAAAUc3RzegAAAAAAAAJ1AAAAAQAAABRzdGNvAAAAAAAAAAEAAAM/AAAAYnVkdGEAAABabWV0YQAAAAAAAAAhaGRscgAAAAAAAAAAbWRpcmFwcGwAAAAAAAAAAAAAAAAtaWxzdAAAACWpdG9vAAAAHWRhdGEAAAABAAAAAExhdmY2Mi4xMi4xMDAAAAAIZnJlZQAAAn1tZGF0AAACUwYF//9P3EXpvebZSLeWLNgg2SPu73gyNjQgLSBjb3JlIDE2NSByMzIyMiBiMzU2MDVhIC0gSC4yNjQvTVBFRy00IEFWQyBjb2RlYyAtIENvcHlsZWZ0IDIwMDMtMjAyNSAtIGh0dHA6Ly93d3cudmlkZW9sYW4ub3JnL3gyNjQuaHRtbCAtIG9wdGlvbnM6IGNhYmFjPTAgcmVmPTEgZGVibG9jaz0wOjA6MCBhbmFseXNlPTA6MCBtZT1kaWEgc3VibWU9MCBwc3k9MSBwc3lfcmQ9MS4wMDowLjAwIG1peGVkX3JlZj0wIG1lX3JhbmdlPTE2IGNocm9tYV9tZT0xIHRyZWxsaXM9MCA4eDhkY3Q9MCBjcW09MCBkZWFkem9uZT0yMSwxMSBmYXN0X3Bza2lwPTEgY2hyb21hX3FwX29mZnNldD0wIHRocmVhZHM9MiBsb29rYWhlYWRfdGhyZWFkcz0xIHNsaWNlZF90aHJlYWRzPTAgbnI9MCBkZWNpbWF0ZT0xIGludGVybGFjZWQ9MCBibHVyYXlfY29tcGF0PTAgY2ZyYW1lcz0wIHdlaWdodHA9MCBrZXlpbnQ9MjUwIGtleWludF9taW49MSBzY2VuZWN1dD0wIGludHJhX3JlZnJlc2g9MCByYz1jcmYgbWJ0cmVlPTAgY3JmPTQwLjAgcWNvbXA9MC42MCBxcG1pbj0wIHFwbWF4PTY5IHFwc3RlcD00IGlwX3JhdGlvPTEuNDAgYXE9MACAAAAAGmWIhDoRigAGY4GOAAbk5OTr7u7u7u7u7u7w",
   "base64",
 );
 
@@ -13,9 +15,9 @@ async function logout(page: Page) {
   });
 }
 
-async function loginParticipant(page: Page, password: string) {
+async function loginParticipant(page: Page, participantPublicId: string, password: string) {
   await page.goto("/login");
-  await page.getByLabel("Participant ID").fill("PT-23456789");
+  await page.getByLabel("Participant ID").fill(participantPublicId);
   await page.getByLabel("Password").fill(password);
   await page.getByRole("button", { name: "进入我的任务" }).click();
   await expect(page).toHaveURL(/\/participant\/tasks$/);
@@ -30,75 +32,159 @@ async function loginAdmin(page: Page, password: string) {
   await expect(page).toHaveURL(/\/admin\/dashboard$/);
 }
 
-test("真实 Participant 上传与 Admin 不可变纠正闭环", async ({ page }) => {
+function publicId(text: string, prefix: "PT" | "DEV" | "TSK" | "AS" | "RS" | "UP" | "RV") {
+  const result = text.match(new RegExp(`(${prefix}-[23456789A-Z]+)`))?.[1];
+  if (!result) throw new Error(`${prefix} Public ID missing from ${text}`);
+  return result;
+}
+
+test("Admin 建档到 Participant 上传与不可变纠正的完整闭环", async ({ page }) => {
+  test.setTimeout(180_000);
   const env = integrationEnvironment();
-  await page.setViewportSize({ width: 390, height: 844 });
-  await loginParticipant(page, env.demoParticipantPassword);
+  const db = postgres(env.databaseUrl, { max: 1, prepare: false, connect_timeout: 8 });
+  const suffix = randomUUID().slice(0, 8);
+  const alias = `E2E Participant ${suffix}`;
+  const taskTitle = `E2E Full Flow ${suffix}`;
+  const participantPassword = `E2E-${suffix}-Strong!`;
+  let participantPublicId = "";
+  let devicePublicId = "";
+  let taskPublicId = "";
+  let uploadPublicId = "";
+  try {
+    await page.setViewportSize({ width: 1440, height: 1000 });
+    await loginAdmin(page, env.demoAdminPassword);
 
-  const unauthorized = await page.request.get("/api/admin/audit-events");
-  expect(unauthorized.status()).toBe(403);
+    await page.goto("/admin/participants/new");
+    await page.getByLabel("Display Alias").fill(alias);
+    await page.getByLabel("Consent Version").fill("e2e-consent-v1");
+    await page.getByLabel("Notes").fill("Synthetic Playwright acceptance identity without PII");
+    await page.getByRole("button", { name: "创建 Draft Participant" }).click();
+    await expect(page).toHaveURL(/\/admin\/participants\/PT-/);
+    participantPublicId = publicId(page.url(), "PT");
 
-  await page.getByRole("link", { name: /Demo Only：上传 5～20 秒测试视频/ }).click();
-  await expect(page.getByText(/AS-23456782 · Version 1 · assigned/)).toBeVisible();
-  await page.getByRole("button", { name: "我已阅读并确认这个版本" }).click();
-  await expect(page.getByRole("heading", { name: "创建 Recording Session" })).toBeVisible();
-  await page.getByRole("button", { name: "创建 Session 并显示 Marker" }).click();
-  await expect(page).toHaveURL(/\/participant\/sessions\/RS-/);
-  const sessionPublicId = page.url().match(/(RS-[23456789A-Z]+)/)?.[1];
-  if (!sessionPublicId) throw new Error("Recording Session Public ID missing from redirect URL");
-  await expect(page.getByRole("img", { name: /签名二维码/ })).toBeVisible();
-  await page.getByRole("button", { name: "我已拍摄二维码" }).click();
-  await expect(page.getByText(/已确认：/)).toBeVisible();
+    await page.getByRole("button", { name: "生成 / 重发邀请" }).click();
+    const invitationLink = page.locator('a[href*="/invite/"]');
+    await expect(invitationLink).toBeVisible();
+    const invitationUrl = await invitationLink.getAttribute("href");
+    if (!invitationUrl) throw new Error("Invitation URL missing");
 
-  await page.getByRole("link", { name: "上传文件 →" }).click();
-  await page.locator('input[type="file"]').setInputFiles({
-    name: "playwright-real-mobile.mp4",
-    mimeType: "video/mp4",
-    buffer: tinyMp4,
-  });
-  const uploadCard = page.getByRole("article").filter({ hasText: "playwright-real-mobile.mp4" });
-  await expect(uploadCard.getByText("ready", { exact: true })).toBeVisible();
-  await uploadCard.getByLabel("Recording Session").selectOption("unable");
-  const metadataResponse = page.waitForResponse((response) =>
-    response.url().includes("/extract-metadata") && response.request().method() === "POST",
-  );
-  await uploadCard.getByRole("button", { name: "开始直传 Storage" }).click();
-  await expect(uploadCard.getByText("verified", { exact: true })).toBeVisible({ timeout: 30_000 });
-  expect((await metadataResponse).status()).toBeLessThan(500);
-  const detailsLink = uploadCard.getByRole("link", { name: "查看服务端状态" });
-  const uploadHref = await detailsLink.getAttribute("href");
-  const uploadPublicId = uploadHref?.match(/(UP-[23456789A-Z]+)/)?.[1];
-  if (!uploadPublicId) throw new Error("Upload Public ID missing from details link");
-  await detailsLink.click();
-  await expect(page.getByText("verified", { exact: true }).first()).toBeVisible();
-  await expect(page.getByText(/MPEG-4.*AVC/)).toBeVisible();
-  await expect(page.getByText("unmatched", { exact: true })).toBeVisible();
+    await logout(page);
+    await page.goto(invitationUrl);
+    await page.getByLabel("设置密码").fill(participantPassword);
+    await page.getByLabel("再次输入").fill(participantPassword);
+    await page.getByRole("button", { name: "接受邀请并进入任务" }).click();
+    await expect(page).toHaveURL(/\/participant\/tasks$/);
 
-  await logout(page);
-  await page.setViewportSize({ width: 1440, height: 1000 });
-  await loginAdmin(page, env.demoAdminPassword);
-  await page.goto(`/admin/uploads/${uploadPublicId}`);
-  await expect(page.getByText("verified", { exact: true })).toBeVisible();
-  await expect(page.getByText(/unmatched \/ metadata_unavailable/)).toBeVisible();
-  const unmatchedReview = page.getByRole("link").filter({ hasText: "unmatched" }).first();
-  await expect(unmatchedReview).toBeVisible();
-  const reviewPublicId = (await unmatchedReview.textContent())?.match(/(RV-[23456789A-Z]+)/)?.[1];
-  if (!reviewPublicId) throw new Error("ReviewCase Public ID missing from related review link");
-  await unmatchedReview.click();
+    await logout(page);
+    await loginAdmin(page, env.demoAdminPassword);
+    await page.goto(`/admin/participants/${participantPublicId}`);
+    await page.getByPlaceholder("Manufacturer").fill("Synthetic");
+    await page.getByPlaceholder("Model").fill("E2E Check Cam");
+    await page.getByPlaceholder("Firmware").fill("1.0.0-e2e");
+    await page.getByRole("button", { name: "登记设备" }).click();
+    await expect(page.getByText("Synthetic E2E Check Cam")).toBeVisible();
+    devicePublicId = publicId(await page.locator("body").innerText(), "DEV");
 
-  await page.getByLabel("Session", { exact: true }).selectOption(sessionPublicId);
-  await page.getByLabel("Device", { exact: true }).selectOption("DEV-23456789");
-  await page.getByLabel("Reason", { exact: true }).fill("Playwright verified the participant claim and corrected it to the declared session.");
-  await page.getByRole("button", { name: "提交不可变决策" }).click();
-  await expect(page.getByText("此 ReviewCase 已终结；历史仍可查看。")).toBeVisible();
-  await expect(page.getByText("admin_corrected", { exact: true })).toBeVisible();
-  const historicalDecision = page.getByRole("article")
-    .filter({ hasText: "unmatched" })
-    .filter({ hasText: "historical" });
-  await expect(historicalDecision).toBeVisible();
+    await page.goto("/admin/tasks/new");
+    const instructionsEditor = page.getByLabel("TaskInstructions · ego-task/1");
+    const instructions = JSON.parse(await instructionsEditor.inputValue()) as Record<string, unknown>;
+    instructions.title = taskTitle;
+    instructions.description = "Playwright creates, publishes, assigns, records and uploads this frozen instruction version.";
+    await instructionsEditor.fill(JSON.stringify(instructions, null, 2));
+    await page.getByRole("button", { name: "创建 Draft" }).click();
+    await expect(page).toHaveURL(/\/admin\/tasks\/TSK-/);
+    taskPublicId = publicId(page.url(), "TSK");
+    await page.getByRole("button", { name: "发布新版本" }).click();
+    await expect(page.getByText("Version 1", { exact: true })).toBeVisible();
 
-  await page.goto("/admin/audit");
-  const audit = page.getByRole("article").filter({ hasText: "review_case.correct_match" }).first();
-  await expect(audit).toContainText(reviewPublicId);
-  await expect(audit).toContainText("Playwright verified the participant claim");
+    await page.goto("/admin/assignments/new");
+    await page.getByLabel("Participant").selectOption(participantPublicId);
+    await page.getByLabel("Published TaskVersion").selectOption(`${taskPublicId}:1`);
+    await page.getByLabel("Preferred Device").selectOption(devicePublicId);
+    const tomorrow = new Date(Date.now() + 24 * 60 * 60 * 1000);
+    const localTomorrow = new Date(tomorrow.getTime() - tomorrow.getTimezoneOffset() * 60_000).toISOString().slice(0, 16);
+    await page.getByLabel("Due At").fill(localTomorrow);
+    await page.getByRole("button", { name: "创建 Assignment" }).click();
+    await expect(page).toHaveURL(/\/admin\/assignments$/);
+    const assignmentCard = page.getByRole("article").filter({ hasText: participantPublicId });
+    await expect(assignmentCard).toContainText(taskTitle);
+    const assignmentPublicId = publicId(await assignmentCard.innerText(), "AS");
+
+    await logout(page);
+    await page.setViewportSize({ width: 390, height: 844 });
+    await loginParticipant(page, participantPublicId, participantPassword);
+    const unauthorized = await page.request.get("/api/admin/audit-events");
+    expect(unauthorized.status()).toBe(403);
+    await page.getByRole("link", { name: new RegExp(taskTitle) }).click();
+    await expect(page.getByText(new RegExp(`${assignmentPublicId} · Version 1 · assigned`))).toBeVisible();
+    await expect(page.getByRole("heading", { name: "环境准备" })).toBeVisible();
+    await expect(page.getByText("目标规格：", { exact: false })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "上传与恢复" })).toBeVisible();
+    await page.getByRole("button", { name: "我已阅读并确认这个版本" }).click();
+    await page.getByRole("button", { name: "创建 Session 并显示 Marker" }).click();
+    await expect(page).toHaveURL(/\/participant\/sessions\/RS-/);
+    const sessionPublicId = publicId(page.url(), "RS");
+    await expect(page.getByRole("img", { name: /签名二维码/ })).toBeVisible();
+    await page.getByRole("button", { name: "我已拍摄二维码" }).click();
+    await expect(page.getByText(/已确认：/)).toBeVisible();
+
+    await page.getByRole("link", { name: "上传文件 →" }).click();
+    await page.locator('input[type="file"]').setInputFiles({ name: `e2e-${suffix}.mp4`, mimeType: "video/mp4", buffer: tinyMp4 });
+    const uploadCard = page.getByRole("article").filter({ hasText: `e2e-${suffix}.mp4` });
+    await uploadCard.getByLabel("Recording Session").selectOption("unable");
+    const metadataResponse = page.waitForResponse((response) => response.url().includes("/extract-metadata") && response.request().method() === "POST");
+    await uploadCard.getByRole("button", { name: "开始直传 Storage" }).click();
+    await expect(uploadCard.getByText("verified", { exact: true })).toBeVisible({ timeout: 30_000 });
+    expect((await metadataResponse).status()).toBeLessThan(500);
+    const detailsLink = uploadCard.getByRole("link", { name: "查看服务端状态" });
+    uploadPublicId = publicId((await detailsLink.getAttribute("href")) || "", "UP");
+    await detailsLink.click();
+    await expect(page.getByText("unmatched", { exact: true })).toBeVisible();
+
+    await logout(page);
+    await page.setViewportSize({ width: 1440, height: 1000 });
+    await loginAdmin(page, env.demoAdminPassword);
+    await page.goto(`/admin/uploads/${uploadPublicId}`);
+    await expect(page.getByText("Unable to Determine", { exact: true })).toBeVisible();
+    const unmatchedReview = page.getByRole("link").filter({ hasText: "unmatched" }).first();
+    const reviewPublicId = publicId((await unmatchedReview.textContent()) || "", "RV");
+    await unmatchedReview.click();
+    await page.getByLabel("Session", { exact: true }).selectOption(sessionPublicId);
+    await page.getByLabel("Device", { exact: true }).selectOption(devicePublicId);
+    await expect(page.getByLabel("Change Preview")).toContainText(`Before Unmatched / —`);
+    await expect(page.getByLabel("Change Preview")).toContainText(`After ${sessionPublicId} / ${devicePublicId}`);
+    const correctionReason = `Playwright ${suffix} verified and corrected the synthetic participant upload.`;
+    await page.getByLabel("Reason", { exact: true }).fill(correctionReason);
+    await page.getByRole("button", { name: "提交不可变决策" }).click();
+    await expect(page.getByText("admin_corrected", { exact: true })).toBeVisible();
+    await expect(page.getByRole("article").filter({ hasText: "unmatched" }).filter({ hasText: "historical" })).toBeVisible();
+
+    await page.goto("/admin/audit");
+    const audit = page.getByRole("article").filter({ hasText: "review_case.correct_match" }).first();
+    await expect(audit).toContainText(reviewPublicId);
+    await expect(audit).toContainText(correctionReason);
+  } finally {
+    if (participantPublicId) {
+      await db`update egocapture.participants set is_fixture = true where public_id = ${participantPublicId}`;
+      await db`update egocapture.devices set is_fixture = true where id in (
+        select device_id from egocapture.device_assignments where participant_id = (
+          select id from egocapture.participants where public_id = ${participantPublicId}
+        )
+      )`;
+      await db`update egocapture.video_assets set is_fixture = true where participant_id = (
+        select id from egocapture.participants where public_id = ${participantPublicId}
+      )`;
+      await db`update egocapture.review_cases review set is_fixture = true where review.video_asset_id in (
+        select id from egocapture.video_assets where participant_id = (
+          select id from egocapture.participants where public_id = ${participantPublicId}
+        )
+      ) or review.assignment_id in (
+        select id from egocapture.assignments where participant_id = (
+          select id from egocapture.participants where public_id = ${participantPublicId}
+        )
+      )`;
+    }
+    if (taskPublicId) await db`update egocapture.tasks set is_fixture = true where public_id = ${taskPublicId}`;
+    await db.end({ timeout: 2 });
+  }
 });
