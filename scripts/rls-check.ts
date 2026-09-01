@@ -3,6 +3,7 @@ import { readFileSync } from "node:fs";
 import path from "node:path";
 import process from "node:process";
 import postgres from "postgres";
+import { createPublicId } from "@/src/domain/public-id";
 
 class RollbackCheck extends Error {}
 
@@ -47,6 +48,13 @@ async function main() {
   const participantB = randomUUID();
   const task = randomUUID();
   const taskVersion = randomUUID();
+  const studyPublicA = createPublicId("ST");
+  const studyPublicB = createPublicId("ST");
+  const participantPublicA = createPublicId("PT");
+  const participantPublicB = createPublicId("PT");
+  const forbiddenParticipantPublicId = createPublicId("PT");
+  const taskPublicId = createPublicId("TSK");
+  const assignmentPublicId = createPublicId("AS");
   try {
     const [rlsState] = await db<{ disabled: number }[]>`
       select count(*)::integer as disabled
@@ -82,8 +90,8 @@ async function main() {
       await transaction`
         insert into egocapture.studies (id, public_id, slug, name, serial_hmac_salt)
         values
-          (${studyA}::uuid, 'ST-23456789', ${`rls-a-${studyA}`}, 'RLS Study A', 'salt-a'),
-          (${studyB}::uuid, 'ST-34567892', ${`rls-b-${studyB}`}, 'RLS Study B', 'salt-b')
+          (${studyA}::uuid, ${studyPublicA}, ${`rls-a-${studyA}`}, 'RLS Study A', 'salt-a'),
+          (${studyB}::uuid, ${studyPublicB}, ${`rls-b-${studyB}`}, 'RLS Study B', 'salt-b')
       `;
       await transaction`
         insert into egocapture.profiles (id, auth_user_id, role, display_name)
@@ -102,12 +110,12 @@ async function main() {
         insert into egocapture.participants (
           id, public_id, study_id, auth_user_id, display_alias, status, consent_status, created_by
         ) values
-          (${participantA}::uuid, 'PT-23456789', ${studyA}::uuid, ${participantUser}::uuid, 'Participant A', 'active', 'valid', ${adminProfileA}::uuid),
-          (${participantB}::uuid, 'PT-34567892', ${studyB}::uuid, null, 'Participant B', 'draft', 'pending', ${adminProfileB}::uuid)
+          (${participantA}::uuid, ${participantPublicA}, ${studyA}::uuid, ${participantUser}::uuid, 'Participant A', 'active', 'valid', ${adminProfileA}::uuid),
+          (${participantB}::uuid, ${participantPublicB}, ${studyB}::uuid, null, 'Participant B', 'draft', 'pending', ${adminProfileB}::uuid)
       `;
       await transaction`
         insert into egocapture.tasks (id, public_id, study_id, title, draft_instructions, created_by)
-        values (${task}::uuid, 'TSK-23456789', ${studyA}::uuid, 'RLS Task', '{}'::jsonb, ${adminProfileA}::uuid)
+        values (${task}::uuid, ${taskPublicId}, ${studyA}::uuid, 'RLS Task', '{}'::jsonb, ${adminProfileA}::uuid)
       `;
       await transaction`
         insert into egocapture.task_versions (
@@ -121,7 +129,7 @@ async function main() {
         insert into egocapture.assignments (
           public_id, study_id, participant_id, task_version_id, due_at, locale, created_by
         ) values (
-          'AS-23456789', ${studyA}::uuid, ${participantA}::uuid, ${taskVersion}::uuid,
+          ${assignmentPublicId}, ${studyA}::uuid, ${participantA}::uuid, ${taskVersion}::uuid,
           now() + interval '1 day', 'zh-CN', ${adminProfileA}::uuid
         )
       `;
@@ -130,7 +138,7 @@ async function main() {
           study_id, actor_profile_id, actor_auth_user_id, action, entity_type, entity_public_id, request_id
         ) values (
           ${studyA}::uuid, ${adminProfileA}::uuid, ${adminA}::uuid,
-          'rls.check', 'participant', 'PT-23456789', ${randomUUID()}::uuid
+          'rls.check', 'participant', ${participantPublicA}, ${randomUUID()}::uuid
         )
       `;
 
@@ -151,7 +159,7 @@ async function main() {
           await savepoint`
             insert into egocapture.participants (
               public_id, study_id, display_alias, status, consent_status
-            ) values ('PT-45678923', ${studyA}::uuid, 'Forbidden', 'draft', 'pending')
+            ) values (${forbiddenParticipantPublicId}, ${studyA}::uuid, 'Forbidden', 'draft', 'pending')
           `;
         });
       } catch {
