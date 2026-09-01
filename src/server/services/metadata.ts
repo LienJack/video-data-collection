@@ -218,6 +218,7 @@ async function finishSuccess(input: {
   attemptId: string;
   attemptNumber: number;
   requestId: string;
+  reason?: string;
   reader: BudgetedRangeReader;
   parserName: string;
   parserVersion: string;
@@ -336,6 +337,7 @@ async function finishSuccess(input: {
       action: "metadata.extracted",
       entityType: "video_asset",
       entityPublicId: input.authority.videoAssetPublicId,
+      reason: input.reason,
       requestId: input.requestId,
       afterValues: {
         status: input.status,
@@ -369,6 +371,7 @@ async function finishFailure(input: {
   attemptId: string;
   attemptNumber: number;
   requestId: string;
+  reason?: string;
   reader: BudgetedRangeReader | null;
   error: unknown;
 }): Promise<never> {
@@ -407,6 +410,7 @@ async function finishFailure(input: {
       action: "metadata.extraction_failed",
       entityType: "video_asset",
       entityPublicId: input.authority.videoAssetPublicId,
+      reason: input.reason,
       requestId: input.requestId,
       afterValues: {
         status: failure.status,
@@ -424,7 +428,7 @@ async function finishFailure(input: {
   );
 }
 
-export async function extractUploadMetadata(viewer: Viewer, uploadPublicId: string, requestId: string) {
+export async function extractUploadMetadata(viewer: Viewer, uploadPublicId: string, requestId: string, reason?: string) {
   uploadPublicIdSchema.parse(uploadPublicId);
   const authority = await metadataAuthority(viewer, uploadPublicId);
   if (authority.transferStatus !== "verified") {
@@ -455,6 +459,7 @@ export async function extractUploadMetadata(viewer: Viewer, uploadPublicId: stri
       attemptId: attempt.attemptId,
       attemptNumber: attempt.attemptNumber,
       requestId,
+      reason,
       reader,
       ...parsed,
     });
@@ -465,6 +470,7 @@ export async function extractUploadMetadata(viewer: Viewer, uploadPublicId: stri
       attemptId: attempt.attemptId,
       attemptNumber: attempt.attemptNumber,
       requestId,
+      reason,
       reader,
       error,
     });

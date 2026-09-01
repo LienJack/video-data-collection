@@ -12,6 +12,10 @@ export async function POST(request: Request, context: { params: Promise<{ id: st
     if (!hasTrustedOrigin(request)) throw new DomainError("ORIGIN_REJECTED", "请求来源无效", 403);
     const viewer = await requireApiViewer();
     const { id } = await context.params;
-    return apiSuccess(await extractUploadMetadata(viewer, id, requestId), requestId);
+    const reason = viewer.role === "admin"
+      ? z.object({ reason: z.string().trim().min(10).max(500) }).parse(await request.json()).reason
+      : undefined;
+    return apiSuccess(await extractUploadMetadata(viewer, id, requestId, reason), requestId);
   });
 }
+import { z } from "zod";

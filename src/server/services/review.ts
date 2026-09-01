@@ -130,7 +130,11 @@ export async function getReviewCase(viewer: Viewer, reviewPublicId: string) {
     participantId: string | null;
     participantPublicId: string | null;
     participantAlias: string | null;
+    participantStatus: string | null;
     assignmentPublicId: string | null;
+    assignmentStatus: string | null;
+    assignmentDueAt: Date | null;
+    assetStatus: string | null;
     currentSessionPublicId: string | null;
     currentDevicePublicId: string | null;
     metadataStatus: string | null;
@@ -154,7 +158,11 @@ export async function getReviewCase(viewer: Viewer, reviewPublicId: string) {
       participant.id as participant_id,
       participant.public_id as participant_public_id,
       participant.display_alias as participant_alias,
+      participant.status as participant_status,
       coalesce(review_assignment.public_id, session_assignment.public_id) as assignment_public_id,
+      coalesce(review_assignment.status, session_assignment.status) as assignment_status,
+      coalesce(review_assignment.due_at, session_assignment.due_at) as assignment_due_at,
+      asset.status as asset_status,
       current_session.public_id as current_session_public_id,
       current_device.public_id as current_device_public_id,
       coalesce(asset_upload.metadata_status, direct_upload.metadata_status) as metadata_status,
