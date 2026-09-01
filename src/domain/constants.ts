@@ -1,0 +1,9 @@
+export const APP_NAME = "EgoCapture";
+export const MAX_FILE_SIZE_BYTES = 50_000_000;
+export const MAX_FILES_PER_BATCH = 5;
+export const MAX_ACTIVE_UPLOADS_PER_PARTICIPANT = 3;
+export const MAX_UPLOAD_BYTES_PER_PARTICIPANT_PER_24H = 200_000_000;
+export const TUS_CHUNK_SIZE_BYTES = 6 * 1024 * 1024;
+export const MARKER_TTL_SECONDS = 24 * 60 * 60;
+export const SIGNED_READ_URL_TTL_SECONDS = 5 * 60;
+export const STORAGE_BUCKET = "egocapture-raw";

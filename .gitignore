@@ -1,0 +1,29 @@
+# dependencies
+node_modules/
+
+# Next.js
+.next/
+out/
+
+# test output
+coverage/
+playwright-report/
+test-results/
+
+# environment and credentials
+.env
+.env.*
+!.env.example
+
+# local runtime state
+.runtime/
+.supabase/
+
+# macOS and editors
+.DS_Store
+*.swp
+
+# logs
+*.log
+pnpm-debug.log*
+*.tsbuildinfo
