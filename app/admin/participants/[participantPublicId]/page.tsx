@@ -33,9 +33,19 @@ export default async function ParticipantDetailPage({ params }: { params: Promis
           participantPublicId={participant.publicId}
           status={participant.status}
           isFixture={participant.isFixture}
+          fixtureProtected={viewer.isDemoAdmin && participant.isFixture}
+          profile={{
+            displayAlias: participant.displayAlias,
+            managementEmail: participant.managementEmail,
+            locale: participant.locale,
+            timezone: participant.timezone,
+            countryRegion: participant.countryRegion,
+            notes: participant.notes,
+            updatedAt: participant.updatedAt.toISOString(),
+          }}
           invitationStatus={participant.invitationStatus}
           invitationExpiresAt={participant.invitationExpiresAt?.toISOString() ?? null}
-          devices={devices.map((device) => ({ ...device, assignedAt: device.assignedAt.toISOString() }))}
+          devices={devices.map((device) => ({ ...device, assignedAt: device.assignedAt.toISOString(), updatedAt: device.updatedAt.toISOString() }))}
         />
       </div>
     </main>

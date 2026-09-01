@@ -32,7 +32,12 @@ export const createParticipantSchema = z.object({
 export const participantListSchema = z.object({
   search: z.string().trim().max(120).optional(),
   status: z.enum(["draft", "invited", "expired", "active", "suspended", "withdrawn"]).optional(),
+  consentStatus: z.enum(["pending", "valid", "expired", "withdrawn"]).optional(),
   studyPublicId: z.string().regex(/^ST-[23456789ABCDEFGHJKLMNPQRSTUVWXYZ]{6,16}$/).optional(),
+  locale: z.string().trim().min(2).max(20).optional(),
+  countryRegion: z.string().trim().max(80).optional(),
+  missing: z.enum(["yes", "no"]).optional(),
+  needsReview: z.enum(["yes", "no"]).optional(),
   cursor: z.string().regex(/^PT-[23456789ABCDEFGHJKLMNPQRSTUVWXYZ]{6,16}$/).optional(),
   limit: z.coerce.number().int().min(1).max(50).default(25),
 });
@@ -144,6 +149,8 @@ export async function listParticipants(viewer: Viewer, input: z.infer<typeof par
     locale: string;
     countryRegion: string | null;
     isFixture: boolean;
+    isMissing: boolean;
+    needsReview: boolean;
   }[]>`
     select distinct
       participant.public_id,
@@ -154,7 +161,19 @@ export async function listParticipants(viewer: Viewer, input: z.infer<typeof par
       participant.consent_status,
       participant.locale,
       participant.country_region,
-      participant.is_fixture
+      participant.is_fixture,
+      exists (
+        select 1 from egocapture.missing_assignments missing
+        where missing.participant_id = participant.id
+      ) as is_missing,
+      exists (
+        select 1
+        from egocapture.review_cases review
+        left join egocapture.assignments review_assignment on review_assignment.id = review.assignment_id
+        left join egocapture.video_assets review_asset on review_asset.id = review.video_asset_id
+        where review.status in ('open', 'in_review')
+          and coalesce(review_assignment.participant_id, review_asset.participant_id) = participant.id
+      ) as needs_review
     from egocapture.participants participant
     join egocapture.studies study on study.id = participant.study_id
     join egocapture.study_memberships membership on membership.study_id = study.id
@@ -162,7 +181,22 @@ export async function listParticipants(viewer: Viewer, input: z.infer<typeof par
       and membership.status = 'active'
       and (${input.search ?? null}::text is null or participant.public_id ilike '%' || ${input.search ?? ""} || '%' or participant.display_alias ilike '%' || ${input.search ?? ""} || '%')
       and (${input.status ?? null}::text is null or participant.status = ${input.status ?? ""})
+      and (${input.consentStatus ?? null}::text is null or participant.consent_status = ${input.consentStatus ?? ""})
       and (${input.studyPublicId ?? null}::text is null or study.public_id = ${input.studyPublicId ?? ""})
+      and (${input.locale ?? null}::text is null or participant.locale = ${input.locale ?? ""})
+      and (${input.countryRegion ?? null}::text is null or participant.country_region = ${input.countryRegion ?? ""})
+      and (${input.missing ?? null}::text is null or exists (
+        select 1 from egocapture.missing_assignments missing
+        where missing.participant_id = participant.id
+      ) = (${input.missing ?? "yes"} = 'yes'))
+      and (${input.needsReview ?? null}::text is null or exists (
+        select 1
+        from egocapture.review_cases review
+        left join egocapture.assignments review_assignment on review_assignment.id = review.assignment_id
+        left join egocapture.video_assets review_asset on review_asset.id = review.video_asset_id
+        where review.status in ('open', 'in_review')
+          and coalesce(review_assignment.participant_id, review_asset.participant_id) = participant.id
+      ) = (${input.needsReview ?? "yes"} = 'yes'))
       and (${input.cursor ?? null}::text is null or participant.public_id > ${input.cursor ?? ""})
     order by participant.public_id
     limit ${input.limit + 1}
@@ -698,6 +732,7 @@ export async function listDevices(viewer: Viewer, participantPublicId: string) {
     status: string;
     assignedAt: Date;
     isDefault: boolean;
+    updatedAt: Date;
   }[]>`
     select
       device.public_id,
@@ -707,7 +742,8 @@ export async function listDevices(viewer: Viewer, participantPublicId: string) {
       device.firmware_version,
       device.status,
       assignment.assigned_at,
-      participant.default_device_id = device.id as is_default
+      participant.default_device_id = device.id as is_default,
+      device.updated_at
     from egocapture.device_assignments assignment
     join egocapture.devices device on device.id = assignment.device_id
     join egocapture.participants participant on participant.id = assignment.participant_id
