@@ -32,7 +32,10 @@ describe("signed session marker", () => {
       devicePublicId: "DEV-EF234567",
     });
     const jws = await signMarkerPayload(payload, await exportJWK(privateKey), "marker-key-v1");
-    await expect(verifyMarkerJws(`${jws.slice(0, -1)}x`, await exportJWK(publicKey), "marker-key-v1")).rejects.toThrow();
+    const [header, body, signature] = jws.split(".");
+    const changedFirstByte = signature.startsWith("A") ? "B" : "A";
+    const tampered = `${header}.${body}.${changedFirstByte}${signature.slice(1)}`;
+    await expect(verifyMarkerJws(tampered, await exportJWK(publicKey), "marker-key-v1")).rejects.toThrow();
     await expect(verifyMarkerJws(jws, await exportJWK(publicKey), "marker-key-v2")).rejects.toThrow("MARKER_HEADER_INVALID");
   });
 });
