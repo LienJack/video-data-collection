@@ -40,6 +40,7 @@ const nasHost = config.NAS_SSH_HOST || "";
 const nasRoot = config.NAS_REMOTE_ROOT || "";
 const nasApiPort = Number(config.NAS_API_PORT || 56521);
 const nasDbPort = Number(config.NAS_DB_PORT || 56522);
+const expectedNasServices = ["api-gateway", "auth", "db", "rest", "storage"];
 
 function validateConfiguration() {
   if (!nasHost) throw new Error("NAS 模式必须在 .env.development.local 设置 NAS_SSH_HOST");
@@ -238,6 +239,31 @@ function remoteCompose(args: string[], options: { quiet?: boolean } = {}) {
   return ssh(command, options);
 }
 
+function assertNasInfrastructureOnly() {
+  const configured = remoteCompose(["config", "--services"], { quiet: true })
+    .split(/\r?\n/)
+    .filter(Boolean)
+    .sort();
+  const expected = [...expectedNasServices].sort();
+  if (configured.join("\n") !== expected.join("\n")) {
+    throw new Error(
+      `NAS Compose 只能包含基础设施服务 ${expected.join(", ")}；当前为 ${configured.join(", ")}`,
+    );
+  }
+
+  const running = ssh(
+    `docker ps --filter label=com.docker.compose.project=egocapture-dev --format '{{.Label "com.docker.compose.service"}}'`,
+    { quiet: true },
+  )
+    .split(/\r?\n/)
+    .filter(Boolean)
+    .sort();
+  const unexpected = running.filter((service) => !expected.includes(service));
+  if (unexpected.length > 0) {
+    throw new Error(`NAS egocapture-dev 项目混入非基础设施容器：${unexpected.join(", ")}`);
+  }
+}
+
 function repairRemoteDatabaseRoles() {
   const sql = `ALTER USER authenticator WITH PASSWORD :'pgpass';
 ALTER USER pgbouncer WITH PASSWORD :'pgpass';
@@ -313,13 +339,16 @@ async function nasInfra() {
   const runtime = await ensureRuntime("nas");
   await checkNasCapacity();
   await syncNas(runtime);
+  assertNasInfrastructureOnly();
   remoteCompose(["up", "-d", "--wait", "db"]);
   repairRemoteDatabaseRoles();
   remoteCompose(["up", "-d", "--wait", "--remove-orphans"]);
+  assertNasInfrastructureOnly();
   const bindings = remoteCompose(["port", "api-gateway", "8000"], { quiet: true });
   if (!bindings.includes(`127.0.0.1:${nasApiPort}`)) {
     throw new Error(`NAS API 未绑定 loopback：${bindings}`);
   }
+  console.log("开发拓扑：NAS Docker 仅运行 DB/Auth/REST/Storage/Gateway；Next.js 在 Mac 本地运行");
   console.log("NAS 最小 Supabase 栈已健康启动");
   return runtime;
 }
