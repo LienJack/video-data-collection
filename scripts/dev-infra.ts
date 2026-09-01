@@ -268,6 +268,47 @@ GRANT USAGE ON SCHEMA egocapture TO anon, authenticated, service_role;
   ssh(command, { input: sql });
 }
 
+function backupRemoteSchema() {
+  const backupDirectory = path.posix.join(path.posix.dirname(nasRoot), "backups");
+  const result = ssh(
+    `set -eu
+cd ${shellQuote(`${nasRoot}/infra/nas`)}
+set -a
+. ./.env
+set +a
+backup_dir=${shellQuote(backupDirectory)}
+mkdir -p "$backup_dir"
+timestamp=$(date -u +%Y%m%dT%H%M%SZ)
+target="$backup_dir/$timestamp.sql.gz"
+docker compose --env-file .env -f compose.yaml exec -T -e PGPASSWORD="$POSTGRES_PASSWORD" db \
+  pg_dump -U postgres -d postgres --schema=egocapture --no-owner --no-privileges \
+  | gzip -9 > "$target"
+test -s "$target"
+set -- "$backup_dir"/*.sql.gz
+if test -e "$1"; then
+  ls -1t "$backup_dir"/*.sql.gz | awk 'NR > 5' | while IFS= read -r old_backup; do
+    case "$old_backup" in
+      "$backup_dir"/*.sql.gz) rm -- "$old_backup" ;;
+      *) exit 78 ;;
+    esac
+  done
+fi
+printf '%s' "$target"`,
+    { quiet: true },
+  );
+  console.log(`NAS schema 备份完成：${result}`);
+}
+
+function runDatabase(command: "migrate" | "verify", appEnv: Record<string, string>) {
+  return run("pnpm", ["tsx", "scripts/database.ts", command], {
+    env: { ...process.env, ...appEnv },
+  });
+}
+
+function runCheck(script: "db:test:rls" | "auth:test", appEnv: Record<string, string>) {
+  return run("pnpm", [script], { env: { ...process.env, ...appEnv } });
+}
+
 async function nasInfra() {
   const runtime = await ensureRuntime("nas");
   await checkNasCapacity();
@@ -281,6 +322,15 @@ async function nasInfra() {
   }
   console.log("NAS 最小 Supabase 栈已健康启动");
   return runtime;
+}
+
+async function nasMigrate() {
+  const runtime = await nasInfra();
+  backupRemoteSchema();
+  await withNasTunnel(async () => {
+    runDatabase("migrate", runtime.appEnv);
+    runDatabase("verify", runtime.appEnv);
+  });
 }
 
 function startTunnel(): ChildProcess {
@@ -374,6 +424,12 @@ async function localInfra() {
   return runtime;
 }
 
+async function localMigrate() {
+  const runtime = await localInfra();
+  runDatabase("migrate", runtime.appEnv);
+  runDatabase("verify", runtime.appEnv);
+}
+
 async function startNext(appEnv: Record<string, string>) {
   const next = spawn("pnpm", ["dev:web"], {
     cwd: root,
@@ -415,6 +471,7 @@ async function nasDev() {
     await waitForPort(nasApiPort);
     await waitForPort(nasDbPort);
     await healthCheck(nasApiPort, runtime.appEnv.NEXT_PUBLIC_SUPABASE_ANON_KEY);
+    runDatabase("verify", runtime.appEnv);
     next = spawn("pnpm", ["dev:web"], {
       cwd: root,
       env: { ...process.env, ...runtime.appEnv },
@@ -465,12 +522,16 @@ async function main() {
     return startNext(runtime.appEnv);
   }
   if (command === "nas:setup" || command === "nas:infra") return void (await nasInfra());
+  if (command === "nas:migrate") return void (await nasMigrate());
   if (command === "nas:check") {
     await nasInfra();
     const runtime = await ensureRuntime("nas");
-    return void (await withNasTunnel(() =>
-      healthCheck(nasApiPort, runtime.appEnv.NEXT_PUBLIC_SUPABASE_ANON_KEY),
-    ));
+    return void (await withNasTunnel(async () => {
+      await healthCheck(nasApiPort, runtime.appEnv.NEXT_PUBLIC_SUPABASE_ANON_KEY);
+      runDatabase("verify", runtime.appEnv);
+      runCheck("db:test:rls", runtime.appEnv);
+      runCheck("auth:test", runtime.appEnv);
+    }));
   }
   if (command === "nas:tunnel") {
     await requireFreeLocalPorts();
@@ -482,6 +543,7 @@ async function main() {
   if (command === "nas:down") return void remoteCompose(["down", "--remove-orphans"]);
   if (command === "nas:destroy") return void (await destroy("nas"));
   if (command === "local:setup" || command === "local:infra") return void (await localInfra());
+  if (command === "local:migrate") return void (await localMigrate());
   if (command === "local:dev") {
     const runtime = await localInfra();
     return startNext(runtime.appEnv);

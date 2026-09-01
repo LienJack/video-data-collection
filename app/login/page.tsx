@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { LoginForm } from "@/app/login/login-form";
 
 export default function LoginPage() {
   return (
@@ -18,23 +19,7 @@ export default function LoginPage() {
           <p className="mb-3 text-xs font-bold uppercase tracking-[0.22em] text-[var(--teal)]">Workspace access</p>
           <h1 className="display text-5xl font-semibold tracking-[-0.045em]">进入采集现场</h1>
           <p className="mt-4 text-sm leading-7 text-[var(--muted)]">管理员使用邮箱；参与者使用 PT 开头的 Participant ID。</p>
-          <div className="mt-9 grid grid-cols-2 border border-[var(--line)] p-1 text-sm font-semibold">
-            <button className="bg-[var(--ink)] px-4 py-3 text-[var(--paper)]">参与者</button>
-            <button className="px-4 py-3 text-[var(--muted)]">管理员</button>
-          </div>
-          <form className="mt-7 space-y-5">
-            <label className="block">
-              <span className="mb-2 block text-xs font-bold uppercase tracking-[0.16em]">Participant ID</span>
-              <input className="w-full border border-[var(--line)] bg-transparent px-4 py-3.5 outline-none transition focus:border-[var(--teal)]" placeholder="PT-XXXXXXXX" disabled />
-            </label>
-            <label className="block">
-              <span className="mb-2 block text-xs font-bold uppercase tracking-[0.16em]">Password</span>
-              <input className="w-full border border-[var(--line)] bg-transparent px-4 py-3.5 outline-none transition focus:border-[var(--teal)]" type="password" placeholder="••••••••••" disabled />
-            </label>
-            <button type="button" className="w-full bg-[var(--signal)] px-5 py-4 font-bold text-white opacity-60" disabled>
-              基础设施配置后启用登录
-            </button>
-          </form>
+          <LoginForm />
         </div>
       </section>
     </main>
