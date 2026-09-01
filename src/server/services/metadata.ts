@@ -52,6 +52,8 @@ type MetadataSummary = {
   frameRate: number | null;
   captureTimeSource: string | null;
   deviceConsistency: string | null;
+  projectionType: string | null;
+  is360: boolean | null;
   rangeRequestCount: number;
   bytesRead: number;
   attemptNumber: number;
@@ -123,6 +125,8 @@ async function summary(videoAssetId: string, status: string): Promise<MetadataSu
       metadata.frame_rate::float8,
       metadata.capture_time_source,
       metadata.device_consistency,
+      metadata.projection_type,
+      metadata.is_360,
       coalesce(attempt.range_request_count, 0)::integer as range_request_count,
       coalesce(attempt.bytes_read, 0)::integer as bytes_read,
       coalesce(attempt.attempt_number, 0)::integer as attempt_number

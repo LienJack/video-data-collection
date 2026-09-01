@@ -39,6 +39,7 @@ class MemoryUrlStorage {
 function generateSyntheticMp4() {
   const directory = mkdtempSync(path.join(tmpdir(), "egocapture-upload-check-"));
   const file = path.join(directory, "synthetic-mobile.mp4");
+  const sphericalFile = path.join(directory, "synthetic-equirectangular-360.mp4");
   execFileSync("ffmpeg", [
     "-hide_banner", "-loglevel", "error",
     "-f", "lavfi", "-i", "testsrc2=size=1280x720:rate=30",
@@ -49,7 +50,53 @@ function generateSyntheticMp4() {
     "-metadata", "com.apple.quicktime.creationdate=2026-09-01T12:34:56+08:00",
     "-movflags", "+faststart+use_metadata_tags", file,
   ]);
-  return { directory, file };
+  execFileSync("ffmpeg", [
+    "-hide_banner", "-loglevel", "error",
+    "-f", "lavfi", "-i", "testsrc2=size=1024x512:rate=24",
+    "-t", "2", "-c:v", "libx264", "-preset", "ultrafast", "-crf", "20",
+    "-pix_fmt", "yuv420p",
+    "-metadata", "projection=equirectangular",
+    "-metadata", "com.apple.quicktime.make=Synthetic",
+    "-metadata", "com.apple.quicktime.model=TUS Check Cam",
+    "-movflags", "+faststart+use_metadata_tags", sphericalFile,
+  ]);
+  return { directory, file, sphericalFile };
+}
+
+type UploadCredential = {
+  uploadPublicId: string;
+  objectKey: string;
+  tusEndpoint: string;
+  signedUploadToken: string;
+  chunkSizeBytes: number;
+  authMode: "official_signed" | "nas_scoped_jwt";
+};
+
+async function uploadDirect(bytes: Buffer, credential: UploadCredential, fingerprint: string) {
+  await new Promise<void>((resolve, reject) => {
+    const upload = new Upload(bytes, {
+      endpoint: credential.tusEndpoint,
+      retryDelays: [0, 500, 1_000],
+      headers: {
+        ...(credential.authMode === "official_signed"
+          ? { "x-signature": credential.signedUploadToken }
+          : { authorization: `Bearer ${credential.signedUploadToken}` }),
+        "x-upsert": "false",
+      },
+      uploadDataDuringCreation: true,
+      chunkSize: credential.chunkSizeBytes,
+      metadata: {
+        bucketName: "egocapture-raw",
+        objectName: credential.objectKey,
+        contentType: "video/mp4",
+        cacheControl: "3600",
+      },
+      fingerprint: async () => `egocapture:${credential.uploadPublicId}:${fingerprint}`,
+      onError: reject,
+      onSuccess: () => resolve(),
+    });
+    upload.start();
+  });
 }
 
 function errorStatus(error: Error) {
@@ -62,11 +109,18 @@ async function main() {
   assert(new URL(tusEndpoint).port !== new URL(env.siteUrl).port, "TUS endpoint points at the Next.js control plane");
   const generated = generateSyntheticMp4();
   const bytes = readFileSync(generated.file);
+  const sphericalBytes = readFileSync(generated.sphericalFile);
   const fileSize = statSync(generated.file).size;
+  const sphericalFileSize = statSync(generated.sphericalFile).size;
   assert(fileSize > 6 * 1024 * 1024 && fileSize < 50_000_000, "Synthetic MP4 does not exercise multiple TUS chunks");
   const first = new Uint8Array(bytes.subarray(0, Math.min(bytes.length, 1024 * 1024)));
   const last = new Uint8Array(bytes.subarray(Math.max(0, bytes.length - 1024 * 1024)));
   const fingerprint = fingerprintV1(fileSize, first, last);
+  const sphericalFingerprint = fingerprintV1(
+    sphericalFileSize,
+    new Uint8Array(sphericalBytes.subarray(0, Math.min(sphericalBytes.length, 1024 * 1024))),
+    new Uint8Array(sphericalBytes.subarray(Math.max(0, sphericalBytes.length - 1024 * 1024))),
+  );
   const db = postgres(env.databaseUrl, { max: 1, prepare: false, connect_timeout: 8, transform: postgres.camel });
   const supabase = createClient(env.supabaseUrl, env.serviceRoleKey, {
     auth: { autoRefreshToken: false, detectSessionInUrl: false, persistSession: false },
@@ -91,6 +145,8 @@ async function main() {
   let participantUserId: string | undefined;
   let uploadPublicId = "";
   let damagedUploadPublicId = "";
+  let sphericalUploadPublicId = "";
+  let duplicateUploadPublicId = "";
   let sessionPublicId = "";
   try {
     const { data: participant, error } = await supabase.auth.admin.createUser({
@@ -419,6 +475,150 @@ async function main() {
       "TUS Upload database, match or audit evidence mismatch",
     );
 
+    const sphericalBatch = await api<{ data?: { batchPublicId: string } }>(env.siteUrl, "/api/upload-batches", {
+      method: "POST", jar, headers: { "idempotency-key": randomUUID() },
+    });
+    const sphericalIntent = await api<{ data?: UploadCredential }>(env.siteUrl, "/api/upload-intents", {
+      method: "POST", jar,
+      headers: { "content-type": "application/json", "idempotency-key": randomUUID() },
+      body: JSON.stringify({
+        batchPublicId: sphericalBatch.payload.data?.batchPublicId,
+        originalFilename: "synthetic-equirectangular-360.mp4",
+        sizeBytes: sphericalFileSize,
+        contentType: "video/mp4",
+        extension: "mp4",
+        localModifiedAt: null,
+        claimedSessionPublicId: sessionPublicId,
+        unableToDetermine: false,
+        fingerprintV1: sphericalFingerprint,
+      }),
+    });
+    assert(sphericalIntent.response.status === 201 && sphericalIntent.payload.data, "360 UploadIntent creation failed");
+    sphericalUploadPublicId = sphericalIntent.payload.data.uploadPublicId;
+    await uploadDirect(sphericalBytes, sphericalIntent.payload.data, sphericalFingerprint);
+    const sphericalComplete = await api<{ data?: { transferStatus: string } }>(
+      env.siteUrl, `/api/uploads/${sphericalUploadPublicId}/complete`, { method: "POST", jar },
+    );
+    assert(sphericalComplete.response.ok && sphericalComplete.payload.data?.transferStatus === "verified", "360 object reconciliation failed");
+    const sphericalMetadata = await api<{ data?: {
+      status: string;
+      containerFormat: string | null;
+      projectionType: string | null;
+      is360: boolean | null;
+    } }>(env.siteUrl, `/api/uploads/${sphericalUploadPublicId}/extract-metadata`, { method: "POST", jar });
+    assert(sphericalMetadata.response.ok && sphericalMetadata.payload.data?.containerFormat === "MPEG-4", "360 container parsing failed");
+    assert(sphericalMetadata.payload.data.projectionType === "equirectangular" && sphericalMetadata.payload.data.is360 === true, "360 projection normalization failed");
+    const [sphericalEvidence] = await db<{ projectionType: string | null; is360: boolean | null; evidenceCount: number }[]>`
+      select metadata.projection_type, metadata.is_360,
+        (select count(*)::integer from egocapture.metadata_evidence evidence
+          where evidence.video_asset_id = asset.id and evidence.field_name in ('projection_type', 'is360')) as evidence_count
+      from egocapture.upload_intents intent
+      join egocapture.video_assets asset on asset.upload_intent_id = intent.id
+      join egocapture.video_file_metadata metadata on metadata.video_asset_id = asset.id
+      where intent.public_id = ${sphericalUploadPublicId}
+    `;
+    assert(sphericalEvidence.projectionType === "equirectangular" && sphericalEvidence.is360 === true && sphericalEvidence.evidenceCount === 2, "360 normalized evidence was not persisted");
+
+    const duplicateBatch = await api<{ data?: { batchPublicId: string } }>(env.siteUrl, "/api/upload-batches", {
+      method: "POST", jar, headers: { "idempotency-key": randomUUID() },
+    });
+    const duplicateIntent = await api<{ data?: UploadCredential & { duplicateCandidate: boolean } }>(env.siteUrl, "/api/upload-intents", {
+      method: "POST", jar,
+      headers: { "content-type": "application/json", "idempotency-key": randomUUID() },
+      body: JSON.stringify({
+        batchPublicId: duplicateBatch.payload.data?.batchPublicId,
+        originalFilename: "same-bytes-copy.mp4",
+        sizeBytes: fileSize,
+        contentType: "video/mp4",
+        extension: "mp4",
+        localModifiedAt: null,
+        claimedSessionPublicId: sessionPublicId,
+        unableToDetermine: false,
+        fingerprintV1: fingerprint,
+      }),
+    });
+    assert(duplicateIntent.response.status === 201 && duplicateIntent.payload.data?.duplicateCandidate, "Duplicate candidate was not reported at intent creation");
+    duplicateUploadPublicId = duplicateIntent.payload.data.uploadPublicId;
+    await uploadDirect(bytes, duplicateIntent.payload.data, fingerprint);
+    const duplicateComplete = await api<{ data?: { transferStatus: string } }>(
+      env.siteUrl, `/api/uploads/${duplicateUploadPublicId}/complete`, { method: "POST", jar },
+    );
+    assert(duplicateComplete.response.ok && duplicateComplete.payload.data?.transferStatus === "verified", "Duplicate candidate transfer was incorrectly rejected");
+    const [duplicateEvidence] = await db<{ reviewCount: number; activeAssetCount: number }[]>`
+      select
+        (select count(*)::integer from egocapture.review_cases review
+          join egocapture.video_assets asset on asset.id = review.video_asset_id
+          join egocapture.upload_intents intent on intent.id = asset.upload_intent_id
+          where intent.public_id = ${duplicateUploadPublicId}
+            and review.case_type = 'duplicate_candidate' and review.status = 'open') as review_count,
+        (select count(*)::integer from egocapture.video_assets asset
+          join egocapture.upload_intents intent on intent.id = asset.upload_intent_id
+          where intent.study_id = ${studyId}::uuid and intent.size_bytes = ${fileSize}
+            and intent.fingerprint_v1 = ${fingerprint} and asset.status = 'active') as active_asset_count
+    `;
+    assert(duplicateEvidence.reviewCount === 1 && duplicateEvidence.activeAssetCount >= 2, "Duplicate candidate did not preserve both assets for review");
+
+    const missingBatch = await api<{ data?: { batchPublicId: string } }>(env.siteUrl, "/api/upload-batches", {
+      method: "POST", jar, headers: { "idempotency-key": randomUUID() },
+    });
+    const missingIntent = await api<{ data?: UploadCredential }>(env.siteUrl, "/api/upload-intents", {
+      method: "POST", jar,
+      headers: { "content-type": "application/json", "idempotency-key": randomUUID() },
+      body: JSON.stringify({
+        batchPublicId: missingBatch.payload.data?.batchPublicId,
+        originalFilename: "storage-missing.mp4",
+        sizeBytes: 64,
+        contentType: "video/mp4",
+        extension: "mp4",
+        localModifiedAt: null,
+        claimedSessionPublicId: sessionPublicId,
+        unableToDetermine: false,
+        fingerprintV1: "b".repeat(64),
+      }),
+    });
+    assert(missingIntent.response.status === 201 && missingIntent.payload.data, "Storage-missing intent creation failed");
+    const missingComplete = await api<{ error?: { code: string } }>(
+      env.siteUrl, `/api/uploads/${missingIntent.payload.data.uploadPublicId}/complete`, { method: "POST", jar },
+    );
+    assert(missingComplete.response.status === 409 && missingComplete.payload.error?.code === "STORAGE_MISSING", "Missing object reconciliation did not fail safely");
+
+    const mismatchBytes = Buffer.from("object smaller than declared intent");
+    const mismatchBatch = await api<{ data?: { batchPublicId: string } }>(env.siteUrl, "/api/upload-batches", {
+      method: "POST", jar, headers: { "idempotency-key": randomUUID() },
+    });
+    const mismatchIntent = await api<{ data?: UploadCredential }>(env.siteUrl, "/api/upload-intents", {
+      method: "POST", jar,
+      headers: { "content-type": "application/json", "idempotency-key": randomUUID() },
+      body: JSON.stringify({
+        batchPublicId: mismatchBatch.payload.data?.batchPublicId,
+        originalFilename: "size-mismatch.mp4",
+        sizeBytes: mismatchBytes.byteLength + 10,
+        contentType: "video/mp4",
+        extension: "mp4",
+        localModifiedAt: null,
+        claimedSessionPublicId: sessionPublicId,
+        unableToDetermine: false,
+        fingerprintV1: "c".repeat(64),
+      }),
+    });
+    assert(mismatchIntent.response.status === 201 && mismatchIntent.payload.data, "Size-mismatch intent creation failed");
+    await uploadDirect(mismatchBytes, mismatchIntent.payload.data, "c".repeat(64));
+    const mismatchComplete = await api<{ error?: { code: string } }>(
+      env.siteUrl, `/api/uploads/${mismatchIntent.payload.data.uploadPublicId}/complete`, { method: "POST", jar },
+    );
+    assert(mismatchComplete.response.status === 409 && mismatchComplete.payload.error?.code === "SIZE_MISMATCH", "Size mismatch reconciliation did not fail safely");
+    const [reconciliationEvidence] = await db<{ missingFailures: number; sizeFailures: number; reviewCount: number }[]>`
+      select
+        count(*) filter (where intent.failure_code = 'storage_missing')::integer as missing_failures,
+        count(*) filter (where intent.failure_code = 'size_mismatch')::integer as size_failures,
+        (select count(*)::integer from egocapture.review_cases review
+          where review.study_id = ${studyId}::uuid and review.case_type = 'upload_failed'
+            and review.status = 'open') as review_count
+      from egocapture.upload_intents intent
+      where intent.study_id = ${studyId}::uuid
+    `;
+    assert(reconciliationEvidence.missingFailures >= 1 && reconciliationEvidence.sizeFailures >= 1 && reconciliationEvidence.reviewCount >= 2, "Reconciliation failure evidence is incomplete");
+
     const damagedBytes = Buffer.from("This is intentionally not an MP4 container.");
     const damagedFingerprint = fingerprintV1(
       damagedBytes.byteLength,
@@ -510,7 +710,7 @@ async function main() {
     rmSync(generated.directory, { recursive: true, force: true });
     await db.end({ timeout: 2 });
   }
-  console.log(`Signed TUS direct upload, pause, resume, Range metadata, damaged-file isolation and participant_claim passed; retained Demo Fixtures ${uploadPublicId}, ${damagedUploadPublicId} / ${sessionPublicId}`);
+  console.log(`Signed TUS pause/resume, 360 metadata, duplicate review, reconciliation failures and damaged isolation passed; retained Demo Fixtures ${uploadPublicId}, ${sphericalUploadPublicId}, ${duplicateUploadPublicId}, ${damagedUploadPublicId} / ${sessionPublicId}`);
 }
 
 main().catch((error) => {

@@ -49,6 +49,26 @@ describe("metadata normalization", () => {
     expect(serialized).not.toContain("private comment");
     expect(serialized).not.toContain("private person");
   });
+
+  it("normalizes an allowlisted equirectangular projection as 360 evidence", () => {
+    const result = {
+      media: {
+        "@ref": "",
+        track: [{
+          "@type": "General",
+          Format: "MPEG-4",
+          extra: { projection: "equirectangular" },
+        }],
+      },
+    } as MediaInfoResult;
+    const normalized = normalizeMediaInfo({ result, expectedFileSize: 100, localModifiedAt: null, serialHmacKey: "x".repeat(32) });
+    expect(normalized.metadata.projectionType).toBe("equirectangular");
+    expect(normalized.metadata.is360).toBe(true);
+    expect(normalized.evidence).toEqual(expect.arrayContaining([
+      expect.objectContaining({ fieldName: "projectionType", normalizedValue: "equirectangular" }),
+      expect.objectContaining({ fieldName: "is360", normalizedValue: true }),
+    ]));
+  });
 });
 
 describe("device consistency", () => {
