@@ -345,7 +345,10 @@ function runDatabase(command: "migrate" | "verify", appEnv: Record<string, strin
   });
 }
 
-function runCheck(script: "db:test:rls" | "auth:test", appEnv: Record<string, string>) {
+function runPackageScript(
+  script: "db:seed" | "db:test:seed" | "db:test:rls" | "auth:test",
+  appEnv: Record<string, string>,
+) {
   return run("pnpm", [script], { env: { ...process.env, ...appEnv } });
 }
 
@@ -373,6 +376,29 @@ async function nasMigrate() {
   await withNasTunnel(async () => {
     runDatabase("migrate", runtime.appEnv);
     runDatabase("verify", runtime.appEnv);
+  });
+}
+
+async function nasSeed() {
+  const runtime = await nasInfra();
+  await withNasTunnel(async () => {
+    runDatabase("verify", runtime.appEnv);
+    runPackageScript("db:seed", runtime.appEnv);
+    runPackageScript("db:test:seed", runtime.appEnv);
+  });
+}
+
+async function nasSetup() {
+  const runtime = await nasInfra();
+  backupRemoteSchema();
+  await withNasTunnel(async () => {
+    await healthCheck(nasApiPort, runtime.appEnv.NEXT_PUBLIC_SUPABASE_ANON_KEY);
+    runDatabase("migrate", runtime.appEnv);
+    runDatabase("verify", runtime.appEnv);
+    runPackageScript("db:seed", runtime.appEnv);
+    runPackageScript("db:test:seed", runtime.appEnv);
+    runPackageScript("db:test:rls", runtime.appEnv);
+    runPackageScript("auth:test", runtime.appEnv);
   });
 }
 
@@ -473,6 +499,21 @@ async function localMigrate() {
   runDatabase("verify", runtime.appEnv);
 }
 
+async function localSeed() {
+  const runtime = await localInfra();
+  runDatabase("verify", runtime.appEnv);
+  runPackageScript("db:seed", runtime.appEnv);
+  runPackageScript("db:test:seed", runtime.appEnv);
+}
+
+async function localSetup() {
+  const runtime = await localInfra();
+  runDatabase("migrate", runtime.appEnv);
+  runDatabase("verify", runtime.appEnv);
+  runPackageScript("db:seed", runtime.appEnv);
+  runPackageScript("db:test:seed", runtime.appEnv);
+}
+
 async function startNext(appEnv: Record<string, string>) {
   const next = spawn("pnpm", ["dev:web"], {
     cwd: root,
@@ -564,16 +605,18 @@ async function main() {
     const runtime = await localInfra();
     return startNext(runtime.appEnv);
   }
-  if (command === "nas:setup" || command === "nas:infra") return void (await nasInfra());
+  if (command === "nas:setup") return void (await nasSetup());
+  if (command === "nas:infra") return void (await nasInfra());
   if (command === "nas:migrate") return void (await nasMigrate());
+  if (command === "nas:seed") return void (await nasSeed());
   if (command === "nas:check") {
     await nasInfra();
     const runtime = await ensureRuntime("nas");
     return void (await withNasTunnel(async () => {
       await healthCheck(nasApiPort, runtime.appEnv.NEXT_PUBLIC_SUPABASE_ANON_KEY);
       runDatabase("verify", runtime.appEnv);
-      runCheck("db:test:rls", runtime.appEnv);
-      runCheck("auth:test", runtime.appEnv);
+      runPackageScript("db:test:rls", runtime.appEnv);
+      runPackageScript("auth:test", runtime.appEnv);
     }));
   }
   if (command === "nas:tunnel") {
@@ -585,8 +628,10 @@ async function main() {
   if (command === "nas:dev") return nasDev();
   if (command === "nas:down") return void remoteCompose(["down", "--remove-orphans"]);
   if (command === "nas:destroy") return void (await destroy("nas"));
-  if (command === "local:setup" || command === "local:infra") return void (await localInfra());
+  if (command === "local:setup") return void (await localSetup());
+  if (command === "local:infra") return void (await localInfra());
   if (command === "local:migrate") return void (await localMigrate());
+  if (command === "local:seed") return void (await localSeed());
   if (command === "local:dev") {
     const runtime = await localInfra();
     return startNext(runtime.appEnv);
