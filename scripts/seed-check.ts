@@ -1,3 +1,4 @@
+import { randomUUID } from "node:crypto";
 import postgres from "postgres";
 import { assert, integrationEnvironment } from "@/scripts/check-support";
 
@@ -77,7 +78,76 @@ async function main() {
     assert(states.failedTransferStatus === "failed", "Upload Failed Fixture 状态错误");
     assert(states.missingCount === 1, "Missing Assignment 必须由实时视图判定");
 
-    console.log("Demo Seed 验证通过：4 TaskVersions、4 Assignments、7 异常队列、单一 current MatchDecision");
+    const rollbackMarker = new Error("ROLLBACK_ACCEPTED_ASSET_CHECK");
+    try {
+      await db.begin(async (transaction) => {
+        const [current] = await transaction<{ id: string }[]>`
+          select id from egocapture.match_decisions
+          where video_asset_id = '74000000-0000-4000-8000-000000000001'::uuid
+            and superseded_by is null
+          for update
+        `;
+        const participantClaimId = randomUUID();
+        await transaction`set constraints all deferred`;
+        await transaction`
+          update egocapture.match_decisions set superseded_by = ${participantClaimId}::uuid
+          where id = ${current.id}::uuid
+        `;
+        await transaction`
+          insert into egocapture.match_decisions (
+            id, video_asset_id, claimed_session_id, resolved_session_id, resolved_device_id,
+            decision_type, supersedes_decision_id, decided_by
+          ) values (
+            ${participantClaimId}::uuid, '74000000-0000-4000-8000-000000000001'::uuid,
+            '61000000-0000-4000-8000-000000000001'::uuid,
+            '61000000-0000-4000-8000-000000000001'::uuid,
+            '40000000-0000-4000-8000-000000000001'::uuid,
+            'participant_claim', ${current.id}::uuid,
+            '20000000-0000-4000-8000-000000000002'::uuid
+          )
+        `;
+        await transaction`
+          update egocapture.assignments set due_at = now() - interval '1 minute'
+          where id = '60000000-0000-4000-8000-000000000003'::uuid
+        `;
+        const [claimProgress] = await transaction<{ acceptedAssetCandidates: number; isMissing: boolean }[]>`
+          select accepted_asset_candidates::integer, is_missing
+          from egocapture.assignment_progress
+          where id = '60000000-0000-4000-8000-000000000003'::uuid
+        `;
+        assert(claimProgress.acceptedAssetCandidates === 0 && claimProgress.isMissing, "Participant claim 不得冒充 accepted asset");
+
+        const confirmedId = randomUUID();
+        await transaction`
+          update egocapture.match_decisions set superseded_by = ${confirmedId}::uuid
+          where id = ${participantClaimId}::uuid
+        `;
+        await transaction`
+          insert into egocapture.match_decisions (
+            id, video_asset_id, claimed_session_id, resolved_session_id, resolved_device_id,
+            decision_type, reason, supersedes_decision_id, decided_by
+          ) values (
+            ${confirmedId}::uuid, '74000000-0000-4000-8000-000000000001'::uuid,
+            '61000000-0000-4000-8000-000000000001'::uuid,
+            '61000000-0000-4000-8000-000000000001'::uuid,
+            '40000000-0000-4000-8000-000000000001'::uuid,
+            'admin_confirmed', 'Seed check confirms accepted asset semantics',
+            ${participantClaimId}::uuid, '20000000-0000-4000-8000-000000000001'::uuid
+          )
+        `;
+        const [confirmedProgress] = await transaction<{ acceptedAssetCandidates: number; isMissing: boolean }[]>`
+          select accepted_asset_candidates::integer, is_missing
+          from egocapture.assignment_progress
+          where id = '60000000-0000-4000-8000-000000000003'::uuid
+        `;
+        assert(confirmedProgress.acceptedAssetCandidates === 1 && !confirmedProgress.isMissing, "Admin-confirmed asset 必须解除 Missing");
+        throw rollbackMarker;
+      });
+    } catch (error) {
+      if (error !== rollbackMarker) throw error;
+    }
+
+    console.log("Demo Seed 验证通过：基线、Missing accepted-asset 语义与不可变 current MatchDecision");
   } finally {
     await db.end({ timeout: 2 });
   }
