@@ -182,7 +182,28 @@ async function main() {
     }
     assert(duplicateSerialRejected, "相同 Study 的重复非空 serial_hmac 必须被拒绝");
 
-    console.log("Demo Seed 验证通过：基线、Missing 语义、可选设备序列号与不可变 current MatchDecision");
+    const [multipartReservation] = await db<{
+      reservedColumns: number;
+      partTableHasRls: boolean;
+    }[]>`
+      select
+        (select count(*)::integer
+          from information_schema.columns
+          where table_schema = 'egocapture'
+            and table_name = 'upload_attempts'
+            and column_name in ('provider_upload_id', 'expires_at', 'storage_region', 'part_manifest', 'completion_receipt')) as reserved_columns,
+        coalesce((select relation.relrowsecurity
+          from pg_class relation
+          join pg_namespace namespace on namespace.oid = relation.relnamespace
+          where namespace.nspname = 'egocapture'
+            and relation.relname = 'multipart_upload_parts'), false) as part_table_has_rls
+    `;
+    assert(
+      multipartReservation.reservedColumns === 5 && multipartReservation.partTableHasRls,
+      "Multipart 演进字段或 part 表 RLS 未完成预留",
+    );
+
+    console.log("Demo Seed 验证通过：基线、Missing 语义、可选设备序列号、Multipart 预留与不可变 current MatchDecision");
   } finally {
     await db.end({ timeout: 2 });
   }
