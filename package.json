@@ -38,6 +38,7 @@
     "upload:test": "tsx scripts/upload-check.ts",
     "review:test": "tsx scripts/review-check.ts",
     "cron:test": "tsx scripts/cron-check.ts",
+    "repo:safety": "tsx scripts/repository-safety.ts",
     "build": "next build",
     "start": "next start",
     "lint": "eslint .",
