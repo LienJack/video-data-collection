@@ -105,7 +105,8 @@ export function ParticipantControls({
 
   async function addDevice(event: FormEvent<HTMLFormElement>) {
     event.preventDefault(); setBusy("device"); setError("");
-    const form = new FormData(event.currentTarget);
+    const formElement = event.currentTarget;
+    const form = new FormData(formElement);
     const response = await fetch(`/api/admin/participants/${participantPublicId}/devices`, {
       method: "POST",
       headers: { "content-type": "application/json", "idempotency-key": crypto.randomUUID() },
@@ -118,7 +119,7 @@ export function ParticipantControls({
     });
     const payload = await response.json() as { error?: { message?: string } };
     if (!response.ok) setError(payload.error?.message || "设备登记失败");
-    else { event.currentTarget.reset(); router.refresh(); }
+    else { formElement.reset(); router.refresh(); }
     setBusy("");
   }
 
