@@ -144,6 +144,39 @@ async function main() {
       body: JSON.stringify(participantBody),
     });
     assert(replay.payload.data?.participantPublicId === participantPublicId, "Participant idempotency replay diverged");
+    const participantDetail = await api<{ data?: { updatedAt: string } }>(
+      env.siteUrl,
+      `/api/admin/participants/${participantPublicId}`,
+      { method: "GET", jar: adminJar },
+    );
+    assert(participantDetail.response.ok && participantDetail.payload.data?.updatedAt, "Participant detail lookup failed");
+    const participantUpdatedAt = participantDetail.payload.data.updatedAt;
+    const participantUpdate = await api<{ data?: { updatedAt: string } }>(
+      env.siteUrl,
+      `/api/admin/participants/${participantPublicId}`,
+      {
+        method: "PATCH", jar: adminJar, headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          displayAlias: "Participant Check Updated",
+          managementEmail: "synthetic-participant@demo.invalid",
+          notes: "Synthetic participant profile update without PII",
+          expectedUpdatedAt: participantUpdatedAt,
+        }),
+      },
+    );
+    assert(participantUpdate.response.ok && participantUpdate.payload.data?.updatedAt, "Participant profile update failed");
+    const staleParticipantUpdate = await api<{ error?: { code: string } }>(
+      env.siteUrl,
+      `/api/admin/participants/${participantPublicId}`,
+      {
+        method: "PATCH", jar: adminJar, headers: { "content-type": "application/json" },
+        body: JSON.stringify({ notes: "This stale write must be rejected", expectedUpdatedAt: participantUpdatedAt }),
+      },
+    );
+    assert(
+      staleParticipantUpdate.response.status === 409 && staleParticipantUpdate.payload.error?.code === "STALE_WRITE",
+      "Stale Participant profile update was not rejected",
+    );
 
     const revokedParticipant = await api<{ data?: { participantPublicId: string } }>(
       env.siteUrl,
@@ -248,6 +281,43 @@ async function main() {
       },
     );
     assert(device.response.status === 201 && device.payload.data?.devicePublicId, "Device registration failed");
+    const devices = await api<{ data?: Array<{ publicId: string; updatedAt: string }> }>(
+      env.siteUrl,
+      `/api/admin/participants/${participantPublicId}/devices`,
+      { method: "GET", jar: adminJar },
+    );
+    const createdDevice = devices.payload.data?.find((candidate) => candidate.publicId === device.payload.data?.devicePublicId);
+    assert(devices.response.ok && createdDevice?.updatedAt, "Device detail lookup failed");
+    const deviceUpdate = await api<{ data?: { status: string; updatedAt: string } }>(
+      env.siteUrl,
+      `/api/admin/devices/${device.payload.data.devicePublicId}`,
+      {
+        method: "PATCH", jar: adminJar, headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          firmwareVersion: "1.0.1",
+          status: "shared",
+          reason: "Integration check updates firmware and sharing status",
+          expectedUpdatedAt: createdDevice.updatedAt,
+        }),
+      },
+    );
+    assert(deviceUpdate.response.ok && deviceUpdate.payload.data?.status === "shared", "Device update failed");
+    const staleDeviceUpdate = await api<{ error?: { code: string } }>(
+      env.siteUrl,
+      `/api/admin/devices/${device.payload.data.devicePublicId}`,
+      {
+        method: "PATCH", jar: adminJar, headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          status: "active",
+          reason: "Integration check rejects stale device update",
+          expectedUpdatedAt: createdDevice.updatedAt,
+        }),
+      },
+    );
+    assert(
+      staleDeviceUpdate.response.status === 409 && staleDeviceUpdate.payload.error?.code === "STALE_WRITE",
+      "Stale Device update was not rejected",
+    );
     await db`
       update egocapture.devices
       set is_fixture = true
@@ -270,6 +340,8 @@ async function main() {
       tokenHash: Buffer;
       authUserId: string;
       serialHmac: string;
+      deviceStatus: string;
+      firmwareVersion: string;
       auditCount: number;
     }[]>`
       select
@@ -279,6 +351,8 @@ async function main() {
         invitation.token_hash,
         participant.auth_user_id,
         device.serial_hmac,
+        device.status as device_status,
+        device.firmware_version,
         (select count(*)::integer from egocapture.audit_events audit where audit.entity_public_id in (participant.public_id, device.public_id)) as audit_count
       from egocapture.participants participant
       join egocapture.participant_invitations invitation on invitation.participant_id = participant.id
@@ -289,7 +363,8 @@ async function main() {
     assert(databaseEvidence.invitationStatus === "accepted", "Invitation did not become single-use accepted");
     assert(databaseEvidence.tokenHash.equals(createHash("sha256").update(token).digest()), "Invitation hash evidence mismatch");
     assert(databaseEvidence.serialHmac !== serial && /^[a-f0-9]{64}$/.test(databaseEvidence.serialHmac), "Raw device serial was persisted");
-    assert(databaseEvidence.auditCount >= 6, "Participant flow audit evidence incomplete");
+    assert(databaseEvidence.deviceStatus === "shared" && databaseEvidence.firmwareVersion === "1.0.1", "Device update evidence mismatch");
+    assert(databaseEvidence.auditCount >= 8, "Participant flow audit evidence incomplete");
     const [revocationEvidence] = await db<{
       status: string;
       invitationStatus: string;
@@ -333,7 +408,7 @@ async function main() {
     }
   }
   console.log(
-    `Participant create, invitation, consent, login, device, lifecycle and audit API checks passed; retained Demo Fixture ${participantPublicId}`,
+    `Participant create/update, invitation, consent, login, device create/update, optimistic locking, lifecycle and audit API checks passed; retained Demo Fixture ${participantPublicId}`,
   );
 }
 
