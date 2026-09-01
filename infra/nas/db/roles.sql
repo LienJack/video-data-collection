@@ -5,6 +5,8 @@ ALTER USER pgbouncer WITH PASSWORD :'pgpass';
 ALTER USER supabase_auth_admin WITH PASSWORD :'pgpass';
 ALTER USER supabase_storage_admin WITH PASSWORD :'pgpass';
 
+GRANT anon, authenticated, service_role TO supabase_storage_admin;
+
 ALTER FUNCTION auth.uid() OWNER TO supabase_auth_admin;
 ALTER FUNCTION auth.role() OWNER TO supabase_auth_admin;
 ALTER FUNCTION auth.email() OWNER TO supabase_auth_admin;

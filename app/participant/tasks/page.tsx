@@ -12,6 +12,7 @@ export default async function ParticipantTasksPage() {
       <p className="text-xs font-bold uppercase tracking-[0.2em] text-[var(--teal)]">Participant field app</p>
       <h1 className="display mt-3 text-4xl font-semibold">你好，{viewer.displayName}</h1>
       <p className="mt-3 text-sm text-[var(--muted)]">每个任务固定到发布时的 TaskVersion；后续 Draft 修改不会改变你已收到的说明。</p>
+      <Link href="/participant/uploads" className="mt-5 inline-block border border-[var(--ink)] px-4 py-3 text-sm font-bold">上传录制文件 →</Link>
       <div className="mt-10 space-y-4">
         {assignments.map((assignment) => (
           <Link key={assignment.publicId} href={`/participant/tasks/${assignment.publicId}`} className="block border border-[var(--line)] bg-white/40 p-6">

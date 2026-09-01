@@ -10,6 +10,8 @@ const browserEnvironmentSchema = z.object({
 
 const serverEnvironmentSchema = browserEnvironmentSchema.extend({
   SUPABASE_SERVICE_ROLE_KEY: z.string().min(32),
+  SUPABASE_JWT_SECRET: z.string().min(32).optional(),
+  STORAGE_UPLOAD_AUTH_MODE: z.enum(["official_signed", "nas_scoped_jwt"]).default("official_signed"),
   DATABASE_URL: z.string().startsWith("postgresql://"),
   SITE_URL: z.string().url(),
   MARKER_PRIVATE_KEY_JWK: z.string().transform((value, context) => {
@@ -33,6 +35,14 @@ const serverEnvironmentSchema = browserEnvironmentSchema.extend({
   CRON_SECRET: z.string().min(32),
   DEMO_ADMIN_PASSWORD: z.string().min(10),
   DEMO_PARTICIPANT_PASSWORD: z.string().min(10),
+}).superRefine((environment, context) => {
+  if (environment.STORAGE_UPLOAD_AUTH_MODE === "nas_scoped_jwt" && !environment.SUPABASE_JWT_SECRET) {
+    context.addIssue({
+      code: "custom",
+      path: ["SUPABASE_JWT_SECRET"],
+      message: "NAS scoped upload 模式必须配置 Supabase JWT secret",
+    });
+  }
 });
 
 export type ServerEnvironment = z.infer<typeof serverEnvironmentSchema>;

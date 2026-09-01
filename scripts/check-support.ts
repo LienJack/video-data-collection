@@ -21,6 +21,7 @@ export function integrationEnvironment() {
   for (const key of [
     "DATABASE_URL",
     "NEXT_PUBLIC_SUPABASE_URL",
+    "NEXT_PUBLIC_STORAGE_TUS_ENDPOINT",
     "SUPABASE_SERVICE_ROLE_KEY",
     "SITE_URL",
     "MARKER_PUBLIC_KEY_JWK",
@@ -31,6 +32,7 @@ export function integrationEnvironment() {
   return {
     databaseUrl: merged.DATABASE_URL!,
     supabaseUrl: merged.NEXT_PUBLIC_SUPABASE_URL!,
+    tusEndpoint: merged.NEXT_PUBLIC_STORAGE_TUS_ENDPOINT!,
     serviceRoleKey: merged.SUPABASE_SERVICE_ROLE_KEY!,
     siteUrl: merged.SITE_URL!,
     markerPublicKeyJwk: JSON.parse(merged.MARKER_PUBLIC_KEY_JWK!) as Record<string, unknown>,

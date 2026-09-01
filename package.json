@@ -31,6 +31,7 @@
     "participant:test": "tsx scripts/participant-check.ts",
     "task:test": "tsx scripts/task-check.ts",
     "session:test": "tsx scripts/session-check.ts",
+    "upload:test": "tsx scripts/upload-check.ts",
     "build": "next build",
     "start": "next start",
     "lint": "eslint .",

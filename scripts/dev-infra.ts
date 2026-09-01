@@ -146,6 +146,8 @@ async function createSecrets(profile: Profile) {
     `NEXT_PUBLIC_SUPABASE_ANON_KEY=${anonKey}`,
     `NEXT_PUBLIC_STORAGE_TUS_ENDPOINT=http://127.0.0.1:${apiPort}/storage/v1/upload/resumable`,
     `SUPABASE_SERVICE_ROLE_KEY=${serviceKey}`,
+    `SUPABASE_JWT_SECRET=${secret}`,
+    "STORAGE_UPLOAD_AUTH_MODE=nas_scoped_jwt",
     `DATABASE_URL=postgresql://postgres:${encodeURIComponent(dbPassword)}@127.0.0.1:${dbPort}/postgres`,
     "SITE_URL=http://localhost:3000",
     `MARKER_PRIVATE_KEY_JWK=${markerPrivate}`,
@@ -175,6 +177,16 @@ async function ensureRuntime(profile: Profile) {
   }
   await chmod(composePath, 0o600);
   await chmod(appPath, 0o600);
+  const composeEnv = parseEnv(await readFile(composePath, "utf8"));
+  const existingApp = await readFile(appPath, "utf8");
+  const appEnv = parseEnv(existingApp);
+  if (!appEnv.SUPABASE_JWT_SECRET || !appEnv.STORAGE_UPLOAD_AUTH_MODE) {
+    const additions = [
+      !appEnv.SUPABASE_JWT_SECRET ? `SUPABASE_JWT_SECRET=${composeEnv.JWT_SECRET}` : "",
+      !appEnv.STORAGE_UPLOAD_AUTH_MODE ? "STORAGE_UPLOAD_AUTH_MODE=nas_scoped_jwt" : "",
+    ].filter(Boolean).join("\n");
+    await writeFile(appPath, `${existingApp.trimEnd()}\n${additions}\n`, { mode: 0o600 });
+  }
   return {
     directory,
     composePath,
@@ -269,6 +281,8 @@ function repairRemoteDatabaseRoles() {
 ALTER USER pgbouncer WITH PASSWORD :'pgpass';
 ALTER USER supabase_auth_admin WITH PASSWORD :'pgpass';
 ALTER USER supabase_storage_admin WITH PASSWORD :'pgpass';
+
+GRANT anon, authenticated, service_role TO supabase_storage_admin;
 
 ALTER FUNCTION auth.uid() OWNER TO supabase_auth_admin;
 ALTER FUNCTION auth.role() OWNER TO supabase_auth_admin;
