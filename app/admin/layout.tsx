@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { ClipboardList, LayoutDashboard, ListChecks, Radio, Users } from "lucide-react";
+import { ClipboardList, HardDrive, History, LayoutDashboard, ListChecks, Radio, ScanSearch, Users } from "lucide-react";
 import { LogoutButton } from "@/app/admin/logout-button";
 import { requireAdmin } from "@/src/server/auth";
 
@@ -20,6 +20,9 @@ export default async function AdminLayout({ children }: { children: React.ReactN
           <Link href="/admin/tasks" className="flex items-center gap-3 px-3 py-3 text-sm hover:bg-white/10"><ClipboardList className="h-4 w-4" />Tasks</Link>
           <Link href="/admin/assignments" className="flex items-center gap-3 px-3 py-3 text-sm hover:bg-white/10"><ListChecks className="h-4 w-4" />Assignments</Link>
           <Link href="/admin/sessions" className="flex items-center gap-3 px-3 py-3 text-sm hover:bg-white/10"><Radio className="h-4 w-4" />Sessions</Link>
+          <Link href="/admin/uploads" className="flex items-center gap-3 px-3 py-3 text-sm hover:bg-white/10"><HardDrive className="h-4 w-4" />Uploads</Link>
+          <Link href="/admin/review" className="flex items-center gap-3 px-3 py-3 text-sm hover:bg-white/10"><ScanSearch className="h-4 w-4" />Review</Link>
+          <Link href="/admin/audit" className="flex items-center gap-3 px-3 py-3 text-sm hover:bg-white/10"><History className="h-4 w-4" />Audit</Link>
         </nav>
         <div className="mt-8 lg:fixed lg:bottom-8"><LogoutButton /></div>
       </aside>

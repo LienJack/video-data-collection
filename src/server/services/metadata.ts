@@ -28,6 +28,7 @@ type MetadataAuthority = {
   participantId: string;
   videoAssetId: string;
   videoAssetPublicId: string;
+  assetIsFixture: boolean;
   objectKey: string;
   objectSize: number;
   extension: "mp4" | "mov" | "insv";
@@ -75,6 +76,7 @@ async function metadataAuthority(viewer: Viewer, uploadPublicId: string): Promis
       intent.local_modified_at,
       asset.id as video_asset_id,
       asset.public_id as video_asset_public_id,
+      asset.is_fixture as asset_is_fixture,
       object.object_key,
       object.size_bytes::integer as object_size,
       expected_device.manufacturer as declared_manufacturer,
@@ -302,10 +304,11 @@ async function finishSuccess(input: {
     if (mismatch) {
       await transaction`
         insert into egocapture.review_cases (
-          public_id, study_id, video_asset_id, case_type, reason
+          public_id, study_id, video_asset_id, case_type, reason, is_fixture
         ) select
           ${createPublicId("RV")}, ${input.authority.studyId}::uuid,
-          ${input.authority.videoAssetId}::uuid, 'device_mismatch', ${consistency}
+          ${input.authority.videoAssetId}::uuid, 'device_mismatch', ${consistency},
+          ${input.authority.assetIsFixture}
         where not exists (
           select 1 from egocapture.review_cases
           where video_asset_id = ${input.authority.videoAssetId}::uuid
@@ -385,10 +388,11 @@ async function finishFailure(input: {
     if (failure.status === "failed") {
       await transaction`
         insert into egocapture.review_cases (
-          public_id, study_id, video_asset_id, case_type, reason
+          public_id, study_id, video_asset_id, case_type, reason, is_fixture
         ) select
           ${createPublicId("RV")}, ${input.authority.studyId}::uuid,
-          ${input.authority.videoAssetId}::uuid, 'metadata_failed', ${failure.code}
+          ${input.authority.videoAssetId}::uuid, 'metadata_failed', ${failure.code},
+          ${input.authority.assetIsFixture}
         where not exists (
           select 1 from egocapture.review_cases
           where video_asset_id = ${input.authority.videoAssetId}::uuid

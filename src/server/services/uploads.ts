@@ -40,6 +40,7 @@ type UploadAuthority = {
   studyId: string;
   participantId: string;
   participantStatus: string;
+  participantIsFixture: boolean;
   consentStatus: string;
   objectKey: string;
   sizeBytes: number;
@@ -114,6 +115,7 @@ async function ownUploadAuthority(
       intent.study_id,
       intent.participant_id,
       participant.status as participant_status,
+      participant.is_fixture as participant_is_fixture,
       participant.consent_status,
       intent.object_key,
       intent.size_bytes::integer,
@@ -492,10 +494,10 @@ async function recordUploadFailure(
     `;
     await transaction`
       insert into egocapture.review_cases (
-        public_id, study_id, upload_intent_id, case_type, reason
+        public_id, study_id, upload_intent_id, case_type, reason, is_fixture
       )
       select ${createPublicId("RV")}, ${upload.studyId}::uuid, ${upload.id}::uuid,
-        'upload_failed', ${failureCode}
+        'upload_failed', ${failureCode}, ${upload.participantIsFixture}
       where not exists (
         select 1 from egocapture.review_cases
         where upload_intent_id = ${upload.id}::uuid and case_type = 'upload_failed' and status = 'open'
@@ -573,9 +575,10 @@ export async function completeUpload(viewer: Viewer, uploadPublicId: string, req
     const assetPublicId = createPublicId("VA");
     const [asset] = await transaction<{ id: string }[]>`
       insert into egocapture.video_assets (
-        public_id, upload_intent_id, study_id, participant_id
+        public_id, upload_intent_id, study_id, participant_id, is_fixture
       ) values (
-        ${assetPublicId}, ${upload.id}::uuid, ${upload.studyId}::uuid, ${upload.participantId}::uuid
+        ${assetPublicId}, ${upload.id}::uuid, ${upload.studyId}::uuid, ${upload.participantId}::uuid,
+        ${upload.participantIsFixture}
       ) returning id
     `;
     await transaction`
@@ -601,10 +604,10 @@ export async function completeUpload(viewer: Viewer, uploadPublicId: string, req
     if (upload.unableToDetermine) {
       await transaction`
         insert into egocapture.review_cases (
-          public_id, study_id, video_asset_id, case_type, reason
+          public_id, study_id, video_asset_id, case_type, reason, is_fixture
         ) values (
           ${createPublicId("RV")}, ${upload.studyId}::uuid, ${asset.id}::uuid,
-          'unmatched', 'participant_selected_unable_to_determine'
+          'unmatched', 'participant_selected_unable_to_determine', ${upload.participantIsFixture}
         )
       `;
     }
@@ -622,10 +625,10 @@ export async function completeUpload(viewer: Viewer, uploadPublicId: string, req
     if (duplicate.exists) {
       await transaction`
         insert into egocapture.review_cases (
-          public_id, study_id, video_asset_id, case_type, reason
+          public_id, study_id, video_asset_id, case_type, reason, is_fixture
         ) values (
           ${createPublicId("RV")}, ${upload.studyId}::uuid, ${asset.id}::uuid,
-          'duplicate_candidate', 'matching_size_and_fingerprint_v1'
+          'duplicate_candidate', 'matching_size_and_fingerprint_v1', ${upload.participantIsFixture}
         )
       `;
     }
