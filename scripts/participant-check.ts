@@ -1,0 +1,343 @@
+import { createHash, randomBytes, randomUUID } from "node:crypto";
+import { readFileSync } from "node:fs";
+import path from "node:path";
+import process from "node:process";
+import { createClient } from "@supabase/supabase-js";
+import postgres from "postgres";
+
+function parseEnv(text: string): Record<string, string> {
+  return Object.fromEntries(text.split(/\r?\n/).filter((line) => line && !line.startsWith("#")).map((line) => {
+    const separator = line.indexOf("=");
+    return [line.slice(0, separator), line.slice(separator + 1)];
+  }));
+}
+
+function readEnv(file: string) {
+  try { return parseEnv(readFileSync(file, "utf8")); } catch { return {}; }
+}
+
+function environment() {
+  const root = process.cwd();
+  const local = readEnv(path.join(root, ".env.development.local"));
+  const profile = local.EGOCAPTURE_DEV_PROFILE || "local";
+  const merged = { ...readEnv(path.join(root, ".runtime", profile, "app.env")), ...process.env };
+  for (const key of ["DATABASE_URL", "NEXT_PUBLIC_SUPABASE_URL", "SUPABASE_SERVICE_ROLE_KEY", "SITE_URL"]) {
+    if (!merged[key]) throw new Error(`缺少 ${key}`);
+  }
+  return {
+    databaseUrl: merged.DATABASE_URL!,
+    supabaseUrl: merged.NEXT_PUBLIC_SUPABASE_URL!,
+    serviceRoleKey: merged.SUPABASE_SERVICE_ROLE_KEY!,
+    siteUrl: merged.SITE_URL!,
+  };
+}
+
+class CookieJar {
+  private readonly values = new Map<string, string>();
+  absorb(response: Response) {
+    for (const header of response.headers.getSetCookie()) {
+      const pair = header.slice(0, header.indexOf(";"));
+      const separator = pair.indexOf("=");
+      const name = pair.slice(0, separator);
+      const value = pair.slice(separator + 1);
+      if (/max-age=0/i.test(header) || !value) this.values.delete(name);
+      else this.values.set(name, value);
+    }
+  }
+  header() { return [...this.values].map(([name, value]) => `${name}=${value}`).join("; "); }
+}
+
+async function api<T>(
+  siteUrl: string,
+  route: string,
+  options: RequestInit & { jar?: CookieJar } = {},
+): Promise<{ response: Response; payload: T }> {
+  const headers = new Headers(options.headers);
+  headers.set("origin", new URL(siteUrl).origin);
+  if (options.jar?.header()) headers.set("cookie", options.jar.header());
+  const response = await fetch(`${siteUrl}${route}`, { ...options, headers, redirect: "manual" });
+  options.jar?.absorb(response);
+  const payload = await response.json() as T;
+  return { response, payload };
+}
+
+function assert(condition: unknown, message: string): asserts condition {
+  if (!condition) throw new Error(message);
+}
+
+async function main() {
+  const env = environment();
+  const db = postgres(env.databaseUrl, {
+    max: 1,
+    prepare: false,
+    connect_timeout: 8,
+    transform: postgres.camel,
+  });
+  const supabase = createClient(env.supabaseUrl, env.serviceRoleKey, {
+    auth: { autoRefreshToken: false, detectSessionInUrl: false, persistSession: false },
+  });
+  const suffix = randomUUID();
+  const adminEmail = `participant-check-${suffix}@demo.invalid`;
+  const adminPassword = randomBytes(24).toString("base64url");
+  const participantPassword = randomBytes(24).toString("base64url");
+  const studyId = randomUUID();
+  const studyPublicId = `ST-${suffix.replaceAll("-", "").slice(0, 8).toUpperCase().replace(/[01IO]/g, "2")}`;
+  const adminJar = new CookieJar();
+  const participantJar = new CookieJar();
+  let adminUserId: string | undefined;
+  let participantPublicId: string | undefined;
+  let revokedParticipantPublicId: string | undefined;
+  try {
+    const { data: adminUser, error: adminError } = await supabase.auth.admin.createUser({
+      email: adminEmail, password: adminPassword, email_confirm: true,
+    });
+    if (adminError || !adminUser.user) throw adminError || new Error("Admin test user creation failed");
+    adminUserId = adminUser.user.id;
+    const [profile] = await db<{ id: string }[]>`
+      insert into egocapture.profiles (auth_user_id, role, display_name)
+      values (${adminUserId}::uuid, 'admin', 'Participant Check Admin') returning id
+    `;
+    await db`
+      insert into egocapture.studies (id, public_id, slug, name, serial_hmac_salt, is_demo)
+      values (
+        ${studyId}::uuid,
+        ${studyPublicId},
+        ${`participant-check-${suffix}`},
+        'Participant Integration Fixture',
+        'participant-check-salt',
+        true
+      )
+    `;
+    await db`
+      insert into egocapture.study_memberships (study_id, profile_id, role)
+      values (${studyId}::uuid, ${profile.id}::uuid, 'owner')
+    `;
+
+    const login = await api<{ data?: { redirectTo: string } }>(env.siteUrl, "/api/auth/admin-login", {
+      method: "POST", jar: adminJar, headers: { "content-type": "application/json" },
+      body: JSON.stringify({ email: adminEmail, password: adminPassword }),
+    });
+    assert(login.response.ok && login.payload.data?.redirectTo === "/admin/dashboard", "Admin API login failed");
+    assert(adminJar.header(), "Admin login did not set SSR cookies");
+
+    const participantBody = {
+      studyPublicId, displayAlias: "Participant Check", managementEmail: null,
+      locale: "zh-CN", timezone: "Asia/Shanghai", countryRegion: "CN",
+      consentVersion: "check-v1", notes: "Synthetic participant integration check",
+    };
+    const participantKey = randomUUID();
+    const created = await api<{ data?: { participantPublicId: string } }>(env.siteUrl, "/api/admin/participants", {
+      method: "POST", jar: adminJar,
+      headers: { "content-type": "application/json", "idempotency-key": participantKey },
+      body: JSON.stringify(participantBody),
+    });
+    assert(created.response.status === 201 && created.payload.data?.participantPublicId, "Participant creation failed");
+    participantPublicId = created.payload.data.participantPublicId;
+    await db`
+      update egocapture.participants
+      set is_fixture = true
+      where public_id = ${participantPublicId}
+    `;
+    const replay = await api<{ data?: { participantPublicId: string } }>(env.siteUrl, "/api/admin/participants", {
+      method: "POST", jar: adminJar,
+      headers: { "content-type": "application/json", "idempotency-key": participantKey },
+      body: JSON.stringify(participantBody),
+    });
+    assert(replay.payload.data?.participantPublicId === participantPublicId, "Participant idempotency replay diverged");
+
+    const revokedParticipant = await api<{ data?: { participantPublicId: string } }>(
+      env.siteUrl,
+      "/api/admin/participants",
+      {
+        method: "POST",
+        jar: adminJar,
+        headers: { "content-type": "application/json", "idempotency-key": randomUUID() },
+        body: JSON.stringify({ ...participantBody, displayAlias: "Revoked Invitation Check" }),
+      },
+    );
+    assert(
+      revokedParticipant.response.status === 201 && revokedParticipant.payload.data?.participantPublicId,
+      "Revocation fixture Participant creation failed",
+    );
+    revokedParticipantPublicId = revokedParticipant.payload.data.participantPublicId;
+    await db`
+      update egocapture.participants
+      set is_fixture = true
+      where public_id = ${revokedParticipantPublicId}
+    `;
+    const revokedInvitation = await api<{ data?: { invitationUrl: string } }>(
+      env.siteUrl,
+      `/api/admin/participants/${revokedParticipantPublicId}/invitations`,
+      { method: "POST", jar: adminJar, headers: { "idempotency-key": randomUUID() } },
+    );
+    assert(
+      revokedInvitation.response.status === 201 && revokedInvitation.payload.data?.invitationUrl,
+      "Revocation fixture Invitation generation failed",
+    );
+    const revokedToken = revokedInvitation.payload.data.invitationUrl.split("/").at(-1)!;
+    const revoked = await api<{ data?: { status: string; invitationStatus: string } }>(
+      env.siteUrl,
+      `/api/admin/participants/${revokedParticipantPublicId}/invitations/revoke`,
+      {
+        method: "POST",
+        jar: adminJar,
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ reason: "Integration check explicit invitation revocation" }),
+      },
+    );
+    assert(
+      revoked.response.ok && revoked.payload.data?.status === "expired" && revoked.payload.data.invitationStatus === "revoked",
+      "Invitation revocation failed",
+    );
+    const rejectedRevokedToken = await api<{ error?: { code: string } }>(
+      env.siteUrl,
+      `/api/invitations/${revokedToken}/accept`,
+      {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ password: participantPassword }),
+      },
+    );
+    assert(
+      rejectedRevokedToken.response.status === 400 &&
+        rejectedRevokedToken.payload.error?.code === "INVITATION_INVALID_OR_EXPIRED",
+      "Revoked Invitation error was not safely unified",
+    );
+
+    const invitation = await api<{ data?: { invitationUrl: string } }>(
+      env.siteUrl,
+      `/api/admin/participants/${participantPublicId}/invitations`,
+      { method: "POST", jar: adminJar, headers: { "idempotency-key": randomUUID() } },
+    );
+    assert(invitation.response.status === 201 && invitation.payload.data?.invitationUrl, "Invitation generation failed");
+    const invitationUrl = invitation.payload.data.invitationUrl;
+    const token = invitationUrl.split("/").at(-1)!;
+    assert(!invitationUrl.includes(participantPublicId), "Invitation URL leaked Participant ID");
+    const invitePage = await fetch(invitationUrl);
+    assert(invitePage.ok, "Invitation open page failed");
+
+    const accepted = await api<{ data?: { participantPublicId: string; redirectTo: string } }>(
+      env.siteUrl,
+      `/api/invitations/${token}/accept`,
+      { method: "POST", jar: participantJar, headers: { "content-type": "application/json" }, body: JSON.stringify({ password: participantPassword }) },
+    );
+    assert(accepted.response.ok && accepted.payload.data?.redirectTo === "/participant/tasks", "Invitation acceptance failed");
+    assert(participantJar.header(), "Invitation acceptance did not establish Participant session");
+
+    const tasksResponse = await fetch(`${env.siteUrl}/participant/tasks`, { headers: { cookie: participantJar.header() } });
+    assert(tasksResponse.ok && (await tasksResponse.text()).includes("Participant Check"), "Participant SSR authorization failed");
+
+    const participantLoginJar = new CookieJar();
+    const participantLogin = await api<{ data?: { redirectTo: string } }>(env.siteUrl, "/api/auth/participant-login", {
+      method: "POST", jar: participantLoginJar, headers: { "content-type": "application/json" },
+      body: JSON.stringify({ participantPublicId, password: participantPassword }),
+    });
+    assert(participantLogin.response.ok && participantLogin.payload.data?.redirectTo === "/participant/tasks", "Participant Public ID login failed");
+
+    const serial = `RAW-SERIAL-${suffix}`;
+    const device = await api<{ data?: { devicePublicId: string } }>(
+      env.siteUrl,
+      `/api/admin/participants/${participantPublicId}/devices`,
+      {
+        method: "POST", jar: adminJar,
+        headers: { "content-type": "application/json", "idempotency-key": randomUUID() },
+        body: JSON.stringify({
+          manufacturer: "Synthetic", model: "Check Cam", deviceType: "action_camera",
+          serial, firmwareVersion: "1.0.0", status: "active", setAsDefault: true,
+        }),
+      },
+    );
+    assert(device.response.status === 201 && device.payload.data?.devicePublicId, "Device registration failed");
+    await db`
+      update egocapture.devices
+      set is_fixture = true
+      where public_id = ${device.payload.data.devicePublicId}
+    `;
+
+    for (const action of ["suspend", "reactivate"] as const) {
+      const result = await api<{ data?: { status: string } }>(
+        env.siteUrl,
+        `/api/admin/participants/${participantPublicId}/${action}`,
+        { method: "POST", jar: adminJar, headers: { "content-type": "application/json" }, body: JSON.stringify({ reason: `Integration check ${action} transition` }) },
+      );
+      assert(result.response.ok, `Participant ${action} failed`);
+    }
+
+    const [databaseEvidence] = await db<{
+      status: string;
+      consentStatus: string;
+      invitationStatus: string;
+      tokenHash: Buffer;
+      authUserId: string;
+      serialHmac: string;
+      auditCount: number;
+    }[]>`
+      select
+        participant.status,
+        participant.consent_status,
+        invitation.status as invitation_status,
+        invitation.token_hash,
+        participant.auth_user_id,
+        device.serial_hmac,
+        (select count(*)::integer from egocapture.audit_events audit where audit.entity_public_id in (participant.public_id, device.public_id)) as audit_count
+      from egocapture.participants participant
+      join egocapture.participant_invitations invitation on invitation.participant_id = participant.id
+      join egocapture.devices device on device.id = participant.default_device_id
+      where participant.public_id = ${participantPublicId}
+    `;
+    assert(databaseEvidence.status === "active" && databaseEvidence.consentStatus === "valid", "Participant lifecycle result mismatch");
+    assert(databaseEvidence.invitationStatus === "accepted", "Invitation did not become single-use accepted");
+    assert(databaseEvidence.tokenHash.equals(createHash("sha256").update(token).digest()), "Invitation hash evidence mismatch");
+    assert(databaseEvidence.serialHmac !== serial && /^[a-f0-9]{64}$/.test(databaseEvidence.serialHmac), "Raw device serial was persisted");
+    assert(databaseEvidence.auditCount >= 6, "Participant flow audit evidence incomplete");
+    const [revocationEvidence] = await db<{
+      status: string;
+      invitationStatus: string;
+      auditCount: number;
+    }[]>`
+      select
+        participant.status,
+        invitation.status as invitation_status,
+        (select count(*)::integer from egocapture.audit_events audit
+          where audit.entity_public_id = participant.public_id
+            and audit.action = 'participant.invitation_revoked') as audit_count
+      from egocapture.participants participant
+      join egocapture.participant_invitations invitation on invitation.participant_id = participant.id
+      where participant.public_id = ${revokedParticipantPublicId}
+    `;
+    assert(
+      revocationEvidence.status === "expired" &&
+        revocationEvidence.invitationStatus === "revoked" &&
+        revocationEvidence.auditCount === 1,
+      "Invitation revocation database or audit evidence mismatch",
+    );
+  } finally {
+    try {
+      const [evidence] = await db<{ auditCount: number; hasParticipant: boolean }[]>`
+        select
+          (select count(*)::integer from egocapture.audit_events where study_id = ${studyId}::uuid) as audit_count,
+          exists(select 1 from egocapture.participants where study_id = ${studyId}::uuid) as has_participant
+      `;
+      if (evidence.auditCount > 0 || evidence.hasParticipant) {
+        await db`update egocapture.studies set is_demo = true where id = ${studyId}::uuid`;
+        await db`update egocapture.participants set is_fixture = true where study_id = ${studyId}::uuid`;
+        await db`update egocapture.devices set is_fixture = true where study_id = ${studyId}::uuid`;
+      } else {
+        await db`delete from egocapture.study_memberships where study_id = ${studyId}::uuid`;
+        await db`delete from egocapture.studies where id = ${studyId}::uuid`;
+        if (adminUserId) await db`delete from egocapture.profiles where auth_user_id = ${adminUserId}::uuid`;
+        if (adminUserId) await supabase.auth.admin.deleteUser(adminUserId);
+      }
+    } finally {
+      await db.end({ timeout: 2 });
+    }
+  }
+  console.log(
+    `Participant create, invitation, consent, login, device, lifecycle and audit API checks passed; retained Demo Fixture ${participantPublicId}`,
+  );
+}
+
+main().catch((error) => {
+  console.error(error instanceof Error ? `EgoCapture Participant: ${error.message}` : error);
+  process.exitCode = 1;
+});

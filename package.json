@@ -28,6 +28,7 @@
     "db:verify": "tsx scripts/database.ts verify",
     "db:test:rls": "tsx scripts/rls-check.ts",
     "auth:test": "tsx scripts/auth-check.ts",
+    "participant:test": "tsx scripts/participant-check.ts",
     "build": "next build",
     "start": "next start",
     "lint": "eslint .",
