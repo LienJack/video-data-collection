@@ -39,40 +39,6 @@ jobs:
       - run: pnpm install --frozen-lockfile
       - run: pnpm repo:safety
 
-  database:
-    runs-on: ubuntu-latest
-    timeout-minutes: 15
-    services:
-      postgres:
-        image: supabase/postgres:17.6.1.136
-        env:
-          POSTGRES_PASSWORD: postgres
-          POSTGRES_DB: postgres
-          JWT_SECRET: ci-only-jwt-secret-with-at-least-thirty-two-characters
-          JWT_EXP: 3600
-        ports:
-          - 54322:5432
-        options: >-
-          --health-cmd "pg_isready -U postgres -h 127.0.0.1"
-          --health-interval 5s
-          --health-timeout 5s
-          --health-retries 20
-    env:
-      DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:54322/postgres
-    steps:
-      - uses: actions/checkout@v4
-      - uses: pnpm/action-setup@v4
-        with:
-          version: 10.33.2
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 24
-          cache: pnpm
-      - run: pnpm install --frozen-lockfile
-      - run: pnpm db:migrate
-      - run: pnpm db:verify
-      - run: pnpm db:test:rls
-
   browser-acceptance:
     runs-on: ubuntu-latest
     timeout-minutes: 35
@@ -88,6 +54,8 @@ jobs:
       - run: pnpm install --frozen-lockfile
       - run: pnpm exec playwright install --with-deps chromium webkit
       - run: pnpm dev:local:setup
+      - run: pnpm db:verify
+      - run: pnpm db:test:rls
       - run: pnpm test:e2e
       - if: always()
         run: pnpm dev:local:down
