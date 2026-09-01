@@ -14,5 +14,5 @@ export default async function NewTaskPage() {
     where membership.profile_id = ${viewer.profileId}::uuid and membership.status = 'active'
     order by study.name
   `;
-  return <main className="mx-auto max-w-5xl px-5 py-8 sm:px-10"><Link href="/admin/tasks" className="text-sm font-bold text-[var(--teal)]">← Tasks</Link><h1 className="display mt-8 text-5xl font-semibold">创建 Task Draft</h1><TaskEditor mode="create" studies={studies} initialInstructions={JSON.stringify(defaultTaskInstructions, null, 2)} /></main>;
+  return <main className="content-page"><Link href="/admin/tasks" className="secondary-action">← Tasks</Link><p className="page-kicker mt-10">Mutable workspace</p><h1 className="page-title">创建 Task Draft</h1><TaskEditor mode="create" studies={studies} initialInstructions={JSON.stringify(defaultTaskInstructions, null, 2)} /></main>;
 }

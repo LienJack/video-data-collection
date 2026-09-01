@@ -42,11 +42,11 @@ export default async function AdminUploadPage({ params }: { params: Promise<{ up
   ];
 
   return (
-    <main className="px-5 py-8 sm:px-10">
+    <main className="app-page">
       <Link href="/admin/uploads" className="text-sm font-bold text-[var(--teal)]">← Uploads</Link>
       <header className="mt-8 border-b border-[var(--line)] pb-7">
         <p className="text-xs font-bold text-[var(--signal)]">{upload.publicId}</p>
-        <h1 className="display mt-3 break-all text-4xl font-semibold">{upload.originalFilename}</h1>
+        <h1 className="page-title break-all">{upload.originalFilename}</h1>
         <p className="mt-3 text-sm text-[var(--muted)]">{upload.participantAlias} · {upload.participantPublicId} · {upload.sizeBytes.toLocaleString()} bytes · {upload.contentType}{upload.storageDeletedAt ? " · Demo object retention expired" : ""}</p>
         <UploadActions uploadPublicId={upload.publicId} canPreview={upload.transferStatus === "verified" && !upload.storageDeletedAt} />
       </header>

@@ -31,11 +31,11 @@ export default async function ParticipantAssignmentPage({ params }: { params: Pr
   ]);
   const instructions = assignment.instructions;
   return (
-    <main className="mx-auto min-h-screen max-w-2xl px-5 py-8">
+    <main className="content-page max-w-3xl">
       <Link href="/participant/tasks" className="text-sm font-bold text-[var(--teal)]">← 我的任务</Link>
       <header className="mt-8 border-b border-[var(--line)] pb-7">
         <p className="text-xs font-bold text-[var(--signal)]">{assignment.publicId} · Version {assignment.taskVersion} · {assignment.status}</p>
-        <h1 className="display mt-3 text-4xl font-semibold">{instructions.title}</h1>
+        <h1 className="page-title">{instructions.title}</h1>
         <p className="mt-4 text-sm leading-7 text-[var(--muted)]">{instructions.description}</p>
         <p className="mt-4 text-sm font-semibold">预计时长：{formatDuration(instructions.estimatedDurationSec)}</p>
         <p className="mt-4 break-all font-mono text-[10px] text-[var(--muted)]">content_hash {assignment.contentHash}</p>

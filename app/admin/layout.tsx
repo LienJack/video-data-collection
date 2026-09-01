@@ -1,32 +1,41 @@
+import { ClipboardText, HardDrives, ListChecks, Pulse, Radio, Scan, Scroll, UsersThree } from "@phosphor-icons/react/dist/ssr";
 import Link from "next/link";
-import { ClipboardList, HardDrive, History, LayoutDashboard, ListChecks, Radio, ScanSearch, Users } from "lucide-react";
 import { LogoutButton } from "@/app/admin/logout-button";
 import { requireAdmin } from "@/src/server/auth";
 
 export const dynamic = "force-dynamic";
 
+const navigation = [
+  ["/admin/dashboard", "总览", Pulse],
+  ["/admin/participants", "Participants", UsersThree],
+  ["/admin/tasks", "Tasks", ClipboardText],
+  ["/admin/assignments", "Assignments", ListChecks],
+  ["/admin/sessions", "Sessions", Radio],
+  ["/admin/uploads", "Uploads", HardDrives],
+  ["/admin/review", "Review", Scan],
+  ["/admin/audit", "Audit", Scroll],
+] as const;
+
 export default async function AdminLayout({ children }: { children: React.ReactNode }) {
   const viewer = await requireAdmin();
   return (
-    <div className="min-h-screen lg:grid lg:grid-cols-[240px_1fr]">
-      <aside className="border-b border-[var(--line)] bg-[var(--ink)] px-6 py-6 text-[var(--paper)] lg:min-h-screen lg:border-b-0 lg:border-r lg:py-8">
-        <div className="flex items-center justify-between lg:block">
-          <Link href="/admin/dashboard" className="display text-2xl font-semibold">EgoCapture</Link>
-          <span className="text-xs text-white/50 lg:mt-2 lg:block">{viewer.displayName}</span>
+    <div className="min-h-[100dvh] lg:grid lg:grid-cols-[264px_1fr]">
+      <aside className="glass-nav z-30 mx-3 mt-3 rounded-[26px] px-4 py-4 text-white lg:sticky lg:top-3 lg:ml-3 lg:mr-0 lg:h-[calc(100dvh-1.5rem)] lg:px-4 lg:py-6">
+        <div className="flex items-center justify-between px-2 lg:block">
+          <Link href="/admin/dashboard" className="display text-xl font-semibold tracking-[-0.04em]">EgoCapture</Link>
+          <p className="hidden text-xs text-white/45 lg:mt-2 lg:block">Research operations</p>
+          <span className="rounded-full bg-white/10 px-3 py-1 text-[11px] text-white/65 lg:mt-5 lg:inline-flex">{viewer.displayName}</span>
         </div>
-        <nav className="mt-6 flex gap-2 lg:mt-14 lg:block lg:space-y-2" aria-label="管理导航">
-          <Link href="/admin/dashboard" className="flex items-center gap-3 px-3 py-3 text-sm hover:bg-white/10"><LayoutDashboard className="h-4 w-4" />总览</Link>
-          <Link href="/admin/participants" className="flex items-center gap-3 px-3 py-3 text-sm hover:bg-white/10"><Users className="h-4 w-4" />Participants</Link>
-          <Link href="/admin/tasks" className="flex items-center gap-3 px-3 py-3 text-sm hover:bg-white/10"><ClipboardList className="h-4 w-4" />Tasks</Link>
-          <Link href="/admin/assignments" className="flex items-center gap-3 px-3 py-3 text-sm hover:bg-white/10"><ListChecks className="h-4 w-4" />Assignments</Link>
-          <Link href="/admin/sessions" className="flex items-center gap-3 px-3 py-3 text-sm hover:bg-white/10"><Radio className="h-4 w-4" />Sessions</Link>
-          <Link href="/admin/uploads" className="flex items-center gap-3 px-3 py-3 text-sm hover:bg-white/10"><HardDrive className="h-4 w-4" />Uploads</Link>
-          <Link href="/admin/review" className="flex items-center gap-3 px-3 py-3 text-sm hover:bg-white/10"><ScanSearch className="h-4 w-4" />Review</Link>
-          <Link href="/admin/audit" className="flex items-center gap-3 px-3 py-3 text-sm hover:bg-white/10"><History className="h-4 w-4" />Audit</Link>
+        <nav className="mt-4 flex gap-1 overflow-x-auto pb-1 lg:mt-9 lg:block lg:space-y-1" aria-label="管理导航">
+          {navigation.map(([href, label, Icon]) => (
+            <Link key={href} href={href} className="group flex shrink-0 items-center gap-3 rounded-xl px-3 py-2.5 text-sm text-white/66 transition hover:bg-white/10 hover:text-white">
+              <Icon className="size-[18px]" weight="duotone" />{label}
+            </Link>
+          ))}
         </nav>
-        <div className="mt-8 lg:fixed lg:bottom-8"><LogoutButton /></div>
+        <div className="hidden border-t border-white/10 px-3 pt-5 lg:absolute lg:bottom-6 lg:left-4 lg:right-4 lg:block"><LogoutButton /></div>
       </aside>
-      <div>{children}</div>
+      <div className="min-w-0">{children}</div>
     </div>
   );
 }

@@ -39,5 +39,5 @@ export default async function NewAssignmentPage() {
       order by device.manufacturer, device.model
     `,
   ]);
-  return <main className="mx-auto max-w-5xl px-5 py-8 sm:px-10"><Link href="/admin/assignments" className="text-sm font-bold text-[var(--teal)]">← Assignments</Link><h1 className="display mt-8 text-5xl font-semibold">创建 Assignment</h1><p className="mt-4 text-sm leading-7 text-[var(--muted)]">服务端会重新核对 Study、Active、Consent、Published Version 和 Device 归属；下拉组合不构成授权。</p><AssignmentForm participants={participants} versions={versions} devices={devices} /></main>;
+  return <main className="content-page"><Link href="/admin/assignments" className="secondary-action">← Assignments</Link><p className="page-kicker mt-10">Frozen delivery</p><h1 className="page-title">创建 Assignment</h1><p className="mt-4 text-sm leading-7 text-[var(--muted)]">服务端会重新核对 Study、Active、Consent、Published Version 和 Device 归属；下拉组合不构成授权。</p><AssignmentForm participants={participants} versions={versions} devices={devices} /></main>;
 }

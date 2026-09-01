@@ -10,11 +10,11 @@ export default async function ReviewCasePage({ params }: { params: Promise<{ cas
   const { casePublicId } = await params;
   const review = await getReviewCase(viewer, casePublicId);
   return (
-    <main className="px-5 py-8 sm:px-10">
+    <main className="app-page">
       <Link href="/admin/review" className="text-sm font-bold text-[var(--teal)]">← Review Queue</Link>
       <header className="mt-8 border-b border-[var(--line)] pb-7">
         <div className="flex flex-wrap items-center gap-3"><p className="text-xs font-bold text-[var(--signal)]">{review.publicId}</p>{review.isFixture ? <span className="bg-[var(--yellow)] px-2 text-xs font-bold">Demo Fixture</span> : null}</div>
-        <h1 className="display mt-3 text-5xl font-semibold">{review.caseType}</h1>
+        <h1 className="page-title">{review.caseType}</h1>
         <p className="mt-3 text-sm text-[var(--muted)]">{review.participantAlias || "Unknown"} · {review.participantPublicId || "—"} · {review.status}</p>
       </header>
       <section className="mt-8 grid gap-4 md:grid-cols-4">

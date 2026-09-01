@@ -1,18 +1,10 @@
 import type { Metadata } from "next";
-import { Noto_Sans_SC, Source_Serif_4 } from "next/font/google";
+import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
 
-const sans = Noto_Sans_SC({
-  variable: "--font-sans",
-  subsets: ["latin"],
-  weight: ["400", "500", "600", "700"],
-});
-
-const display = Source_Serif_4({
-  variable: "--font-display",
-  subsets: ["latin"],
-  weight: ["500", "600", "700"],
-});
+const sans = Geist({ variable: "--font-sans", subsets: ["latin"] });
+const display = Geist({ variable: "--font-display", subsets: ["latin"] });
+const mono = Geist_Mono({ variable: "--font-mono", subsets: ["latin"] });
 
 export const metadata: Metadata = {
   title: "EgoCapture — 第一人称视频采集控制台",
@@ -21,8 +13,8 @@ export const metadata: Metadata = {
 
 export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
   return (
-    <html lang="zh-CN" className={`${sans.variable} ${display.variable}`}>
-      <body className="grain">{children}</body>
+    <html lang="zh-CN" className={`${sans.variable} ${display.variable} ${mono.variable}`}>
+      <body>{children}</body>
     </html>
   );
 }

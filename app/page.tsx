@@ -1,92 +1,111 @@
-import { ArrowUpRight, CheckCircle2, Database, ScanLine, UploadCloud } from "lucide-react";
+import { ArrowUpRight, CheckCircle, Database, Fingerprint, QrCode, UploadSimple } from "@phosphor-icons/react/dist/ssr";
 import Link from "next/link";
+import { MagneticLink } from "@/app/_components/magnetic-link";
 
 const steps = [
-  { code: "01", title: "任务冻结", copy: "发布不可变说明版本，让每次采集都有可追溯上下文。" },
-  { code: "02", title: "会话标记", copy: "为每次外部录制生成签名二维码和短码。" },
-  { code: "03", title: "断点直传", copy: "视频从浏览器直达私有对象存储，不经过应用服务器。" },
-  { code: "04", title: "证据复核", copy: "提取轻量元数据，并由研究人员保留人工决策链。" },
+  { code: "01", title: "冻结任务", copy: "发布不可变 TaskVersion，让每次采集都绑定清晰、可追溯的说明。", icon: Fingerprint },
+  { code: "02", title: "标记录制", copy: "为应用外录制生成不含个人信息的 Ed25519 签名二维码。", icon: QrCode },
+  { code: "03", title: "直接上传", copy: "视频以 6 MiB 分片直达私有 Storage，不经过 Next.js 数据面。", icon: UploadSimple },
 ];
 
 export default function Home() {
   return (
-    <main className="min-h-screen px-5 py-5 sm:px-8 lg:px-12">
-      <header className="mx-auto flex max-w-[1500px] items-center justify-between border-b border-[var(--line)] pb-4">
-        <div className="flex items-baseline gap-3">
-          <span className="display text-2xl font-semibold tracking-[-0.03em]">EgoCapture</span>
-          <span className="hidden text-xs font-semibold uppercase tracking-[0.2em] text-[var(--muted)] sm:inline">Research Operations</span>
+    <main className="min-h-[100dvh] overflow-hidden px-5 py-5 sm:px-8 lg:px-12">
+      <header className="surface mx-auto flex max-w-[1500px] items-center justify-between rounded-full px-5 py-3 sm:px-6">
+        <Link href="/" className="display text-lg font-semibold tracking-[-0.04em]">EgoCapture</Link>
+        <div className="hidden items-center gap-2 text-xs text-[var(--muted)] sm:flex">
+          <span className="size-1.5 rounded-full bg-[var(--signal)]" />
+          Research operations system
         </div>
-        <Link href="/login" className="group flex items-center gap-2 border-b border-[var(--ink)] pb-1 text-sm font-semibold">
-          进入控制台
-          <ArrowUpRight className="size-4 transition-transform group-hover:-translate-y-0.5 group-hover:translate-x-0.5" />
+        <Link href="/login" className="secondary-action min-h-9 px-4 py-2">
+          登录 <ArrowUpRight className="size-4" weight="bold" />
         </Link>
       </header>
 
-      <section className="mx-auto grid max-w-[1500px] gap-10 border-b border-[var(--line)] py-12 lg:grid-cols-[1.3fr_0.7fr] lg:py-20">
-        <div className="reveal max-w-5xl">
-          <p className="mb-5 flex items-center gap-2 text-xs font-bold uppercase tracking-[0.22em] text-[var(--teal)]">
+      <section className="relative mx-auto grid max-w-[1500px] gap-12 py-16 lg:grid-cols-[1.15fr_0.85fr] lg:items-center lg:py-28">
+        <div className="reveal relative z-10 max-w-4xl">
+          <p className="page-kicker flex items-center gap-2">
             <span className="inline-block size-2 rounded-full bg-[var(--signal)]" />
-            Egocentric video fieldwork system
+            Egocentric video fieldwork
           </p>
-          <h1 className="display text-[clamp(3.4rem,8vw,8.4rem)] font-semibold leading-[0.86] tracking-[-0.065em]">
+          <h1 className="display mt-6 text-[clamp(3.8rem,8vw,8.8rem)] font-semibold leading-[0.88] tracking-[-0.075em]">
             让每段录制，
             <br />
-            <em className="font-medium text-[var(--signal)]">都有来路。</em>
+            <span className="text-[var(--signal)]">都有来路。</span>
           </h1>
           <p className="mt-8 max-w-2xl text-base leading-8 text-[var(--muted)] sm:text-lg">
-            从任务说明、外部录制到断点上传与人工复核，EgoCapture 把第一人称视频采集变成一条可审计、可恢复的证据链。
+            从不可变任务、应用外录制，到断点直传与人工复核。EgoCapture 把第一人称视频采集变成一条可信、可恢复的证据链。
           </p>
+          <div className="mt-9 flex flex-wrap items-center gap-4">
+            <MagneticLink href="/login">
+              进入控制台 <ArrowUpRight className="size-4" weight="bold" />
+            </MagneticLink>
+            <p className="max-w-xs text-xs leading-5 text-[var(--muted)]">公开 Demo 仅使用合成身份与无敏感信息视频。</p>
+          </div>
         </div>
 
-        <aside className="reveal flex flex-col justify-between border-l-0 border-[var(--line)] pt-3 lg:border-l lg:pl-10" style={{ animationDelay: "120ms" }}>
-          <div className="grid grid-cols-2 gap-px bg-[var(--line)] border border-[var(--line)]">
-            <Metric value="50 MB" label="Demo 单文件上限" />
-            <Metric value="6 MiB" label="TUS 固定分片" />
-            <Metric value="24 h" label="录制标记有效期" />
-            <Metric value="0 byte" label="经 Vercel 的视频" signal />
-          </div>
-          <div className="mt-8 border-t border-[var(--line)] pt-5 text-sm leading-7 text-[var(--muted)]">
-            <div className="mb-2 flex items-center gap-2 font-semibold text-[var(--ink)]">
-              <CheckCircle2 className="size-4 text-[var(--teal)]" />
-              当前实施边界
+        <aside className="reveal-delay relative min-h-[560px]">
+          <div className="absolute right-[-15%] top-[-18%] size-[430px] rounded-full bg-[rgb(57_117_173_/_10%)] blur-3xl" aria-hidden="true" />
+          <div className="surface absolute inset-x-0 top-6 p-7 sm:left-10 sm:p-9">
+            <div className="flex items-start justify-between gap-5">
+              <div>
+                <p className="page-kicker">Live architecture</p>
+                <h2 className="display mt-2 text-3xl font-semibold">控制面与数据面分离</h2>
+              </div>
+              <span className="status-pill">Ready</span>
             </div>
-            生成录制二维码并由参与者手工选择会话；不做视频中的二维码识别，也不声称完成内容验证。
+            <div className="mt-9 space-y-1">
+              {["浏览器创建 UploadIntent", "Storage 接收 TUS 字节", "PostgreSQL 保存业务权威"].map((item, index) => (
+                <div key={item} className="flex items-center gap-4 border-b border-[var(--line)] py-4 last:border-0">
+                  <span className="flex size-9 shrink-0 items-center justify-center rounded-full bg-[var(--paper)] text-xs font-semibold">{index + 1}</span>
+                  <p className="text-sm font-medium">{item}</p>
+                  <CheckCircle className="ml-auto size-5 text-[var(--signal)]" weight="fill" />
+                </div>
+              ))}
+            </div>
+          </div>
+          <div className="surface-solid absolute bottom-0 right-0 grid w-[78%] grid-cols-2 gap-px overflow-hidden p-1 sm:w-[72%]">
+            <Metric value="50 MB" label="单文件上限" />
+            <Metric value="6 MiB" label="TUS 分片" />
+            <Metric value="24 h" label="Marker 有效期" />
+            <Metric value="0 byte" label="经 Next.js 视频" accent />
           </div>
         </aside>
       </section>
 
-      <section className="mx-auto max-w-[1500px] py-10 lg:py-14">
-        <div className="mb-8 flex items-end justify-between">
+      <section className="mx-auto max-w-[1500px] pb-16 lg:pb-24">
+        <div className="mb-8 flex flex-wrap items-end justify-between gap-4">
           <div>
-            <p className="mb-2 text-xs font-bold uppercase tracking-[0.2em] text-[var(--muted)]">Operational chain</p>
-            <h2 className="display text-4xl font-semibold tracking-[-0.035em]">四个不可越过的节点</h2>
+            <p className="page-kicker">Operational chain</p>
+            <h2 className="display mt-2 text-3xl font-semibold sm:text-5xl">三个清晰节点，一条完整证据链。</h2>
           </div>
-          <div className="hidden items-center gap-2 text-sm text-[var(--muted)] md:flex">
-            <Database className="size-4" /> PostgreSQL 保存业务权威
-          </div>
+          <p className="flex items-center gap-2 text-sm text-[var(--muted)]"><Database className="size-4" /> PostgreSQL 是业务权威</p>
         </div>
-        <div className="grid border-x border-t border-[var(--line)] md:grid-cols-2 xl:grid-cols-4">
-          {steps.map((step, index) => (
-            <article key={step.code} className="group min-h-64 border-b border-r border-[var(--line)] p-6 transition-colors hover:bg-[var(--paper-deep)]">
-              <div className="mb-14 flex items-start justify-between">
-                <span className="display text-5xl font-semibold text-[var(--line)] transition-colors group-hover:text-[var(--signal)]">{step.code}</span>
-                {index === 0 ? <ScanLine className="size-5" /> : index === 2 ? <UploadCloud className="size-5" /> : null}
-              </div>
-              <h3 className="mb-3 text-lg font-bold">{step.title}</h3>
-              <p className="text-sm leading-7 text-[var(--muted)]">{step.copy}</p>
-            </article>
-          ))}
+        <div className="grid gap-4 lg:grid-cols-[1.1fr_0.95fr_0.95fr]">
+          {steps.map((step, index) => {
+            const Icon = step.icon;
+            return (
+              <article key={step.code} className={`surface-solid group p-7 transition duration-300 hover:-translate-y-1 hover:shadow-[var(--shadow)] ${index === 0 ? "lg:py-10" : ""}`}>
+                <div className="flex items-start justify-between">
+                  <span className="text-xs font-semibold tracking-[0.16em] text-[var(--muted)]">{step.code}</span>
+                  <span className="flex size-11 items-center justify-center rounded-full bg-[var(--teal-soft)] text-[var(--signal-dark)]"><Icon className="size-5" weight="duotone" /></span>
+                </div>
+                <h3 className="display mt-12 text-2xl font-semibold">{step.title}</h3>
+                <p className="mt-3 text-sm leading-7 text-[var(--muted)]">{step.copy}</p>
+              </article>
+            );
+          })}
         </div>
       </section>
     </main>
   );
 }
 
-function Metric({ value, label, signal = false }: { value: string; label: string; signal?: boolean }) {
+function Metric({ value, label, accent = false }: { value: string; label: string; accent?: boolean }) {
   return (
-    <div className="bg-[var(--paper)] p-5">
-      <div className={`display text-3xl font-semibold ${signal ? "text-[var(--signal)]" : ""}`}>{value}</div>
-      <div className="mt-2 text-xs leading-5 text-[var(--muted)]">{label}</div>
+    <div className="rounded-[18px] bg-[var(--paper)] p-4">
+      <p className={`display text-2xl font-semibold ${accent ? "text-[var(--signal)]" : ""}`}>{value}</p>
+      <p className="mt-1 text-[11px] text-[var(--muted)]">{label}</p>
     </div>
   );
 }

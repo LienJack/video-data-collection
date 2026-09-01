@@ -41,7 +41,7 @@ export function LoginForm() {
 
   return (
     <>
-      <div className="mt-9 grid grid-cols-2 border border-[var(--line)] p-1 text-sm font-semibold" role="tablist" aria-label="登录角色">
+      <div className="mt-1 grid grid-cols-2 rounded-2xl bg-[var(--paper-deep)] p-1 text-sm font-semibold" role="tablist" aria-label="登录角色">
         {(["participant", "admin"] as const).map((item) => (
           <button
             key={item}
@@ -49,7 +49,7 @@ export function LoginForm() {
             role="tab"
             aria-selected={mode === item}
             onClick={() => { setMode(item); setError(""); }}
-            className={mode === item ? "bg-[var(--ink)] px-4 py-3 text-[var(--paper)]" : "px-4 py-3 text-[var(--muted)]"}
+            className={mode === item ? "rounded-xl bg-white px-4 py-3 text-[var(--ink)] shadow-sm" : "rounded-xl px-4 py-3 text-[var(--muted)]"}
           >
             {item === "participant" ? "参与者" : "管理员"}
           </button>
@@ -63,7 +63,7 @@ export function LoginForm() {
           <input
             key={mode}
             name="identity"
-            className="w-full border border-[var(--line)] bg-transparent px-4 py-3.5 outline-none transition focus:border-[var(--teal)]"
+            className="w-full border border-[var(--line)] bg-white/70 px-4 py-3.5 outline-none transition"
             placeholder={mode === "participant" ? "PT-XXXXXXXX" : "admin@example.com"}
             type={mode === "participant" ? "text" : "email"}
             autoCapitalize="none"
@@ -75,7 +75,7 @@ export function LoginForm() {
           <span className="mb-2 block text-xs font-bold uppercase tracking-[0.16em]">Password</span>
           <input
             name="password"
-            className="w-full border border-[var(--line)] bg-transparent px-4 py-3.5 outline-none transition focus:border-[var(--teal)]"
+            className="w-full border border-[var(--line)] bg-white/70 px-4 py-3.5 outline-none transition"
             type="password"
             placeholder="至少 10 位"
             minLength={10}
@@ -87,7 +87,7 @@ export function LoginForm() {
         {error ? <p className="border-l-4 border-[var(--signal)] bg-white/45 px-4 py-3 text-sm" role="alert">{error}</p> : null}
         <button
           type="submit"
-          className="w-full bg-[var(--signal)] px-5 py-4 font-bold text-white transition hover:bg-[var(--signal-dark)] disabled:cursor-wait disabled:opacity-60"
+          className="primary-action w-full disabled:cursor-wait disabled:opacity-60"
           disabled={busy}
         >
           {busy ? "正在验证…" : mode === "participant" ? "进入我的任务" : "进入管理控制台"}
