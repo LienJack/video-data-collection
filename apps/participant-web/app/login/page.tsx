@@ -11,7 +11,7 @@ export default function LoginPage() {
         <div className="relative z-10 max-w-xl">
           <p className="text-xs font-semibold uppercase tracking-[0.18em] text-white/55">Field operation</p>
           <blockquote className="display mt-5 text-5xl font-semibold leading-[1.02] tracking-[-0.055em]">
-            采集不是一个上传按钮，而是一条需要被证明的过程。
+            认真完成一次记录，让真实的过程被看见。
           </blockquote>
           <div className="mt-10 grid grid-cols-2 gap-3 text-sm text-white/65">
             <p className="flex items-center gap-2"><CheckCircle className="size-4 text-white" weight="fill" /> 私有对象存储</p>
