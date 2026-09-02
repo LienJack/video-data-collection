@@ -27,3 +27,25 @@
 ### Status
 
 [OK] **Completed**
+
+
+## Session 2: 落地采集记录工作台
+
+**Date**: 2026-09-02
+**Task**: 落地采集记录工作台
+**Package**: admin-web
+**Branch**: `codex/egocapture-mvp`
+
+### Summary
+
+将管理员上传、录制会话和审计列表收敛为 /records 三页签工作台，补齐异常汇总、延迟上传追溯、兼容重定向、共享中文呈现器与聚焦验收。
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `5030d41` | (see git log) |
+
+### Status
+
+[OK] **Completed**
