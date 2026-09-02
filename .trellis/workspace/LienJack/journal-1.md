@@ -115,3 +115,25 @@ Added admin-readable plaintext participant credentials in an isolated server-onl
 ### Status
 
 [OK] **Completed**
+
+
+## Session 6: 系统指南业务流程与超大文件上传设计
+
+**Date**: 2026-09-02
+**Task**: 系统指南业务流程与超大文件上传设计
+**Package**: admin-web
+**Branch**: `codex/egocapture-mvp`
+
+### Summary
+
+将系统说明第 02、03 章改为 Leader 向业务叙事，补齐管理员/参与者采集闭环、当前 TUS 与未来 Multipart 的分片暂停恢复设计；重做两张 Archify 图并通过仓库、浏览器和图表验收。
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `b9e4fe8` | (see git log) |
+
+### Status
+
+[OK] **Completed**
