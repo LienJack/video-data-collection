@@ -1,3 +1,4 @@
+import { buttonVariants } from "@egocapture/ui/components/button";
 import Link from "next/link";
 import { AssignmentForm } from "@/app/(console)/assignments/new/assignment-form";
 import { requireAdmin } from "@/lib/auth";
@@ -28,5 +29,5 @@ export default async function NewAssignmentPage() {
       order by device.manufacturer, device.model
     `,
   ]);
-  return <main className="content-page"><Link href="/assignments" className="secondary-action">← Assignments</Link><p className="page-kicker mt-10">Frozen delivery</p><h1 className="page-title">创建 Assignment</h1><p className="mt-4 text-sm leading-7 text-[var(--muted)]">服务端会重新核对 Active、Consent、Published Version 和 Device 归属；下拉组合不构成授权。</p><AssignmentForm participants={participants} versions={versions} devices={devices} /></main>;
+  return <main className="content-page"><Link href="/assignments" className={buttonVariants({ variant: "outline", className: "" })}>← Assignments</Link><p className="page-kicker mt-10">Frozen delivery</p><h1 className="page-title">创建 Assignment</h1><p className="mt-4 text-sm leading-7 text-[var(--muted)]">服务端会重新核对 Active、Consent、Published Version 和 Device 归属；下拉组合不构成授权。</p><AssignmentForm participants={participants} versions={versions} devices={devices} /></main>;
 }

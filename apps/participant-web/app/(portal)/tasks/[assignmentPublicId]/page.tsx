@@ -1,3 +1,4 @@
+import { Card } from "@egocapture/ui/components/card";
 import Link from "next/link";
 import { AcknowledgeButton } from "@/app/(portal)/tasks/[assignmentPublicId]/acknowledge-button";
 import { SessionCreate } from "@/app/(portal)/tasks/[assignmentPublicId]/session-create";
@@ -88,7 +89,7 @@ export default async function ParticipantAssignmentPage({ params }: { params: Pr
       </section>
       <section className="border-y border-[var(--line)] py-8">
         <h2 className="display text-2xl font-semibold">完成条件</h2>
-        <div className="mt-5 space-y-3">{instructions.completionCriteria.map((criterion) => { const displayStatus = criterionDisplayStatus(criterion.validator); return <article key={criterion.code} className="border border-[var(--line)] bg-white/35 p-4"><p className="font-semibold">{criterion.description}</p><p className="mt-2 text-xs text-[var(--muted)]">{displayStatus}{criterion.validator === "future_cv" ? " · 本 MVP 未自动检查" : ""}</p></article>; })}</div>
+        <div className="mt-5 space-y-3">{instructions.completionCriteria.map((criterion) => { const displayStatus = criterionDisplayStatus(criterion.validator); return <Card as="article" key={criterion.code} className="border border-[var(--line)] bg-white/35 p-4"><p className="font-semibold">{criterion.description}</p><p className="mt-2 text-xs text-[var(--muted)]">{displayStatus}{criterion.validator === "future_cv" ? " · 本 MVP 未自动检查" : ""}</p></Card>; })}</div>
       </section>
       <section className="py-8">
         <h2 className="display text-2xl font-semibold">隐私检查</h2>

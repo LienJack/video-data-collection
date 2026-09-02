@@ -1,5 +1,8 @@
 "use client";
 
+import { Alert, AlertDescription } from "@egocapture/ui/components/alert";
+import { NativeSelect, NativeSelectOption } from "@egocapture/ui/components/native-select";
+import { Button } from "@egocapture/ui/components/button";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 
@@ -23,5 +26,5 @@ export function SessionCreate({ assignmentPublicId, devices }: { assignmentPubli
     else router.push(`/sessions/${payload.data.sessionPublicId}`);
     setBusy(false);
   }
-  return <div className="mt-8 border border-[var(--line)] bg-white/40 p-5"><h2 className="display text-2xl font-semibold">创建 Recording Session</h2><p className="mt-2 text-sm leading-6 text-[var(--muted)]">选择实际用于本次录制的设备；Participant 和 TaskVersion 由服务端根据 Assignment 推导。</p><select value={devicePublicId} onChange={(event) => setDevicePublicId(event.target.value)} className="mt-4 w-full border border-[var(--line)] bg-[var(--paper)] px-4 py-3">{devices.map((device) => <option key={device.publicId} value={device.publicId}>{device.manufacturer} {device.model} · {device.publicId}{device.isDefault ? " · Default" : ""}</option>)}</select><button onClick={create} disabled={busy || devices.length === 0} className="mt-4 w-full bg-[var(--ink)] px-5 py-4 font-bold text-[var(--paper)] disabled:opacity-50">{busy ? "创建中…" : "创建 Session 并显示 Marker"}</button>{error ? <p role="alert" className="mt-3 border-l-4 border-[var(--signal)] px-4 py-3 text-sm">{error}</p> : null}</div>;
+  return <div className="mt-8 border border-[var(--line)] bg-white/40 p-5"><h2 className="display text-2xl font-semibold">创建 Recording Session</h2><p className="mt-2 text-sm leading-6 text-[var(--muted)]">选择实际用于本次录制的设备；Participant 和 TaskVersion 由服务端根据 Assignment 推导。</p><NativeSelect value={devicePublicId} onChange={(event) => setDevicePublicId(event.target.value)} className="mt-4 w-full border border-[var(--line)] bg-[var(--paper)] px-4 py-3">{devices.map((device) => <NativeSelectOption key={device.publicId} value={device.publicId}>{device.manufacturer} {device.model} · {device.publicId}{device.isDefault ? " · Default" : ""}</NativeSelectOption>)}</NativeSelect><Button onClick={create} disabled={busy || devices.length === 0} className="mt-4 w-full bg-[var(--ink)] px-5 py-4 font-bold text-[var(--paper)] disabled:opacity-50">{busy ? "创建中…" : "创建 Session 并显示 Marker"}</Button>{error ? <Alert role="alert" className="mt-3 border-l-4 border-[var(--signal)] px-4 py-3 text-sm"><AlertDescription>{error}</AlertDescription></Alert> : null}</div>;
 }

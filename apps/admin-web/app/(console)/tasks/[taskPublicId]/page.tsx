@@ -1,3 +1,6 @@
+import { buttonVariants } from "@egocapture/ui/components/button";
+import { Badge } from "@egocapture/ui/components/badge";
+import { Card } from "@egocapture/ui/components/card";
 import Link from "next/link";
 import { TaskEditor } from "@/app/(console)/tasks/task-editor";
 import { requireAdmin } from "@/lib/auth";
@@ -11,7 +14,7 @@ export default async function TaskDetailPage({ params }: { params: Promise<{ tas
   const task = await getTask(viewer, taskPublicId);
   return (
     <main className="app-page">
-      <Link href="/tasks" className="secondary-action">← Tasks</Link>
+      <Link href="/tasks" className={buttonVariants({ variant: "outline", className: "" })}>← Tasks</Link>
       <header className="mt-8 border-b border-[var(--line)] pb-7">
         <p className="page-kicker">{task.publicId} · {task.lifecycle}{task.isFixture ? " · Demo Fixture" : ""}</p>
         <h1 className="page-title">{task.title}</h1>
@@ -19,7 +22,7 @@ export default async function TaskDetailPage({ params }: { params: Promise<{ tas
       </header>
       <div className="grid gap-8 xl:grid-cols-[minmax(0,1fr)_320px]">
         <TaskEditor mode="edit" taskPublicId={task.publicId} initialInstructions={JSON.stringify(task.draftInstructions, null, 2)} initialUpdatedAt={task.updatedAt.toISOString()} />
-        <aside className="surface mt-8 h-fit p-6"><h2 className="display text-2xl font-semibold">Published</h2><div className="mt-5 space-y-4">{task.versions.map((version) => <article key={version.version} className="border-t border-[var(--line)] pt-4"><div className="flex items-center justify-between"><p className="font-bold">Version {version.version}</p><span className="status-pill">Frozen</span></div><p className="mt-2 break-all font-mono text-[10px] text-[var(--muted)]">{version.contentHash}</p><p className="mt-2 text-xs text-[var(--muted)]">{version.publishedAt.toLocaleString("zh-CN")}</p></article>)}{task.versions.length === 0 ? <p className="text-sm text-[var(--muted)]">尚未发布。</p> : null}</div></aside>
+        <aside className="rounded-xl border bg-card/80 text-card-foreground shadow-sm backdrop-blur-xl mt-8 h-fit p-6"><h2 className="display text-2xl font-semibold">Published</h2><div className="mt-5 space-y-4">{task.versions.map((version) => <Card as="article" key={version.version} className="border-t border-[var(--line)] pt-4"><div className="flex items-center justify-between"><p className="font-bold">Version {version.version}</p><Badge>Frozen</Badge></div><p className="mt-2 break-all font-mono text-[10px] text-[var(--muted)]">{version.contentHash}</p><p className="mt-2 text-xs text-[var(--muted)]">{version.publishedAt.toLocaleString("zh-CN")}</p></Card>)}{task.versions.length === 0 ? <p className="text-sm text-[var(--muted)]">尚未发布。</p> : null}</div></aside>
       </div>
     </main>
   );

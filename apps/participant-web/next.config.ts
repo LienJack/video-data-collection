@@ -26,7 +26,7 @@ const contentSecurityPolicy = [
 ].join("; ");
 
 const nextConfig: NextConfig = {
-  transpilePackages: ["@egocapture/core"],
+  transpilePackages: ["@egocapture/core", "@egocapture/ui"],
   allowedDevOrigins: ["127.0.0.1"],
   poweredByHeader: false,
   experimental: {

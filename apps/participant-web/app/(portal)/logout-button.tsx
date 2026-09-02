@@ -1,5 +1,6 @@
 "use client";
 
+import { Button } from "@egocapture/ui/components/button";
 import { SignOut } from "@phosphor-icons/react";
 import { useRouter } from "next/navigation";
 
@@ -12,9 +13,9 @@ export function LogoutButton() {
   }
 
   return (
-    <button type="button" onClick={logout} className="flex min-h-11 items-center gap-2 rounded-full px-3 text-xs font-semibold text-[var(--muted)] hover:bg-white hover:text-[var(--ink)]">
+    <Button type="button" variant="ghost" onClick={logout} className="flex min-h-11 items-center gap-2 rounded-full px-3 text-xs font-semibold text-[var(--muted)] hover:bg-white hover:text-[var(--ink)]">
       <SignOut className="size-4" weight="duotone" />
       <span className="hidden sm:inline">退出</span>
-    </button>
+    </Button>
   );
 }

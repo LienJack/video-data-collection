@@ -1,5 +1,7 @@
 "use client";
 
+import { Alert, AlertDescription } from "@egocapture/ui/components/alert";
+import { Button } from "@egocapture/ui/components/button";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 
@@ -19,5 +21,5 @@ export function AcknowledgeButton({ assignmentPublicId, contentHash }: { assignm
     else router.refresh();
     setBusy(false);
   }
-  return <div className="mt-8"><button disabled={busy} onClick={acknowledge} className="w-full bg-[var(--signal)] px-5 py-4 font-bold text-white disabled:opacity-50">{busy ? "确认中…" : "我已阅读并确认这个版本"}</button>{error ? <p role="alert" className="mt-3 border-l-4 border-[var(--signal)] px-4 py-3 text-sm">{error}</p> : null}</div>;
+  return <div className="mt-8"><Button disabled={busy} onClick={acknowledge} className="w-full bg-[var(--signal)] px-5 py-4 font-bold text-white disabled:opacity-50">{busy ? "确认中…" : "我已阅读并确认这个版本"}</Button>{error ? <Alert role="alert" className="mt-3 border-l-4 border-[var(--signal)] px-4 py-3 text-sm"><AlertDescription>{error}</AlertDescription></Alert> : null}</div>;
 }

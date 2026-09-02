@@ -46,7 +46,7 @@ export default async function AdminLayout({ children }: { children: React.ReactN
         <div className="hidden border-t border-white/10 px-3 pt-5 lg:absolute lg:bottom-6 lg:left-4 lg:right-4 lg:block"><LogoutButton /></div>
       </aside>
       <div className="min-w-0">{children}</div>
-      <nav className="surface fixed bottom-[max(0.5rem,env(safe-area-inset-bottom))] left-1/2 z-40 grid w-[min(30rem,calc(100%-1rem))] -translate-x-1/2 grid-cols-4 gap-1 rounded-2xl p-1.5 shadow-[0_14px_45px_rgb(15_23_42_/_16%)] lg:hidden" aria-label="主要管理导航">
+      <nav className="rounded-xl border bg-card/80 text-card-foreground shadow-sm backdrop-blur-xl fixed bottom-[max(0.5rem,env(safe-area-inset-bottom))] left-1/2 z-40 grid w-[min(30rem,calc(100%-1rem))] -translate-x-1/2 grid-cols-4 gap-1 rounded-2xl p-1.5 shadow-[0_14px_45px_rgb(15_23_42_/_16%)] lg:hidden" aria-label="主要管理导航">
         {navigation.slice(0, 4).map(([href, label, Icon]) => <Link key={href} href={href} className="flex min-h-12 flex-col items-center justify-center gap-1 rounded-xl px-1 text-[10px] font-semibold"><Icon className="size-[18px]" weight="duotone" />{label === "Participants" ? "参与者" : label === "Tasks" ? "任务" : label === "Assignments" ? "分配" : label}</Link>)}
       </nav>
     </div>

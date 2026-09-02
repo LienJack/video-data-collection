@@ -1,5 +1,7 @@
 "use client";
 
+import { Alert, AlertDescription } from "@egocapture/ui/components/alert";
+import { Button, buttonVariants } from "@egocapture/ui/components/button";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 
@@ -33,5 +35,5 @@ export function MarkerControls({
     else router.refresh();
     setBusy("");
   }
-  return <div className="mt-6 grid gap-3 sm:grid-cols-2"><a href={qrDataUrl} download={`${sessionPublicId}-marker.png`} className="border border-[var(--ink)] px-5 py-3 text-center font-bold">下载二维码</a>{sessionStatus === "open" ? <button onClick={() => mutate("regenerate")} disabled={Boolean(busy)} className="border border-[var(--teal)] px-5 py-3 font-bold text-[var(--teal)]">{busy === "regenerate" ? "生成中…" : "重新生成 Marker"}</button> : null}{sessionStatus === "open" && !markerAcknowledgedAt ? <button onClick={() => mutate("ack")} disabled={Boolean(busy)} className="bg-[var(--signal)] px-5 py-4 font-bold text-white sm:col-span-2">{busy === "ack" ? "确认中…" : "我已拍摄二维码"}</button> : <p className="border-l-4 border-[var(--teal)] px-4 py-3 text-sm sm:col-span-2">{markerAcknowledgedAt ? `已确认：${new Date(markerAcknowledgedAt).toLocaleString("zh-CN")}` : "Session 已关闭"}</p>}{error ? <p role="alert" className="border-l-4 border-[var(--signal)] px-4 py-3 text-sm sm:col-span-2">{error}</p> : null}</div>;
+  return <div className="mt-6 grid gap-3 sm:grid-cols-2"><a href={qrDataUrl} download={`${sessionPublicId}-marker.png`} className={buttonVariants({ variant: "outline", className: "border-[var(--ink)] px-5 py-3 text-center font-bold" })}>下载二维码</a>{sessionStatus === "open" ? <Button variant="outline" onClick={() => mutate("regenerate")} disabled={Boolean(busy)} className="border-[var(--teal)] px-5 py-3 font-bold text-[var(--teal)]">{busy === "regenerate" ? "生成中…" : "重新生成 Marker"}</Button> : null}{sessionStatus === "open" && !markerAcknowledgedAt ? <Button onClick={() => mutate("ack")} disabled={Boolean(busy)} className="bg-[var(--signal)] px-5 py-4 font-bold text-white sm:col-span-2">{busy === "ack" ? "确认中…" : "我已拍摄二维码"}</Button> : <p className="border-l-4 border-[var(--teal)] px-4 py-3 text-sm sm:col-span-2">{markerAcknowledgedAt ? `已确认：${new Date(markerAcknowledgedAt).toLocaleString("zh-CN")}` : "Session 已关闭"}</p>}{error ? <Alert role="alert" className="border-l-4 border-[var(--signal)] px-4 py-3 text-sm sm:col-span-2"><AlertDescription>{error}</AlertDescription></Alert> : null}</div>;
 }

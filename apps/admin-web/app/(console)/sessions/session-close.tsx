@@ -1,5 +1,9 @@
 "use client";
 
+import { Alert, AlertDescription } from "@egocapture/ui/components/alert";
+import { Input } from "@egocapture/ui/components/input";
+import { Button } from "@egocapture/ui/components/button";
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@egocapture/ui/components/collapsible";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 
@@ -22,5 +26,14 @@ export function SessionClose({ sessionPublicId }: { sessionPublicId: string }) {
     else router.refresh();
     setBusy(false);
   }
-  return <div className="mt-4"><button onClick={() => setOpen((value) => !value)} className="text-xs font-bold text-[var(--signal)]">{open ? "收起" : "关闭 Session"}</button>{open ? <div className="mt-3 space-y-2"><input value={reason} onChange={(event) => setReason(event.target.value)} maxLength={500} placeholder="关闭原因，至少 10 字符" className="w-full border border-[var(--line)] bg-[var(--paper)] px-3 py-2 text-xs" /><button onClick={close} disabled={busy} className="border border-[var(--signal)] px-3 py-2 text-xs font-bold text-[var(--signal)]">{busy ? "关闭中…" : "确认关闭"}</button>{error ? <p role="alert" className="text-xs text-[var(--signal-dark)]">{error}</p> : null}</div> : null}</div>;
+  return (
+    <Collapsible open={open} onOpenChange={setOpen} className="mt-4">
+      <CollapsibleTrigger asChild><Button variant="ghost" size="sm">{open ? "收起" : "关闭 Session"}</Button></CollapsibleTrigger>
+      <CollapsibleContent className="mt-3 space-y-2">
+        <Input value={reason} onChange={(event) => setReason(event.target.value)} maxLength={500} placeholder="关闭原因，至少 10 字符" />
+        <Button variant="destructive" size="sm" onClick={close} disabled={busy}>{busy ? "关闭中…" : "确认关闭"}</Button>
+        {error ? <Alert variant="destructive"><AlertDescription>{error}</AlertDescription></Alert> : null}
+      </CollapsibleContent>
+    </Collapsible>
+  );
 }

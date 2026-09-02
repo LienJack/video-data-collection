@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { Card } from "@egocapture/ui/components/card";
 import { AcceptInvitationForm } from "@/app/invite/[token]/accept-form";
 import { openInvitation } from "@egocapture/core/server/services/participants";
 
@@ -9,7 +10,7 @@ export default async function InvitationPage({ params }: { params: Promise<{ tok
   const valid = await openInvitation(token);
   return (
     <main className="flex min-h-[100dvh] items-center justify-center px-5 py-12">
-      <section className="surface-solid w-full max-w-lg p-7 sm:p-10">
+      <Card className="w-full max-w-lg p-7 sm:p-10">
         <p className="page-kicker">Participant activation</p>
         <h1 className="page-title text-[clamp(2.5rem,7vw,4rem)]">{valid ? "建立你的采集账号" : "邀请无效或已过期"}</h1>
         {valid ? (
@@ -23,7 +24,7 @@ export default async function InvitationPage({ params }: { params: Promise<{ tok
             <Link href="/login" className="mt-6 inline-block border-b-2 border-[var(--signal)] pb-1 font-semibold">返回登录</Link>
           </div>
         )}
-      </section>
+      </Card>
     </main>
   );
 }

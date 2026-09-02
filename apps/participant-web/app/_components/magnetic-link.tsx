@@ -1,5 +1,6 @@
 "use client";
 
+import { buttonVariants } from "@egocapture/ui/components/button";
 import { motion, useMotionValue, useReducedMotion, useSpring } from "framer-motion";
 import Link from "next/link";
 import { memo, type MouseEvent } from "react";
@@ -25,7 +26,7 @@ export const MagneticLink = memo(function MagneticLink({ href, children }: { hre
 
   return (
     <motion.div style={{ x, y }}>
-      <Link href={href} onMouseMove={move} onMouseLeave={reset} className="primary-action">
+      <Link href={href} onMouseMove={move} onMouseLeave={reset} className={buttonVariants({ className: "" })}>
         {children}
       </Link>
     </motion.div>

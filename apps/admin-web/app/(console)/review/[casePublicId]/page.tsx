@@ -1,3 +1,4 @@
+import { Card } from "@egocapture/ui/components/card";
 import Link from "next/link";
 import { ReviewDecisionPanel } from "@/app/(console)/review/[casePublicId]/review-decision-panel";
 import { requireAdmin } from "@/lib/auth";
@@ -18,12 +19,12 @@ export default async function ReviewCasePage({ params }: { params: Promise<{ cas
         <p className="mt-3 text-sm text-[var(--muted)]">{review.participantAlias || "Unknown"} · {review.participantPublicId || "—"} · {review.status}</p>
       </header>
       <section className="mt-8 grid gap-4 md:grid-cols-4">
-        {[["Transfer", review.transferStatus], ["Metadata", review.metadataStatus], ["Device", review.deviceConsistency], ["Assignment", review.assignmentPublicId]].map(([label, value]) => <article key={label} className="border border-[var(--line)] bg-white/35 p-4"><p className="text-xs font-bold uppercase text-[var(--muted)]">{label}</p><p className="mt-2 break-all font-bold">{value || "—"}</p></article>)}
+        {[["Transfer", review.transferStatus], ["Metadata", review.metadataStatus], ["Device", review.deviceConsistency], ["Assignment", review.assignmentPublicId]].map(([label, value]) => <Card as="article" key={label} className="border border-[var(--line)] bg-white/35 p-4"><p className="text-xs font-bold uppercase text-[var(--muted)]">{label}</p><p className="mt-2 break-all font-bold">{value || "—"}</p></Card>)}
       </section>
       <div className="mt-8 grid gap-8 xl:grid-cols-[minmax(0,1fr)_420px]">
         <section>
           <h2 className="display text-2xl font-semibold">MatchDecision 历史</h2>
-          <div className="mt-4 space-y-3">{review.decisions.map((decision) => <article key={decision.id} className="border border-[var(--line)] bg-white/35 p-5"><div className="flex flex-wrap justify-between gap-3"><p className="font-bold">{decision.decisionType}</p><span className="text-xs text-[var(--muted)]">{decision.decidedAt.toLocaleString("zh-CN")}</span></div><p className="mt-2 text-sm">Session {decision.sessionPublicId || "Unmatched"} · Device {decision.devicePublicId || "—"}</p><p className="mt-2 text-xs text-[var(--muted)]">{decision.reason || "Participant claim"} · supersedes {decision.supersedesDecisionId || "none"} · {decision.supersededBy ? "historical" : "current"}</p></article>)}{review.decisions.length === 0 ? <p className="text-sm text-[var(--muted)]">没有 MatchDecision。</p> : null}</div>
+          <div className="mt-4 space-y-3">{review.decisions.map((decision) => <Card as="article" key={decision.id} className="border border-[var(--line)] bg-white/35 p-5"><div className="flex flex-wrap justify-between gap-3"><p className="font-bold">{decision.decisionType}</p><span className="text-xs text-[var(--muted)]">{decision.decidedAt.toLocaleString("zh-CN")}</span></div><p className="mt-2 text-sm">Session {decision.sessionPublicId || "Unmatched"} · Device {decision.devicePublicId || "—"}</p><p className="mt-2 text-xs text-[var(--muted)]">{decision.reason || "Participant claim"} · supersedes {decision.supersedesDecisionId || "none"} · {decision.supersededBy ? "historical" : "current"}</p></Card>)}{review.decisions.length === 0 ? <p className="text-sm text-[var(--muted)]">没有 MatchDecision。</p> : null}</div>
           {review.uploadPublicId ? <Link href={`/uploads/${review.uploadPublicId}`} className="mt-6 inline-block font-bold text-[var(--teal)]">查看 Upload 详情 →</Link> : null}
         </section>
         <ReviewDecisionPanel

@@ -1,5 +1,9 @@
 "use client";
 
+import { Label } from "@egocapture/ui/components/label";
+import { Alert, AlertDescription } from "@egocapture/ui/components/alert";
+import { Input } from "@egocapture/ui/components/input";
+import { Button } from "@egocapture/ui/components/button";
 import { useState, type FormEvent } from "react";
 
 export function LoginForm() {
@@ -36,9 +40,9 @@ export function LoginForm() {
 
   return (
     <form className="space-y-5" onSubmit={submit}>
-        <label className="block">
+        <Label className="block">
           <span className="mb-2 block text-xs font-bold uppercase tracking-[0.16em]">Participant ID</span>
-          <input
+          <Input
             name="identity"
             className="w-full border border-[var(--line)] bg-white/70 px-4 py-3.5 outline-none transition"
             placeholder="PT-XXXXXXXX"
@@ -47,10 +51,10 @@ export function LoginForm() {
             autoComplete="username"
             required
           />
-        </label>
-        <label className="block">
+        </Label>
+        <Label className="block">
           <span className="mb-2 block text-xs font-bold uppercase tracking-[0.16em]">Password</span>
-          <input
+          <Input
             name="password"
             className="w-full border border-[var(--line)] bg-white/70 px-4 py-3.5 outline-none transition"
             type="password"
@@ -60,15 +64,15 @@ export function LoginForm() {
             autoComplete="current-password"
             required
           />
-        </label>
-        {error ? <p className="border-l-4 border-[var(--signal)] bg-white/45 px-4 py-3 text-sm" role="alert">{error}</p> : null}
-        <button
+        </Label>
+        {error ? <Alert variant="destructive"><AlertDescription>{error}</AlertDescription></Alert> : null}
+        <Button
           type="submit"
-          className="primary-action w-full disabled:cursor-wait disabled:opacity-60"
+          className=" w-full disabled:cursor-wait disabled:opacity-60"
           disabled={busy}
         >
           {busy ? "正在验证…" : "进入我的任务"}
-        </button>
+        </Button>
       </form>
   );
 }

@@ -1,3 +1,10 @@
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@egocapture/ui/components/table";
+import { Badge } from "@egocapture/ui/components/badge";
+import { Label } from "@egocapture/ui/components/label";
+import { NativeSelect, NativeSelectOption } from "@egocapture/ui/components/native-select";
+import { Input } from "@egocapture/ui/components/input";
+import { Button, buttonVariants } from "@egocapture/ui/components/button";
+import { Empty, EmptyDescription } from "@egocapture/ui/components/empty";
 import Link from "next/link";
 import { MagnifyingGlass, Plus } from "@phosphor-icons/react/dist/ssr";
 import { requireAdmin } from "@/lib/auth";
@@ -38,37 +45,37 @@ export default async function ParticipantsPage({ searchParams }: { searchParams:
           <p className="page-kicker">Participant registry</p>
           <h1 className="page-title">参与者</h1>
         </div>
-        <Link href="/participants/new" className="primary-action"><Plus className="size-4" weight="bold" />创建 Participant</Link>
+        <Link href="/participants/new" className={buttonVariants({ className: "" })}><Plus className="size-4" weight="bold" />创建 Participant</Link>
       </header>
-      <form className="surface my-7 grid gap-3 p-3 sm:grid-cols-2 xl:grid-cols-4">
-        <label className="flex items-center gap-2 border border-[var(--line)] bg-[var(--paper)] px-3"><MagnifyingGlass className="size-4 text-[var(--muted)]" /><input name="search" defaultValue={query.search} placeholder="Public ID 或 Alias" className="w-full bg-transparent py-3 outline-none" /></label>
-        <select name="status" defaultValue={query.status ?? ""} className="border border-[var(--line)] bg-[var(--paper)] px-3">
-          <option value="">全部状态</option>
-          {Object.entries(statusLabels).map(([value, label]) => <option key={value} value={value}>{label}</option>)}
-        </select>
-        <select name="consentStatus" aria-label="Consent" defaultValue={query.consentStatus ?? ""} className="border border-[var(--line)] bg-[var(--paper)] px-3"><option value="">全部 Consent</option>{["pending", "valid", "expired", "withdrawn"].map((value) => <option key={value} value={value}>{value}</option>)}</select>
+      <form className="rounded-xl border bg-card/80 text-card-foreground shadow-sm backdrop-blur-xl my-7 grid gap-3 p-3 sm:grid-cols-2 xl:grid-cols-4">
+        <Label className="flex items-center gap-2 border border-[var(--line)] bg-[var(--paper)] px-3"><MagnifyingGlass className="size-4 text-[var(--muted)]" /><Input name="search" defaultValue={query.search} placeholder="Public ID 或 Alias" className="w-full bg-transparent py-3 outline-none" /></Label>
+        <NativeSelect name="status" defaultValue={query.status ?? ""} className="border border-[var(--line)] bg-[var(--paper)] px-3">
+          <NativeSelectOption value="">全部状态</NativeSelectOption>
+          {Object.entries(statusLabels).map(([value, label]) => <NativeSelectOption key={value} value={value}>{label}</NativeSelectOption>)}
+        </NativeSelect>
+        <NativeSelect name="consentStatus" aria-label="Consent" defaultValue={query.consentStatus ?? ""} className="border border-[var(--line)] bg-[var(--paper)] px-3"><NativeSelectOption value="">全部 Consent</NativeSelectOption>{["pending", "valid", "expired", "withdrawn"].map((value) => <NativeSelectOption key={value} value={value}>{value}</NativeSelectOption>)}</NativeSelect>
         <LocaleSelect name="locale" defaultValue={query.locale} blankLabel="全部 Locale" aria-label="Locale" className="border border-[var(--line)] bg-[var(--paper)] px-3 py-3" />
         <CountrySelect name="countryRegion" defaultValue={query.countryRegion} blankLabel="全部 Country / Region" aria-label="Country / Region" className="border border-[var(--line)] bg-[var(--paper)] px-3 py-3" />
-        <select name="missing" aria-label="Missing" defaultValue={query.missing ?? ""} className="border border-[var(--line)] bg-[var(--paper)] px-3"><option value="">全部 Missing 状态</option><option value="yes">仅 Missing</option><option value="no">排除 Missing</option></select>
-        <select name="needsReview" aria-label="Needs Review" defaultValue={query.needsReview ?? ""} className="border border-[var(--line)] bg-[var(--paper)] px-3"><option value="">全部 Review 状态</option><option value="yes">仅 Needs Review</option><option value="no">排除 Needs Review</option></select>
-        <button className="primary-action">筛选</button>
+        <NativeSelect name="missing" aria-label="Missing" defaultValue={query.missing ?? ""} className="border border-[var(--line)] bg-[var(--paper)] px-3"><NativeSelectOption value="">全部 Missing 状态</NativeSelectOption><NativeSelectOption value="yes">仅 Missing</NativeSelectOption><NativeSelectOption value="no">排除 Missing</NativeSelectOption></NativeSelect>
+        <NativeSelect name="needsReview" aria-label="Needs Review" defaultValue={query.needsReview ?? ""} className="border border-[var(--line)] bg-[var(--paper)] px-3"><NativeSelectOption value="">全部 Review 状态</NativeSelectOption><NativeSelectOption value="yes">仅 Needs Review</NativeSelectOption><NativeSelectOption value="no">排除 Needs Review</NativeSelectOption></NativeSelect>
+        <Button>筛选</Button>
       </form>
-      <div className="data-table overflow-x-auto">
-        <table className="w-full min-w-[820px] border-collapse text-sm">
-          <thead className="text-left text-xs uppercase tracking-[0.12em]"><tr><th className="p-4">Participant</th><th className="p-4">Status</th><th className="p-4">Consent</th><th className="p-4">Locale / Region</th><th className="p-4">Signals</th></tr></thead>
-          <tbody>
+      <div className="rounded-xl border bg-card shadow-sm overflow-x-auto">
+        <Table className="w-full min-w-[820px] border-collapse text-sm">
+          <TableHeader className="text-left text-xs uppercase tracking-[0.12em]"><TableRow><TableHead className="p-4">Participant</TableHead><TableHead className="p-4">Status</TableHead><TableHead className="p-4">Consent</TableHead><TableHead className="p-4">Locale / Region</TableHead><TableHead className="p-4">Signals</TableHead></TableRow></TableHeader>
+          <TableBody>
             {result.items.map((participant) => (
-              <tr key={participant.publicId} className="border-t border-[var(--line)] hover:bg-white/35">
-                <td className="p-4"><Link className="font-bold underline decoration-[var(--signal)] decoration-2 underline-offset-4" href={`/participants/${participant.publicId}`}>{participant.publicId}</Link><p className="mt-1 text-[var(--muted)]">{participant.displayAlias}{participant.isFixture ? " · Demo Fixture" : ""}</p></td>
-                <td className="p-4"><span className="status-pill">{statusLabels[participant.status]}</span></td>
-                <td className="p-4">{participant.consentStatus}</td>
-                <td className="p-4">{participant.locale}<span className="text-[var(--muted)]"> · {participant.countryRegion || "—"}</span></td>
-                <td className="p-4"><div className="flex flex-wrap gap-2">{participant.isMissing ? <span className="bg-[var(--yellow)] px-2 py-1 text-xs font-bold">Missing</span> : null}{participant.needsReview ? <span className="bg-[var(--signal)] px-2 py-1 text-xs font-bold text-white">Needs Review</span> : null}{!participant.isMissing && !participant.needsReview ? <span className="text-[var(--muted)]">—</span> : null}</div></td>
-              </tr>
+              <TableRow key={participant.publicId} className="border-t border-[var(--line)] hover:bg-white/35">
+                <TableCell className="p-4"><Link className="font-bold underline decoration-[var(--signal)] decoration-2 underline-offset-4" href={`/participants/${participant.publicId}`}>{participant.publicId}</Link><p className="mt-1 text-[var(--muted)]">{participant.displayAlias}{participant.isFixture ? " · Demo Fixture" : ""}</p></TableCell>
+                <TableCell className="p-4"><Badge>{statusLabels[participant.status]}</Badge></TableCell>
+                <TableCell className="p-4">{participant.consentStatus}</TableCell>
+                <TableCell className="p-4">{participant.locale}<span className="text-[var(--muted)]"> · {participant.countryRegion || "—"}</span></TableCell>
+                <TableCell className="p-4"><div className="flex flex-wrap gap-2">{participant.isMissing ? <Badge variant="secondary">Missing</Badge> : null}{participant.needsReview ? <Badge>Needs Review</Badge> : null}{!participant.isMissing && !participant.needsReview ? <span className="text-[var(--muted)]">—</span> : null}</div></TableCell>
+              </TableRow>
             ))}
-          </tbody>
-        </table>
-        {result.items.length === 0 ? <p className="empty-state m-4">没有符合条件的 Participant。</p> : null}
+          </TableBody>
+        </Table>
+        {result.items.length === 0 ? <Empty className="m-4"><EmptyDescription>没有符合条件的 Participant。</EmptyDescription></Empty> : null}
       </div>
       {result.nextCursor ? <Link className="mt-6 inline-block border-b-2 border-[var(--signal)] pb-1 font-bold" href={`/participants?${nextParams.toString()}`}>下一页 →</Link> : null}
     </main>

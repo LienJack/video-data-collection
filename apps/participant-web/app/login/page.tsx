@@ -1,4 +1,5 @@
 import { CheckCircle, ShieldCheck } from "@phosphor-icons/react/dist/ssr";
+import { Card } from "@egocapture/ui/components/card";
 import Link from "next/link";
 import { LoginForm } from "@/app/login/login-form";
 
@@ -30,7 +31,7 @@ export default function LoginPage() {
           <p className="page-kicker mt-8">Participant access</p>
           <h1 className="page-title">继续你的采集任务</h1>
           <p className="mt-4 text-sm leading-7 text-[var(--muted)]">使用邀请中 PT 开头的 Participant ID 登录。管理控制台位于独立域名。</p>
-          <div className="surface mt-8 p-5 sm:p-7"><LoginForm /></div>
+          <Card className="mt-8 p-5 sm:p-7"><LoginForm /></Card>
         </div>
       </section>
     </main>

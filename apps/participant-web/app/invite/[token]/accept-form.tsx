@@ -1,5 +1,9 @@
 "use client";
 
+import { Label } from "@egocapture/ui/components/label";
+import { Alert, AlertDescription } from "@egocapture/ui/components/alert";
+import { Input } from "@egocapture/ui/components/input";
+import { Button } from "@egocapture/ui/components/button";
 import { useState, type FormEvent } from "react";
 
 export function AcceptInvitationForm({ token }: { token: string }) {
@@ -39,19 +43,19 @@ export function AcceptInvitationForm({ token }: { token: string }) {
 
   return (
     <form className="mt-8 space-y-5" onSubmit={submit}>
-      <label className="block">
+      <Label className="block">
         <span className="mb-2 block text-xs font-bold uppercase tracking-[0.16em]">设置密码</span>
-        <input name="password" type="password" minLength={10} maxLength={128} required autoComplete="new-password" className="w-full border border-[var(--line)] bg-white/70 px-4 py-3.5 outline-none" />
-      </label>
-      <label className="block">
+        <Input name="password" type="password" minLength={10} maxLength={128} required autoComplete="new-password" className="w-full border border-[var(--line)] bg-white/70 px-4 py-3.5 outline-none" />
+      </Label>
+      <Label className="block">
         <span className="mb-2 block text-xs font-bold uppercase tracking-[0.16em]">再次输入</span>
-        <input name="confirmation" type="password" minLength={10} maxLength={128} required autoComplete="new-password" className="w-full border border-[var(--line)] bg-white/70 px-4 py-3.5 outline-none" />
-      </label>
+        <Input name="confirmation" type="password" minLength={10} maxLength={128} required autoComplete="new-password" className="w-full border border-[var(--line)] bg-white/70 px-4 py-3.5 outline-none" />
+      </Label>
       <p className="text-xs leading-6 text-[var(--muted)]">至少 10 位。系统不会向管理邮箱发送真实邮件。</p>
-      {error ? <p className="border-l-4 border-[var(--signal)] bg-white/45 px-4 py-3 text-sm" role="alert">{error}</p> : null}
-      <button disabled={busy} className="primary-action w-full disabled:opacity-60">
+      {error ? <Alert variant="destructive"><AlertDescription>{error}</AlertDescription></Alert> : null}
+      <Button disabled={busy} className=" w-full disabled:opacity-60">
         {busy ? "正在激活…" : "接受邀请并进入任务"}
-      </button>
+      </Button>
     </form>
   );
 }

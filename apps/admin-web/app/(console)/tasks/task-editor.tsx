@@ -1,5 +1,9 @@
 "use client";
 
+import { Alert, AlertDescription } from "@egocapture/ui/components/alert";
+import { Label } from "@egocapture/ui/components/label";
+import { Textarea } from "@egocapture/ui/components/textarea";
+import { Button } from "@egocapture/ui/components/button";
 import { useRouter } from "next/navigation";
 import { useState, type FormEvent } from "react";
 
@@ -80,25 +84,25 @@ export function TaskEditor({
 
   return (
     <form onSubmit={save} className="mt-8 space-y-5 border border-[var(--line)] bg-white/30 p-6">
-      <label className="block text-sm font-bold">TaskInstructions · ego-task/1
-        <textarea
+      <Label className="block text-sm font-bold">TaskInstructions · ego-task/1
+        <Textarea
           value={json}
           onChange={(event) => { setJson(event.target.value); setDirty(true); }}
           rows={30}
           spellCheck={false}
           className="mt-2 w-full border border-[var(--line)] bg-[var(--ink)] px-4 py-4 font-mono text-xs leading-6 text-[var(--paper)] outline-none focus:border-[var(--signal)]"
         />
-      </label>
+      </Label>
       <p className="text-xs leading-6 text-[var(--muted)]">发布后版本不可修改或删除。`future_cv` 会显示“本 MVP 未自动检查”。</p>
-      {error ? <p role="alert" className="border-l-4 border-[var(--signal)] px-4 py-3 text-sm">{error}</p> : null}
+      {error ? <Alert role="alert" className="border-l-4 border-[var(--signal)] px-4 py-3 text-sm"><AlertDescription>{error}</AlertDescription></Alert> : null}
       <div className="flex flex-wrap gap-3">
-        <button disabled={Boolean(busy)} className="bg-[var(--ink)] px-5 py-3 font-bold text-[var(--paper)] disabled:opacity-50">
+        <Button disabled={Boolean(busy)} className="bg-[var(--ink)] px-5 py-3 font-bold text-[var(--paper)] disabled:opacity-50">
           {busy === "save" ? "保存中…" : mode === "create" ? "创建 Draft" : "保存 Draft"}
-        </button>
+        </Button>
         {mode === "edit" ? (
-          <button type="button" onClick={publish} disabled={Boolean(busy) || dirty} className="bg-[var(--signal)] px-5 py-3 font-bold text-white disabled:opacity-40">
+          <Button type="button" onClick={publish} disabled={Boolean(busy) || dirty} className="bg-[var(--signal)] px-5 py-3 font-bold text-white disabled:opacity-40">
             {busy === "publish" ? "发布中…" : dirty ? "先保存 Draft" : "发布新版本"}
-          </button>
+          </Button>
         ) : null}
       </div>
     </form>

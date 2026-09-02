@@ -1,5 +1,7 @@
 "use client";
 
+import { Label } from "@egocapture/ui/components/label";
+import { NativeSelect, NativeSelectOption } from "@egocapture/ui/components/native-select";
 import { useMemo, useState, useSyncExternalStore, type ChangeEvent } from "react";
 import {
   allLocales,
@@ -64,18 +66,18 @@ export function CountrySelect({
   "aria-label": ariaLabel,
 }: SelectProps) {
   return (
-    <select
+    <NativeSelect
       name={name}
       defaultValue={defaultValue ?? ""}
       className={className}
       required={required}
       aria-label={ariaLabel}
     >
-      {blankLabel ? <option value="">{blankLabel}</option> : null}
+      {blankLabel ? <NativeSelectOption value="">{blankLabel}</NativeSelectOption> : null}
       {withCurrentValue(countryOptions, defaultValue).map((option) => (
-        <option key={option.value} value={option.value}>{option.label}</option>
+        <NativeSelectOption key={option.value} value={option.value}>{option.label}</NativeSelectOption>
       ))}
-    </select>
+    </NativeSelect>
   );
 }
 
@@ -89,18 +91,18 @@ export function LocaleSelect({
 }: SelectProps) {
   const normalizedDefault = defaultValue ? canonicalLocale(defaultValue) ?? defaultValue : "";
   return (
-    <select
+    <NativeSelect
       name={name}
       defaultValue={normalizedDefault}
       className={className}
       required={required}
       aria-label={ariaLabel}
     >
-      {blankLabel ? <option value="">{blankLabel}</option> : null}
+      {blankLabel ? <NativeSelectOption value="">{blankLabel}</NativeSelectOption> : null}
       {withCurrentValue(localeOptions, normalizedDefault).map((option) => (
-        <option key={option.value} value={option.value}>{option.label}</option>
+        <NativeSelectOption key={option.value} value={option.value}>{option.label}</NativeSelectOption>
       ))}
-    </select>
+    </NativeSelect>
   );
 }
 
@@ -113,18 +115,18 @@ export function TimezoneSelect({
   "aria-label": ariaLabel,
 }: SelectProps) {
   return (
-    <select
+    <NativeSelect
       name={name}
       defaultValue={defaultValue ?? ""}
       className={className}
       required={required}
       aria-label={ariaLabel}
     >
-      {blankLabel ? <option value="">{blankLabel}</option> : null}
+      {blankLabel ? <NativeSelectOption value="">{blankLabel}</NativeSelectOption> : null}
       {withCurrentValue(timezoneOptions, defaultValue).map((option) => (
-        <option key={option.value} value={option.value}>{option.label}</option>
+        <NativeSelectOption key={option.value} value={option.value}>{option.label}</NativeSelectOption>
       ))}
-    </select>
+    </NativeSelect>
   );
 }
 
@@ -177,31 +179,31 @@ export function RegionalPreferencesFields({
 
   return (
     <>
-      <label className={labelClassName}>
+      <Label className={labelClassName}>
         Country / Region
-        <select name="countryRegion" required disabled={!ready} value={country} onChange={changeCountry} className={fieldClassName}>
-          <option value="" disabled>请选择国家或地区</option>
+        <NativeSelect name="countryRegion" required disabled={!ready} value={country} onChange={changeCountry} className={fieldClassName}>
+          <NativeSelectOption value="" disabled>请选择国家或地区</NativeSelectOption>
           {withCurrentValue(countryOptions, country).map((option) => (
-            <option key={option.value} value={option.value}>{option.label}</option>
+            <NativeSelectOption key={option.value} value={option.value}>{option.label}</NativeSelectOption>
           ))}
-        </select>
-      </label>
-      <label className={labelClassName}>
+        </NativeSelect>
+      </Label>
+      <Label className={labelClassName}>
         Locale
-        <select name="locale" required disabled={!ready} value={locale} onChange={(event) => setLocale(event.target.value)} className={fieldClassName}>
+        <NativeSelect name="locale" required disabled={!ready} value={locale} onChange={(event) => setLocale(event.target.value)} className={fieldClassName}>
           {withCurrentValue(visibleLocales, locale).map((option) => (
-            <option key={option.value} value={option.value}>{option.label}</option>
+            <NativeSelectOption key={option.value} value={option.value}>{option.label}</NativeSelectOption>
           ))}
-        </select>
-      </label>
-      <label className={labelClassName}>
+        </NativeSelect>
+      </Label>
+      <Label className={labelClassName}>
         Timezone
-        <select name="timezone" required disabled={!ready} value={timezone} onChange={(event) => setTimezone(event.target.value)} className={fieldClassName}>
+        <NativeSelect name="timezone" required disabled={!ready} value={timezone} onChange={(event) => setTimezone(event.target.value)} className={fieldClassName}>
           {withCurrentValue(visibleTimezones, timezone).map((option) => (
-            <option key={option.value} value={option.value}>{option.label}</option>
+            <NativeSelectOption key={option.value} value={option.value}>{option.label}</NativeSelectOption>
           ))}
-        </select>
-      </label>
+        </NativeSelect>
+      </Label>
     </>
   );
 }

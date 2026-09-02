@@ -1,3 +1,4 @@
+import { Card } from "@egocapture/ui/components/card";
 import Link from "next/link";
 import { FieldSessionPreview } from "@/app/_components/field-session-preview";
 import { MagneticLink } from "@/app/_components/magnetic-link";
@@ -108,13 +109,13 @@ export default function Home() {
 
         <div className="lg:col-span-7 lg:pl-8">
           {workflow.map((step) => (
-            <article key={step.code} className={styles.workflowRow}>
+            <Card as="article" key={step.code} className={styles.workflowRow}>
               <p className={styles.stepCode}>{step.code}</p>
               <div>
                 <h3 className="display text-2xl font-semibold tracking-[-0.04em] sm:text-[1.75rem]">{step.title}</h3>
                 <p className="mt-3 max-w-[42rem] text-sm leading-7 text-[var(--home-muted)]">{step.copy}</p>
               </div>
-            </article>
+            </Card>
           ))}
         </div>
       </section>

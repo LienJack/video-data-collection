@@ -1,5 +1,13 @@
 "use client";
 
+import { Alert, AlertDescription } from "@egocapture/ui/components/alert";
+import { Badge } from "@egocapture/ui/components/badge";
+import { Card } from "@egocapture/ui/components/card";
+import { Label } from "@egocapture/ui/components/label";
+import { NativeSelect, NativeSelectOption } from "@egocapture/ui/components/native-select";
+import { Input } from "@egocapture/ui/components/input";
+import { Button } from "@egocapture/ui/components/button";
+import { Progress } from "@egocapture/ui/components/progress";
 import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
 import type { Upload } from "tus-js-client";
@@ -326,58 +334,58 @@ export function UploadQueue({ sessions }: { sessions: SessionOption[] }) {
 
   return (
     <section className="mt-8">
-      <label className="surface block cursor-pointer border-dashed p-8 text-center transition hover:border-[var(--signal)] hover:bg-white sm:p-12">
+      <Label className="rounded-xl border bg-card/80 text-card-foreground shadow-sm backdrop-blur-xl block cursor-pointer border-dashed p-8 text-center transition hover:border-[var(--signal)] hover:bg-white sm:p-12">
         <span className="mx-auto mb-5 flex size-12 items-center justify-center rounded-full bg-[var(--teal-soft)] text-xl text-[var(--signal)]">＋</span>
         <span className="display block text-2xl font-semibold">选择设备或 SSD 中的视频</span>
         <span className="mt-2 block text-sm leading-6 text-[var(--muted)]">MP4 / MOV / INSV · 每批最多 5 个 · 单文件最多 50,000,000 bytes</span>
-        <input
+        <Input
           type="file"
           multiple
           accept=".mp4,.mov,.insv,video/mp4,video/quicktime,application/octet-stream"
           onChange={(event) => void onFiles(event.target.files)}
           className="mt-5 block w-full text-sm"
         />
-      </label>
+      </Label>
       {restorableCount > 0 ? <p className="mt-4 border-l-4 border-[var(--yellow)] px-4 py-3 text-sm">浏览器保留了 {restorableCount} 个未完成上传。重新选择同一文件后会尝试恢复原 TUS 资源。</p> : null}
-      {selectionError ? <p role="alert" className="mt-4 border-l-4 border-[var(--signal)] px-4 py-3 text-sm">{selectionError}</p> : null}
+      {selectionError ? <Alert role="alert" className="mt-4 border-l-4 border-[var(--signal)] px-4 py-3 text-sm"><AlertDescription>{selectionError}</AlertDescription></Alert> : null}
       <div className="mt-6 space-y-5">
         {items.map((item) => (
-          <article key={item.id} className="surface-solid p-5 sm:p-6">
+          <Card as="article" key={item.id} className="p-5 sm:p-6">
             <div className="flex flex-wrap items-start justify-between gap-3">
               <div><h2 className="font-bold break-all">{item.file.name}</h2><p className="mt-1 text-xs text-[var(--muted)]">{formatBytes(item.file.size)} · {item.contentType} · 修改于 {new Date(item.file.lastModified).toLocaleString("zh-CN")}</p></div>
-              <span className="status-pill">{item.status}</span>
+              <Badge>{item.status}</Badge>
             </div>
             <div className="mt-5 grid gap-3 sm:grid-cols-2">
-              <label className="text-sm font-bold">Recording Session
-                <select
+              <Label className="text-sm font-bold">Recording Session
+                <NativeSelect
                   value={item.sessionChoice}
                   disabled={!(["ready", "failed"].includes(item.status)) || Boolean(item.uploadPublicId)}
                   onChange={(event) => update(item.id, { sessionChoice: event.target.value, error: "" })}
                   className="mt-2 w-full border border-[var(--line)] bg-[var(--paper)] px-3 py-3 font-normal"
                 >
-                  <option value="">请选择…</option>
-                  {sessions.map((session) => <option key={session.publicId} value={session.publicId}>{session.publicId} · {session.taskTitle} · {session.deviceLabel}</option>)}
-                  <option value="unable">Unable to Determine</option>
-                </select>
-              </label>
-              <label className="text-sm font-bold">备注（可选）
-                <input value={item.note} disabled={Boolean(item.uploadPublicId)} onChange={(event) => update(item.id, { note: event.target.value.slice(0, 500) })} className="mt-2 w-full border border-[var(--line)] bg-[var(--paper)] px-3 py-3 font-normal" placeholder="不要填写敏感信息" />
-              </label>
+                  <NativeSelectOption value="">请选择…</NativeSelectOption>
+                  {sessions.map((session) => <NativeSelectOption key={session.publicId} value={session.publicId}>{session.publicId} · {session.taskTitle} · {session.deviceLabel}</NativeSelectOption>)}
+                  <NativeSelectOption value="unable">Unable to Determine</NativeSelectOption>
+                </NativeSelect>
+              </Label>
+              <Label className="text-sm font-bold">备注（可选）
+                <Input value={item.note} disabled={Boolean(item.uploadPublicId)} onChange={(event) => update(item.id, { note: event.target.value.slice(0, 500) })} className="mt-2 w-full border border-[var(--line)] bg-[var(--paper)] px-3 py-3 font-normal" placeholder="不要填写敏感信息" />
+              </Label>
             </div>
-            <div className="mt-5 h-2 overflow-hidden rounded-full bg-[var(--paper-deep)]"><div className="h-full rounded-full bg-[var(--teal)] transition-[width]" style={{ width: `${item.progress}%` }} /></div>
+            <Progress className="mt-5" value={item.progress} aria-label={`上传进度 ${item.progress.toFixed(1)}%`} />
             <div className="mt-2 flex justify-between text-xs text-[var(--muted)]"><span>{item.fingerprintV1 ? `fingerprint ${item.fingerprintV1.slice(0, 12)}…` : "正在计算 fingerprint_v1…"}</span><span>{item.progress.toFixed(1)}%</span></div>
             {item.resumed ? <p className="mt-3 text-xs font-bold text-[var(--teal)]">已从浏览器保存的 TUS offset 恢复</p> : null}
             {item.duplicateCandidate ? <p className="mt-3 border-l-4 border-[var(--yellow)] px-3 text-xs">Duplicate Candidate：仅进入人工复核，不会自动删除或拒绝。</p> : null}
-            {item.error ? <p role="alert" className="mt-3 border-l-4 border-[var(--signal)] px-3 text-sm">{item.error}</p> : null}
+            {item.error ? <Alert role="alert" className="mt-3 border-l-4 border-[var(--signal)] px-3 text-sm"><AlertDescription>{item.error}</AlertDescription></Alert> : null}
             <div className="mt-5 flex flex-wrap gap-2">
-              {item.status === "ready" ? <button onClick={() => void start(item)} className="primary-action">开始直传 Storage</button> : null}
-              {item.status === "uploading" ? <button onClick={() => void pause(item)} className="border border-[var(--ink)] px-4 py-3 text-sm font-bold">暂停</button> : null}
-              {item.status === "paused" ? <button onClick={() => resume(item)} className="primary-action">继续</button> : null}
-              {item.status === "failed" && item.uploadPublicId ? <button onClick={() => void start(item, item.resourceExpired)} className="bg-[var(--signal)] px-4 py-3 text-sm font-bold text-white">{item.resourceExpired ? "创建新 Attempt 并重试" : "恢复并重试"}</button> : null}
-              {["preparing", "uploading", "paused", "failed"].includes(item.status) ? <button onClick={() => void cancel(item)} className="border border-[var(--signal)] px-4 py-3 text-sm font-bold text-[var(--signal)]">取消</button> : null}
+              {item.status === "ready" ? <Button onClick={() => void start(item)}>开始直传 Storage</Button> : null}
+              {item.status === "uploading" ? <Button variant="outline" onClick={() => void pause(item)} className="border-[var(--ink)] px-4 py-3 text-sm font-bold">暂停</Button> : null}
+              {item.status === "paused" ? <Button onClick={() => resume(item)}>继续</Button> : null}
+              {item.status === "failed" && item.uploadPublicId ? <Button onClick={() => void start(item, item.resourceExpired)} className="bg-[var(--signal)] px-4 py-3 text-sm font-bold text-white">{item.resourceExpired ? "创建新 Attempt 并重试" : "恢复并重试"}</Button> : null}
+              {["preparing", "uploading", "paused", "failed"].includes(item.status) ? <Button variant="outline" onClick={() => void cancel(item)} className="border-[var(--signal)] px-4 py-3 text-sm font-bold text-[var(--signal)]">取消</Button> : null}
               {item.uploadPublicId ? <Link href={`/uploads/${item.uploadPublicId}`} className="border border-[var(--line)] px-4 py-3 text-sm font-bold">查看服务端状态</Link> : null}
             </div>
-          </article>
+          </Card>
         ))}
       </div>
     </section>

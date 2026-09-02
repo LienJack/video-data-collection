@@ -1,5 +1,9 @@
 "use client";
 
+import { Alert, AlertDescription } from "@egocapture/ui/components/alert";
+import { Input } from "@egocapture/ui/components/input";
+import { Button } from "@egocapture/ui/components/button";
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@egocapture/ui/components/collapsible";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 
@@ -25,5 +29,18 @@ export function AssignmentActions({ assignmentPublicId, status }: { assignmentPu
     setBusy("");
   }
   if (["accepted", "canceled"].includes(status)) return null;
-  return <div className="mt-3"><button onClick={() => setOpen((value) => !value)} className="text-xs font-bold text-[var(--teal)]">{open ? "收起" : "管理"}</button>{open ? <div className="mt-3 space-y-2 border-t border-[var(--line)] pt-3"><input value={reason} onChange={(event) => setReason(event.target.value)} placeholder="操作原因，至少 10 字符" className="w-full border border-[var(--line)] bg-[var(--paper)] px-3 py-2 text-xs" /><input type="datetime-local" value={dueAt} onChange={(event) => setDueAt(event.target.value)} className="w-full border border-[var(--line)] bg-[var(--paper)] px-3 py-2 text-xs" /><div className="flex gap-2"><button disabled={Boolean(busy)} onClick={() => mutate("extend")} className="border border-[var(--teal)] px-3 py-1.5 text-xs font-bold text-[var(--teal)]">延期</button><button disabled={Boolean(busy)} onClick={() => mutate("cancel")} className="border border-[var(--signal)] px-3 py-1.5 text-xs font-bold text-[var(--signal)]">取消</button></div>{error ? <p role="alert" className="text-xs text-[var(--signal-dark)]">{error}</p> : null}</div> : null}</div>;
+  return (
+    <Collapsible open={open} onOpenChange={setOpen} className="mt-3">
+      <CollapsibleTrigger asChild><Button variant="ghost" size="sm">{open ? "收起" : "管理"}</Button></CollapsibleTrigger>
+      <CollapsibleContent className="mt-3 space-y-2 border-t pt-3">
+        <Input value={reason} onChange={(event) => setReason(event.target.value)} placeholder="操作原因，至少 10 字符" />
+        <Input type="datetime-local" value={dueAt} onChange={(event) => setDueAt(event.target.value)} />
+        <div className="flex gap-2">
+          <Button variant="outline" size="sm" disabled={Boolean(busy)} onClick={() => mutate("extend")}>延期</Button>
+          <Button variant="destructive" size="sm" disabled={Boolean(busy)} onClick={() => mutate("cancel")}>取消</Button>
+        </div>
+        {error ? <Alert variant="destructive"><AlertDescription>{error}</AlertDescription></Alert> : null}
+      </CollapsibleContent>
+    </Collapsible>
+  );
 }
