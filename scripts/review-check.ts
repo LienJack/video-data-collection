@@ -92,17 +92,17 @@ async function main() {
       )
     `;
 
-    const login = await api(env.siteUrl, "/api/auth/admin-login", {
+    const login = await api(env.adminSiteUrl, "/api/auth/admin-login", {
       method: "POST", jar, headers: { "content-type": "application/json" },
       body: JSON.stringify({ email, password }),
     });
     assert(login.response.ok, "Review Admin login failed");
-    const listed = await api<{ data?: { items: Array<{ publicId: string }> } }>(env.siteUrl, "/api/admin/review-cases?status=open", { jar });
+    const listed = await api<{ data?: { items: Array<{ publicId: string }> } }>(env.adminSiteUrl, "/api/admin/review-cases?status=open", { jar });
     assert(listed.response.ok && listed.payload.data?.items.some((item) => item.publicId === reviewPublicId), "Open ReviewCase was not listed");
 
     const idempotencyKey = randomUUID();
     const decision = await api<{ data?: { status: string; matchDecisionId: string } }>(
-      env.siteUrl,
+      env.adminSiteUrl,
       `/api/admin/review-cases/${reviewPublicId}/decision`,
       {
         method: "POST", jar,
@@ -117,7 +117,7 @@ async function main() {
     );
     assert(decision.response.ok && decision.payload.data?.status === "resolved" && decision.payload.data.matchDecisionId, "Admin Correct Session failed");
     const replay = await api<{ data?: { matchDecisionId: string } }>(
-      env.siteUrl,
+      env.adminSiteUrl,
       `/api/admin/review-cases/${reviewPublicId}/decision`,
       {
         method: "POST", jar,
@@ -132,7 +132,7 @@ async function main() {
     );
     assert(replay.response.ok && replay.payload.data?.matchDecisionId === decision.payload.data.matchDecisionId, "Review decision replay was not idempotent");
 
-    const signed = await api<{ data?: { signedUrl: string } }>(env.siteUrl, `/api/admin/uploads/${uploadPublicId}/signed-url`, { jar });
+    const signed = await api<{ data?: { signedUrl: string } }>(env.adminSiteUrl, `/api/admin/uploads/${uploadPublicId}/signed-url`, { jar });
     assert(signed.response.ok && signed.payload.data?.signedUrl, "Admin private signed URL failed");
     const range = await fetch(signed.payload.data.signedUrl, { headers: { range: "bytes=0-31" } });
     assert(range.status === 206 && (await range.arrayBuffer()).byteLength === 32, "Signed preview URL did not return a private Range response");

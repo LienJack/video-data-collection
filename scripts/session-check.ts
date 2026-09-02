@@ -112,26 +112,26 @@ async function main() {
       )
     `;
 
-    const participantLogin = await api<{ data?: { redirectTo: string } }>(env.siteUrl, "/api/auth/participant-login", {
+    const participantLogin = await api<{ data?: { redirectTo: string } }>(env.participantSiteUrl, "/api/auth/participant-login", {
       method: "POST", jar: participantJar, headers: { "content-type": "application/json" },
       body: JSON.stringify({ participantPublicId, password: participantPassword }),
     });
     assert(participantLogin.response.ok, "Session check Participant login failed");
-    const invalidDevice = await api<{ error?: { code: string } }>(env.siteUrl, "/api/participant/sessions", {
+    const invalidDevice = await api<{ error?: { code: string } }>(env.participantSiteUrl, "/api/participant/sessions", {
       method: "POST", jar: participantJar,
       headers: { "content-type": "application/json", "idempotency-key": randomUUID() },
       body: JSON.stringify({ assignmentPublicId, devicePublicId: createPublicId("DEV") }),
     });
     assert(invalidDevice.response.status === 422 && invalidDevice.payload.error?.code === "DEVICE_NOT_AVAILABLE", "Unassigned Device was not rejected");
     const createKey = randomUUID();
-    const created = await api<{ data?: { sessionPublicId: string; markerExpiresAt: string } }>(env.siteUrl, "/api/participant/sessions", {
+    const created = await api<{ data?: { sessionPublicId: string; markerExpiresAt: string } }>(env.participantSiteUrl, "/api/participant/sessions", {
       method: "POST", jar: participantJar,
       headers: { "content-type": "application/json", "idempotency-key": createKey },
       body: JSON.stringify({ assignmentPublicId, devicePublicId }),
     });
     assert(created.response.status === 201 && created.payload.data?.sessionPublicId, "Recording Session creation failed");
     sessionPublicId = created.payload.data.sessionPublicId;
-    const replay = await api<{ data?: { sessionPublicId: string } }>(env.siteUrl, "/api/participant/sessions", {
+    const replay = await api<{ data?: { sessionPublicId: string } }>(env.participantSiteUrl, "/api/participant/sessions", {
       method: "POST", jar: participantJar,
       headers: { "content-type": "application/json", "idempotency-key": createKey },
       body: JSON.stringify({ assignmentPublicId, devicePublicId }),
@@ -143,7 +143,7 @@ async function main() {
       qrDataUrl: string;
       shortCode: string;
       keyId: string;
-    } }>(env.siteUrl, `/api/participant/sessions/${sessionPublicId}/marker`, { jar: participantJar });
+    } }>(env.participantSiteUrl, `/api/participant/sessions/${sessionPublicId}/marker`, { jar: participantJar });
     const firstMarkerData = firstMarker.payload.data;
     assert(firstMarker.response.ok, "Marker retrieval failed");
     assert(firstMarkerData, "Marker response did not include data");
@@ -162,7 +162,7 @@ async function main() {
     let firstAcknowledgedAt = "";
     for (let attempt = 0; attempt < 2; attempt += 1) {
       const acknowledged = await api<{ data?: { acknowledgedAt: string } }>(
-        env.siteUrl,
+        env.participantSiteUrl,
         `/api/participant/sessions/${sessionPublicId}/marker-acknowledgement`,
         { method: "POST", jar: participantJar },
       );
@@ -171,41 +171,41 @@ async function main() {
       else assert(acknowledged.payload.data.acknowledgedAt === firstAcknowledgedAt, "Marker acknowledgement was not idempotent");
     }
     const regenerateKey = randomUUID();
-    const regenerated = await api<{ data?: { expiresAt: string } }>(env.siteUrl, `/api/participant/sessions/${sessionPublicId}/marker`, {
+    const regenerated = await api<{ data?: { expiresAt: string } }>(env.participantSiteUrl, `/api/participant/sessions/${sessionPublicId}/marker`, {
       method: "POST", jar: participantJar, headers: { "idempotency-key": regenerateKey },
     });
     assert(regenerated.response.status === 201 && regenerated.payload.data?.expiresAt, "Marker regeneration failed");
-    const regeneratedReplay = await api<{ data?: { expiresAt: string } }>(env.siteUrl, `/api/participant/sessions/${sessionPublicId}/marker`, {
+    const regeneratedReplay = await api<{ data?: { expiresAt: string } }>(env.participantSiteUrl, `/api/participant/sessions/${sessionPublicId}/marker`, {
       method: "POST", jar: participantJar, headers: { "idempotency-key": regenerateKey },
     });
     assert(regeneratedReplay.payload.data?.expiresAt === regenerated.payload.data.expiresAt, "Marker regeneration replay diverged");
-    const secondMarker = await api<{ data?: { markerUri: string } }>(env.siteUrl, `/api/participant/sessions/${sessionPublicId}/marker`, { jar: participantJar });
+    const secondMarker = await api<{ data?: { markerUri: string } }>(env.participantSiteUrl, `/api/participant/sessions/${sessionPublicId}/marker`, { jar: participantJar });
     assert(secondMarker.payload.data?.markerUri && secondMarker.payload.data.markerUri !== firstMarkerData.markerUri, "Regenerated Marker overwrote or reused the old JWS");
     await verifyMarkerJws(secondMarker.payload.data.markerUri.slice("egocapture://marker/".length), env.markerPublicKeyJwk as JWK, env.markerKeyId);
 
-    const adminLogin = await api<{ data?: { redirectTo: string } }>(env.siteUrl, "/api/auth/admin-login", {
+    const adminLogin = await api<{ data?: { redirectTo: string } }>(env.adminSiteUrl, "/api/auth/admin-login", {
       method: "POST", jar: adminJar, headers: { "content-type": "application/json" },
       body: JSON.stringify({ email: adminEmail, password: adminPassword }),
     });
     assert(adminLogin.response.ok, "Session check Admin login failed");
-    const closed = await api<{ data?: { status: string } }>(env.siteUrl, `/api/admin/sessions/${sessionPublicId}/close`, {
+    const closed = await api<{ data?: { status: string } }>(env.adminSiteUrl, `/api/admin/sessions/${sessionPublicId}/close`, {
       method: "POST", jar: adminJar, headers: { "content-type": "application/json" },
       body: JSON.stringify({ reason: "Integration check explicitly closes the synthetic Recording Session" }),
     });
     assert(closed.response.ok && closed.payload.data?.status === "closed", "Admin Session close failed");
-    const secondSession = await api<{ data?: { sessionPublicId: string } }>(env.siteUrl, "/api/participant/sessions", {
+    const secondSession = await api<{ data?: { sessionPublicId: string } }>(env.participantSiteUrl, "/api/participant/sessions", {
       method: "POST", jar: participantJar,
       headers: { "content-type": "application/json", "idempotency-key": randomUUID() },
       body: JSON.stringify({ assignmentPublicId, devicePublicId }),
     });
     assert(secondSession.response.status === 201 && secondSession.payload.data?.sessionPublicId, "Second open Session creation failed");
     const secondSessionPublicId = secondSession.payload.data.sessionPublicId;
-    const canceled = await api<{ data?: { status: string } }>(env.siteUrl, `/api/admin/assignments/${assignmentPublicId}/cancel`, {
+    const canceled = await api<{ data?: { status: string } }>(env.adminSiteUrl, `/api/admin/assignments/${assignmentPublicId}/cancel`, {
       method: "POST", jar: adminJar, headers: { "content-type": "application/json" },
       body: JSON.stringify({ reason: "Integration check cancels Assignment and closes its remaining open Session" }),
     });
     assert(canceled.response.ok && canceled.payload.data?.status === "canceled", "Assignment cancellation failed");
-    const closedRegenerate = await api<{ error?: { code: string } }>(env.siteUrl, `/api/participant/sessions/${secondSessionPublicId}/marker`, {
+    const closedRegenerate = await api<{ error?: { code: string } }>(env.participantSiteUrl, `/api/participant/sessions/${secondSessionPublicId}/marker`, {
       method: "POST", jar: participantJar, headers: { "idempotency-key": randomUUID() },
     });
     assert(closedRegenerate.response.status === 409 && closedRegenerate.payload.error?.code === "SESSION_CLOSED", "Assignment-canceled Session allowed Marker regeneration");

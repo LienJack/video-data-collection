@@ -44,9 +44,9 @@ Participant Demo 登录
 
 ```text
 Mac / Browser
-├─ Next.js 16 + React 19（控制面）
-├─ Admin Portal / Participant Portal
-└─ tus-js-client（视频数据面）
+├─ Participant Next.js（独立域名 / Vercel Project）
+├─ Admin Next.js（独立域名 / Vercel Project）
+└─ Participant tus-js-client（视频数据面）
         │
         ├─ JSON / Auth / Review → Next.js Route Handlers
         └─ 视频字节 → Supabase Storage TUS
@@ -67,11 +67,10 @@ Storage
 主要工程目录：
 
 ```text
-app/                 页面与 Route Handlers
-src/domain/          稳定类型、状态与领域规则
-src/server/          Auth、DB、Storage、Audit 和服务层
-src/upload/          TUS 客户端、fingerprint 与恢复
-src/metadata/        Range Reader、MediaInfo、MP4Box 与设备比较
+apps/participant-web/ 参与者 Next.js、邀请、Session 与上传 API
+apps/admin-web/       管理 Next.js、管理 API 与 Vercel Cron
+packages/core/        稳定领域规则、Auth、DB、Storage、Audit 和服务层
+packages/ui/          两端共享的视觉基础，不包含页面或导航
 database/migrations/ 显式 Migration、RLS、View 与约束
 infra/nas/           五服务最小 Supabase Compose
 scripts/             Migration、Seed、物理 Integration Checks
@@ -95,7 +94,8 @@ pnpm dev:local
 
 - Supabase API / Storage：`127.0.0.1:54321`
 - PostgreSQL：`127.0.0.1:54322`
-- Next.js：`localhost:3000`
+- Participant Next.js：`localhost:3000`
+- Admin Next.js：`localhost:3001`
 
 `pnpm dev:local:setup` 会创建本地随机秘密、启动基础设施、执行 Migration、幂等 Seed 和 Seed 校验。普通 `down` 保留 volume；只有显式设置 `EGOCAPTURE_DESTROY_INFRA=YES` 后运行 `pnpm dev:local:destroy` 才删除专属 volume。
 
@@ -223,7 +223,7 @@ pnpm test:e2e          # Chromium 主流程 + WebKit smoke
 
 Playwright 的主流程真实上传一个有效 MP4，并验证视频请求目标是 Storage/NAS Gateway，而不是 Next.js。本轮 [本地验收记录](docs/acceptance/2026-09-02-local-mvp.md) 包含：
 
-- quality：lint、type、27 个单元测试、production build。
+- quality：lint、type、30 个单元测试、两套独立 production build。
 - browser-acceptance：在 NAS 五服务 Docker + Mac 本地 Next.js 上依次通过 13 个 Migration/checksum、RLS、Chromium 主流程与 WebKit 实际 TUS smoke（4 passed，1 个按项目条件 intentional skip）。
 - repository-safety：明显秘密和大媒体检查。
 
@@ -249,9 +249,13 @@ Playwright 的主流程真实上传一个有效 MP4，并验证视频请求目�
 5. 确认 private `egocapture-raw` bucket 的 50,000,000 bytes limit。
 6. 将 `egocapture` 追加到 Exposed Schemas，禁止覆盖现有值。
 7. 执行 `pnpm db:seed && pnpm db:test:seed`。
-8. 在 Vercel 配置 `.env.example` 中的 server/browser 环境变量；cloud 设置 `STORAGE_UPLOAD_AUTH_MODE=official_signed`。
-9. Preview 部署并运行登录、TUS、metadata、RLS 与 Review smoke。
-10. 通过后发布 Production，并把真实 URL、账号密码、commit、region 和日期更新到本 README。
+8. 创建两个 Vercel Project，Root Directory 分别设为 `apps/participant-web` 与 `apps/admin-web`，不要把它们合并为同一 Project 的路径路由。
+9. 两个 Project 都配置 `.env.example` 中的共享后端变量；cloud 设置 `STORAGE_UPLOAD_AUTH_MODE=official_signed`。Participant 设置 `AUTH_COOKIE_NAME=egocapture-participant-auth`，Admin 设置 `AUTH_COOKIE_NAME=egocapture-admin-auth`。
+10. 设置 `PARTICIPANT_SITE_URL` 和 `ADMIN_SITE_URL` 为各自正式域名；邀请链接必须使用前者。只有 Admin Project 包含 `/api/cron/reconcile` 和 Vercel Cron。
+11. Preview 部署并运行登录、TUS、metadata、RLS、Review 与双向 404 隔离 smoke。
+12. 通过后发布 Production，并把两条真实 URL、账号密码、commit、region 和日期更新到本 README。
+
+两套 Vercel Project 的精确配置见 [双应用部署说明](docs/deployment/vercel-dual-app.md)。
 
 当前 Vercel CLI 已登录，但仓库尚未绑定 Vercel Project；Supabase CLI 可见的共享项目尚未被本仓库 link、目标 project ref 未获明确确认，并且项目状态为 `INACTIVE`。因此云阶段仍为 `WAITING_EXTERNAL`：确认并恢复既定共享 Supabase 项目后，才能执行冲突检查、Migration、Preview 验收和 Production 发布。不得使用新建 Supabase 项目、NAS 公网映射或关闭隔离规则绕过。
 

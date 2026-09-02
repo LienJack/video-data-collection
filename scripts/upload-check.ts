@@ -106,7 +106,7 @@ function errorStatus(error: Error) {
 async function main() {
   const env = integrationEnvironment();
   const tusEndpoint = env.tusEndpoint;
-  assert(new URL(tusEndpoint).port !== new URL(env.siteUrl).port, "TUS endpoint points at the Next.js control plane");
+  assert(new URL(tusEndpoint).port !== new URL(env.participantSiteUrl).port, "TUS endpoint points at the Next.js control plane");
   const generated = generateSyntheticMp4();
   const bytes = readFileSync(generated.file);
   const sphericalBytes = readFileSync(generated.sphericalFile);
@@ -216,23 +216,23 @@ async function main() {
       )
     `;
 
-    const login = await api(env.siteUrl, "/api/auth/participant-login", {
+    const login = await api(env.participantSiteUrl, "/api/auth/participant-login", {
       method: "POST", jar, headers: { "content-type": "application/json" },
       body: JSON.stringify({ participantPublicId, password: participantPassword }),
     });
     assert(login.response.ok, "Upload check Participant login failed");
-    const session = await api<{ data?: { sessionPublicId: string } }>(env.siteUrl, "/api/participant/sessions", {
+    const session = await api<{ data?: { sessionPublicId: string } }>(env.participantSiteUrl, "/api/participant/sessions", {
       method: "POST", jar,
       headers: { "content-type": "application/json", "idempotency-key": randomUUID() },
       body: JSON.stringify({ assignmentPublicId, devicePublicId }),
     });
     assert(session.response.status === 201 && session.payload.data?.sessionPublicId, "Upload check Session creation failed");
     sessionPublicId = session.payload.data.sessionPublicId;
-    const batch = await api<{ data?: { batchPublicId: string } }>(env.siteUrl, "/api/upload-batches", {
+    const batch = await api<{ data?: { batchPublicId: string } }>(env.participantSiteUrl, "/api/upload-batches", {
       method: "POST", jar, headers: { "idempotency-key": randomUUID() },
     });
     assert(batch.response.status === 201 && batch.payload.data?.batchPublicId, "Upload Batch creation failed");
-    const oversized = await api<{ error?: { code: string } }>(env.siteUrl, "/api/upload-intents", {
+    const oversized = await api<{ error?: { code: string } }>(env.participantSiteUrl, "/api/upload-intents", {
       method: "POST", jar,
       headers: { "content-type": "application/json", "idempotency-key": randomUUID() },
       body: JSON.stringify({
@@ -256,7 +256,7 @@ async function main() {
       signedUploadToken: string;
       chunkSizeBytes: number;
       authMode: "official_signed" | "nas_scoped_jwt";
-    } }>(env.siteUrl, "/api/upload-intents", {
+    } }>(env.participantSiteUrl, "/api/upload-intents", {
       method: "POST", jar,
       headers: { "content-type": "application/json", "idempotency-key": randomUUID() },
       body: JSON.stringify({
@@ -278,7 +278,7 @@ async function main() {
     assert(credential.tusEndpoint === tusEndpoint, "Server returned a non-authoritative TUS endpoint");
     assert(!credential.objectKey.includes("synthetic-mobile") && !credential.objectKey.includes(participantPublicId), "Object key contains display identifiers");
     const resumedAttempt = await api<{ data?: typeof credential & { resumedExistingAttempt: boolean } }>(
-      env.siteUrl,
+      env.participantSiteUrl,
       `/api/uploads/${uploadPublicId}/attempts`,
       {
         method: "POST", jar, headers: { "content-type": "application/json" },
@@ -287,7 +287,7 @@ async function main() {
     );
     assert(resumedAttempt.response.ok && resumedAttempt.payload.data?.attemptPublicId === credential.attemptPublicId, "Resume did not retain the same UploadAttempt");
     const replacementAttempt = await api<{ data?: typeof credential & { resumedExistingAttempt: boolean } }>(
-      env.siteUrl,
+      env.participantSiteUrl,
       `/api/uploads/${uploadPublicId}/attempts`,
       {
         method: "POST", jar, headers: { "content-type": "application/json" },
@@ -384,15 +384,15 @@ async function main() {
     });
     assert(requests.length >= 2, "TUS did not issue resumable Storage requests");
     assert(requests.every((url) => new URL(url).port === new URL(tusEndpoint).port), "Video bytes were sent outside the Storage data plane");
-    assert(requests.every((url) => new URL(url).port !== new URL(env.siteUrl).port), "Video bytes traversed the Next.js host");
+    assert(requests.every((url) => new URL(url).port !== new URL(env.participantSiteUrl).port), "Video bytes traversed the Next.js host");
 
     const completed = await api<{ data?: { transferStatus: string; videoAssetPublicId: string } }>(
-      env.siteUrl,
+      env.participantSiteUrl,
       `/api/uploads/${uploadPublicId}/complete`,
       { method: "POST", jar },
     );
     assert(completed.response.ok && completed.payload.data?.transferStatus === "verified", "Upload Complete reconciliation failed");
-    const replay = await api<{ data?: { transferStatus: string; videoAssetPublicId: string } }>(env.siteUrl, `/api/uploads/${uploadPublicId}/complete`, { method: "POST", jar });
+    const replay = await api<{ data?: { transferStatus: string; videoAssetPublicId: string } }>(env.participantSiteUrl, `/api/uploads/${uploadPublicId}/complete`, { method: "POST", jar });
     assert(
       replay.response.ok && replay.payload.data?.transferStatus === "verified"
         && replay.payload.data.videoAssetPublicId === completed.payload.data.videoAssetPublicId,
@@ -408,7 +408,7 @@ async function main() {
       rangeRequestCount: number;
       bytesRead: number;
       deviceConsistency: string;
-    } }>(env.siteUrl, `/api/uploads/${uploadPublicId}/extract-metadata`, { method: "POST", jar });
+    } }>(env.participantSiteUrl, `/api/uploads/${uploadPublicId}/extract-metadata`, { method: "POST", jar });
     assert(metadata.response.ok && metadata.payload.data?.status === "extracted", "Metadata extraction did not complete");
     assert(metadata.payload.data.containerFormat === "MPEG-4", "MediaInfo did not identify the MP4 container");
     assert(metadata.payload.data.videoCodec === "AVC", "MediaInfo did not identify the H.264/AVC track");
@@ -418,7 +418,7 @@ async function main() {
     assert(metadata.payload.data.bytesRead > 0 && metadata.payload.data.bytesRead <= 16 * 1024 * 1024, "Metadata byte budget mismatch");
     assert(metadata.payload.data.deviceConsistency === "matched", "Declared and extracted synthetic device did not match");
     const metadataReplay = await api<{ data?: { status: string; attemptNumber: number } }>(
-      env.siteUrl,
+      env.participantSiteUrl,
       `/api/uploads/${uploadPublicId}/extract-metadata`,
       { method: "POST", jar },
     );
@@ -475,10 +475,10 @@ async function main() {
       "TUS Upload database, match or audit evidence mismatch",
     );
 
-    const sphericalBatch = await api<{ data?: { batchPublicId: string } }>(env.siteUrl, "/api/upload-batches", {
+    const sphericalBatch = await api<{ data?: { batchPublicId: string } }>(env.participantSiteUrl, "/api/upload-batches", {
       method: "POST", jar, headers: { "idempotency-key": randomUUID() },
     });
-    const sphericalIntent = await api<{ data?: UploadCredential }>(env.siteUrl, "/api/upload-intents", {
+    const sphericalIntent = await api<{ data?: UploadCredential }>(env.participantSiteUrl, "/api/upload-intents", {
       method: "POST", jar,
       headers: { "content-type": "application/json", "idempotency-key": randomUUID() },
       body: JSON.stringify({
@@ -497,7 +497,7 @@ async function main() {
     sphericalUploadPublicId = sphericalIntent.payload.data.uploadPublicId;
     await uploadDirect(sphericalBytes, sphericalIntent.payload.data, sphericalFingerprint);
     const sphericalComplete = await api<{ data?: { transferStatus: string } }>(
-      env.siteUrl, `/api/uploads/${sphericalUploadPublicId}/complete`, { method: "POST", jar },
+      env.participantSiteUrl, `/api/uploads/${sphericalUploadPublicId}/complete`, { method: "POST", jar },
     );
     assert(sphericalComplete.response.ok && sphericalComplete.payload.data?.transferStatus === "verified", "360 object reconciliation failed");
     const sphericalMetadata = await api<{ data?: {
@@ -505,7 +505,7 @@ async function main() {
       containerFormat: string | null;
       projectionType: string | null;
       is360: boolean | null;
-    } }>(env.siteUrl, `/api/uploads/${sphericalUploadPublicId}/extract-metadata`, { method: "POST", jar });
+    } }>(env.participantSiteUrl, `/api/uploads/${sphericalUploadPublicId}/extract-metadata`, { method: "POST", jar });
     assert(sphericalMetadata.response.ok && sphericalMetadata.payload.data?.containerFormat === "MPEG-4", "360 container parsing failed");
     assert(sphericalMetadata.payload.data.projectionType === "equirectangular" && sphericalMetadata.payload.data.is360 === true, "360 projection normalization failed");
     const [sphericalEvidence] = await db<{ projectionType: string | null; is360: boolean | null; evidenceCount: number }[]>`
@@ -519,10 +519,10 @@ async function main() {
     `;
     assert(sphericalEvidence.projectionType === "equirectangular" && sphericalEvidence.is360 === true && sphericalEvidence.evidenceCount === 2, "360 normalized evidence was not persisted");
 
-    const duplicateBatch = await api<{ data?: { batchPublicId: string } }>(env.siteUrl, "/api/upload-batches", {
+    const duplicateBatch = await api<{ data?: { batchPublicId: string } }>(env.participantSiteUrl, "/api/upload-batches", {
       method: "POST", jar, headers: { "idempotency-key": randomUUID() },
     });
-    const duplicateIntent = await api<{ data?: UploadCredential & { duplicateCandidate: boolean } }>(env.siteUrl, "/api/upload-intents", {
+    const duplicateIntent = await api<{ data?: UploadCredential & { duplicateCandidate: boolean } }>(env.participantSiteUrl, "/api/upload-intents", {
       method: "POST", jar,
       headers: { "content-type": "application/json", "idempotency-key": randomUUID() },
       body: JSON.stringify({
@@ -541,7 +541,7 @@ async function main() {
     duplicateUploadPublicId = duplicateIntent.payload.data.uploadPublicId;
     await uploadDirect(bytes, duplicateIntent.payload.data, fingerprint);
     const duplicateComplete = await api<{ data?: { transferStatus: string } }>(
-      env.siteUrl, `/api/uploads/${duplicateUploadPublicId}/complete`, { method: "POST", jar },
+      env.participantSiteUrl, `/api/uploads/${duplicateUploadPublicId}/complete`, { method: "POST", jar },
     );
     assert(duplicateComplete.response.ok && duplicateComplete.payload.data?.transferStatus === "verified", "Duplicate candidate transfer was incorrectly rejected");
     const [duplicateEvidence] = await db<{ reviewCount: number; activeAssetCount: number }[]>`
@@ -558,10 +558,10 @@ async function main() {
     `;
     assert(duplicateEvidence.reviewCount === 1 && duplicateEvidence.activeAssetCount >= 2, "Duplicate candidate did not preserve both assets for review");
 
-    const missingBatch = await api<{ data?: { batchPublicId: string } }>(env.siteUrl, "/api/upload-batches", {
+    const missingBatch = await api<{ data?: { batchPublicId: string } }>(env.participantSiteUrl, "/api/upload-batches", {
       method: "POST", jar, headers: { "idempotency-key": randomUUID() },
     });
-    const missingIntent = await api<{ data?: UploadCredential }>(env.siteUrl, "/api/upload-intents", {
+    const missingIntent = await api<{ data?: UploadCredential }>(env.participantSiteUrl, "/api/upload-intents", {
       method: "POST", jar,
       headers: { "content-type": "application/json", "idempotency-key": randomUUID() },
       body: JSON.stringify({
@@ -578,15 +578,15 @@ async function main() {
     });
     assert(missingIntent.response.status === 201 && missingIntent.payload.data, "Storage-missing intent creation failed");
     const missingComplete = await api<{ error?: { code: string } }>(
-      env.siteUrl, `/api/uploads/${missingIntent.payload.data.uploadPublicId}/complete`, { method: "POST", jar },
+      env.participantSiteUrl, `/api/uploads/${missingIntent.payload.data.uploadPublicId}/complete`, { method: "POST", jar },
     );
     assert(missingComplete.response.status === 409 && missingComplete.payload.error?.code === "STORAGE_MISSING", "Missing object reconciliation did not fail safely");
 
     const mismatchBytes = Buffer.from("object smaller than declared intent");
-    const mismatchBatch = await api<{ data?: { batchPublicId: string } }>(env.siteUrl, "/api/upload-batches", {
+    const mismatchBatch = await api<{ data?: { batchPublicId: string } }>(env.participantSiteUrl, "/api/upload-batches", {
       method: "POST", jar, headers: { "idempotency-key": randomUUID() },
     });
-    const mismatchIntent = await api<{ data?: UploadCredential }>(env.siteUrl, "/api/upload-intents", {
+    const mismatchIntent = await api<{ data?: UploadCredential }>(env.participantSiteUrl, "/api/upload-intents", {
       method: "POST", jar,
       headers: { "content-type": "application/json", "idempotency-key": randomUUID() },
       body: JSON.stringify({
@@ -604,7 +604,7 @@ async function main() {
     assert(mismatchIntent.response.status === 201 && mismatchIntent.payload.data, "Size-mismatch intent creation failed");
     await uploadDirect(mismatchBytes, mismatchIntent.payload.data, "c".repeat(64));
     const mismatchComplete = await api<{ error?: { code: string } }>(
-      env.siteUrl, `/api/uploads/${mismatchIntent.payload.data.uploadPublicId}/complete`, { method: "POST", jar },
+      env.participantSiteUrl, `/api/uploads/${mismatchIntent.payload.data.uploadPublicId}/complete`, { method: "POST", jar },
     );
     assert(mismatchComplete.response.status === 409 && mismatchComplete.payload.error?.code === "SIZE_MISMATCH", "Size mismatch reconciliation did not fail safely");
     const [reconciliationEvidence] = await db<{ missingFailures: number; sizeFailures: number; reviewCount: number }[]>`
@@ -625,11 +625,11 @@ async function main() {
       new Uint8Array(damagedBytes),
       new Uint8Array(damagedBytes),
     );
-    const damagedBatch = await api<{ data?: { batchPublicId: string } }>(env.siteUrl, "/api/upload-batches", {
+    const damagedBatch = await api<{ data?: { batchPublicId: string } }>(env.participantSiteUrl, "/api/upload-batches", {
       method: "POST", jar, headers: { "idempotency-key": randomUUID() },
     });
     assert(damagedBatch.response.status === 201 && damagedBatch.payload.data, "Damaged fixture batch creation failed");
-    const damagedIntent = await api<{ data?: typeof credential }>(env.siteUrl, "/api/upload-intents", {
+    const damagedIntent = await api<{ data?: typeof credential }>(env.participantSiteUrl, "/api/upload-intents", {
       method: "POST", jar,
       headers: { "content-type": "application/json", "idempotency-key": randomUUID() },
       body: JSON.stringify({
@@ -672,13 +672,13 @@ async function main() {
       upload.start();
     });
     const damagedComplete = await api<{ data?: { transferStatus: string } }>(
-      env.siteUrl,
+      env.participantSiteUrl,
       `/api/uploads/${damagedUploadPublicId}/complete`,
       { method: "POST", jar },
     );
     assert(damagedComplete.response.ok && damagedComplete.payload.data?.transferStatus === "verified", "Damaged fixture did not preserve transfer verification");
     const damagedMetadata = await api<{ error?: { code: string } }>(
-      env.siteUrl,
+      env.participantSiteUrl,
       `/api/uploads/${damagedUploadPublicId}/extract-metadata`,
       { method: "POST", jar },
     );

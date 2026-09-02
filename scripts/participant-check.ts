@@ -21,14 +21,15 @@ function environment() {
   const local = readEnv(path.join(root, ".env.development.local"));
   const profile = local.EGOCAPTURE_DEV_PROFILE || "local";
   const merged = { ...readEnv(path.join(root, ".runtime", profile, "app.env")), ...process.env };
-  for (const key of ["DATABASE_URL", "NEXT_PUBLIC_SUPABASE_URL", "SUPABASE_SERVICE_ROLE_KEY", "SITE_URL"]) {
+  for (const key of ["DATABASE_URL", "NEXT_PUBLIC_SUPABASE_URL", "SUPABASE_SERVICE_ROLE_KEY", "PARTICIPANT_SITE_URL", "ADMIN_SITE_URL"]) {
     if (!merged[key]) throw new Error(`缺少 ${key}`);
   }
   return {
     databaseUrl: merged.DATABASE_URL!,
     supabaseUrl: merged.NEXT_PUBLIC_SUPABASE_URL!,
     serviceRoleKey: merged.SUPABASE_SERVICE_ROLE_KEY!,
-    siteUrl: merged.SITE_URL!,
+    participantSiteUrl: merged.PARTICIPANT_SITE_URL!,
+    adminSiteUrl: merged.ADMIN_SITE_URL!,
   };
 }
 
@@ -113,11 +114,11 @@ async function main() {
       values (${studyId}::uuid, ${profile.id}::uuid, 'owner')
     `;
 
-    const login = await api<{ data?: { redirectTo: string } }>(env.siteUrl, "/api/auth/admin-login", {
+    const login = await api<{ data?: { redirectTo: string } }>(env.adminSiteUrl, "/api/auth/admin-login", {
       method: "POST", jar: adminJar, headers: { "content-type": "application/json" },
       body: JSON.stringify({ email: adminEmail, password: adminPassword }),
     });
-    assert(login.response.ok && login.payload.data?.redirectTo === "/admin/dashboard", "Admin API login failed");
+    assert(login.response.ok && login.payload.data?.redirectTo === "/dashboard", "Admin API login failed");
     assert(adminJar.header(), "Admin login did not set SSR cookies");
 
     const participantBody = {
@@ -126,7 +127,7 @@ async function main() {
       consentVersion: "check-v1", notes: "Synthetic participant integration check",
     };
     const participantKey = randomUUID();
-    const created = await api<{ data?: { participantPublicId: string } }>(env.siteUrl, "/api/admin/participants", {
+    const created = await api<{ data?: { participantPublicId: string } }>(env.adminSiteUrl, "/api/admin/participants", {
       method: "POST", jar: adminJar,
       headers: { "content-type": "application/json", "idempotency-key": participantKey },
       body: JSON.stringify(participantBody),
@@ -138,21 +139,21 @@ async function main() {
       set is_fixture = true
       where public_id = ${participantPublicId}
     `;
-    const replay = await api<{ data?: { participantPublicId: string } }>(env.siteUrl, "/api/admin/participants", {
+    const replay = await api<{ data?: { participantPublicId: string } }>(env.adminSiteUrl, "/api/admin/participants", {
       method: "POST", jar: adminJar,
       headers: { "content-type": "application/json", "idempotency-key": participantKey },
       body: JSON.stringify(participantBody),
     });
     assert(replay.payload.data?.participantPublicId === participantPublicId, "Participant idempotency replay diverged");
     const participantDetail = await api<{ data?: { updatedAt: string } }>(
-      env.siteUrl,
+      env.adminSiteUrl,
       `/api/admin/participants/${participantPublicId}`,
       { method: "GET", jar: adminJar },
     );
     assert(participantDetail.response.ok && participantDetail.payload.data?.updatedAt, "Participant detail lookup failed");
     const participantUpdatedAt = participantDetail.payload.data.updatedAt;
     const participantUpdate = await api<{ data?: { updatedAt: string } }>(
-      env.siteUrl,
+      env.adminSiteUrl,
       `/api/admin/participants/${participantPublicId}`,
       {
         method: "PATCH", jar: adminJar, headers: { "content-type": "application/json" },
@@ -166,7 +167,7 @@ async function main() {
     );
     assert(participantUpdate.response.ok && participantUpdate.payload.data?.updatedAt, "Participant profile update failed");
     const staleParticipantUpdate = await api<{ error?: { code: string } }>(
-      env.siteUrl,
+      env.adminSiteUrl,
       `/api/admin/participants/${participantPublicId}`,
       {
         method: "PATCH", jar: adminJar, headers: { "content-type": "application/json" },
@@ -179,7 +180,7 @@ async function main() {
     );
 
     const revokedParticipant = await api<{ data?: { participantPublicId: string } }>(
-      env.siteUrl,
+      env.adminSiteUrl,
       "/api/admin/participants",
       {
         method: "POST",
@@ -199,7 +200,7 @@ async function main() {
       where public_id = ${revokedParticipantPublicId}
     `;
     const revokedInvitation = await api<{ data?: { invitationUrl: string } }>(
-      env.siteUrl,
+      env.adminSiteUrl,
       `/api/admin/participants/${revokedParticipantPublicId}/invitations`,
       { method: "POST", jar: adminJar, headers: { "idempotency-key": randomUUID() } },
     );
@@ -209,7 +210,7 @@ async function main() {
     );
     const revokedToken = revokedInvitation.payload.data.invitationUrl.split("/").at(-1)!;
     const revoked = await api<{ data?: { status: string; invitationStatus: string } }>(
-      env.siteUrl,
+      env.adminSiteUrl,
       `/api/admin/participants/${revokedParticipantPublicId}/invitations/revoke`,
       {
         method: "POST",
@@ -223,7 +224,7 @@ async function main() {
       "Invitation revocation failed",
     );
     const rejectedRevokedToken = await api<{ error?: { code: string } }>(
-      env.siteUrl,
+      env.participantSiteUrl,
       `/api/invitations/${revokedToken}/accept`,
       {
         method: "POST",
@@ -238,7 +239,7 @@ async function main() {
     );
 
     const invitation = await api<{ data?: { invitationUrl: string } }>(
-      env.siteUrl,
+      env.adminSiteUrl,
       `/api/admin/participants/${participantPublicId}/invitations`,
       { method: "POST", jar: adminJar, headers: { "idempotency-key": randomUUID() } },
     );
@@ -250,26 +251,26 @@ async function main() {
     assert(invitePage.ok, "Invitation open page failed");
 
     const accepted = await api<{ data?: { participantPublicId: string; redirectTo: string } }>(
-      env.siteUrl,
+      env.participantSiteUrl,
       `/api/invitations/${token}/accept`,
       { method: "POST", jar: participantJar, headers: { "content-type": "application/json" }, body: JSON.stringify({ password: participantPassword }) },
     );
-    assert(accepted.response.ok && accepted.payload.data?.redirectTo === "/participant/tasks", "Invitation acceptance failed");
+    assert(accepted.response.ok && accepted.payload.data?.redirectTo === "/tasks", "Invitation acceptance failed");
     assert(participantJar.header(), "Invitation acceptance did not establish Participant session");
 
-    const tasksResponse = await fetch(`${env.siteUrl}/participant/tasks`, { headers: { cookie: participantJar.header() } });
+    const tasksResponse = await fetch(`${env.participantSiteUrl}/tasks`, { headers: { cookie: participantJar.header() } });
     assert(tasksResponse.ok && (await tasksResponse.text()).includes("Participant Check"), "Participant SSR authorization failed");
 
     const participantLoginJar = new CookieJar();
-    const participantLogin = await api<{ data?: { redirectTo: string } }>(env.siteUrl, "/api/auth/participant-login", {
+    const participantLogin = await api<{ data?: { redirectTo: string } }>(env.participantSiteUrl, "/api/auth/participant-login", {
       method: "POST", jar: participantLoginJar, headers: { "content-type": "application/json" },
       body: JSON.stringify({ participantPublicId, password: participantPassword }),
     });
-    assert(participantLogin.response.ok && participantLogin.payload.data?.redirectTo === "/participant/tasks", "Participant Public ID login failed");
+    assert(participantLogin.response.ok && participantLogin.payload.data?.redirectTo === "/tasks", "Participant Public ID login failed");
 
     const serial = `RAW-SERIAL-${suffix}`;
     const device = await api<{ data?: { devicePublicId: string } }>(
-      env.siteUrl,
+      env.adminSiteUrl,
       `/api/admin/participants/${participantPublicId}/devices`,
       {
         method: "POST", jar: adminJar,
@@ -282,14 +283,14 @@ async function main() {
     );
     assert(device.response.status === 201 && device.payload.data?.devicePublicId, "Device registration failed");
     const devices = await api<{ data?: Array<{ publicId: string; updatedAt: string }> }>(
-      env.siteUrl,
+      env.adminSiteUrl,
       `/api/admin/participants/${participantPublicId}/devices`,
       { method: "GET", jar: adminJar },
     );
     const createdDevice = devices.payload.data?.find((candidate) => candidate.publicId === device.payload.data?.devicePublicId);
     assert(devices.response.ok && createdDevice?.updatedAt, "Device detail lookup failed");
     const deviceUpdate = await api<{ data?: { status: string; updatedAt: string } }>(
-      env.siteUrl,
+      env.adminSiteUrl,
       `/api/admin/devices/${device.payload.data.devicePublicId}`,
       {
         method: "PATCH", jar: adminJar, headers: { "content-type": "application/json" },
@@ -303,7 +304,7 @@ async function main() {
     );
     assert(deviceUpdate.response.ok && deviceUpdate.payload.data?.status === "shared", "Device update failed");
     const staleDeviceUpdate = await api<{ error?: { code: string } }>(
-      env.siteUrl,
+      env.adminSiteUrl,
       `/api/admin/devices/${device.payload.data.devicePublicId}`,
       {
         method: "PATCH", jar: adminJar, headers: { "content-type": "application/json" },
@@ -326,7 +327,7 @@ async function main() {
 
     for (const action of ["suspend", "reactivate"] as const) {
       const result = await api<{ data?: { status: string } }>(
-        env.siteUrl,
+        env.adminSiteUrl,
         `/api/admin/participants/${participantPublicId}/${action}`,
         { method: "POST", jar: adminJar, headers: { "content-type": "application/json" }, body: JSON.stringify({ reason: `Integration check ${action} transition` }) },
       );

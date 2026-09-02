@@ -8,6 +8,9 @@ const tinyMp4 = Buffer.from(
   "base64",
 );
 
+const participantOrigin = process.env.PARTICIPANT_SITE_URL || "http://localhost:3000";
+const adminOrigin = process.env.ADMIN_SITE_URL || "http://localhost:3001";
+
 async function logout(page: Page) {
   await page.evaluate(async () => {
     const response = await fetch("/api/auth/logout", { method: "POST" });
@@ -16,20 +19,19 @@ async function logout(page: Page) {
 }
 
 async function loginParticipant(page: Page, participantPublicId: string, password: string) {
-  await page.goto("/login");
+  await page.goto(`${participantOrigin}/login`);
   await page.getByLabel("Participant ID").fill(participantPublicId);
   await page.getByLabel("Password").fill(password);
   await page.getByRole("button", { name: "进入我的任务" }).click();
-  await expect(page).toHaveURL(/\/participant\/tasks$/);
+  await expect(page).toHaveURL(/\/tasks$/);
 }
 
 async function loginAdmin(page: Page, password: string) {
-  await page.goto("/login");
-  await page.getByRole("tab", { name: "管理员" }).click();
+  await page.goto(`${adminOrigin}/login`);
   await page.getByLabel("Admin Account").fill("admin");
   await page.getByLabel("Password").fill(password);
   await page.getByRole("button", { name: "进入管理控制台" }).click();
-  await expect(page).toHaveURL(/\/admin\/dashboard$/);
+  await expect(page).toHaveURL(/\/dashboard$/);
 }
 
 function publicId(text: string, prefix: "PT" | "DEV" | "TSK" | "AS" | "RS" | "UP" | "RV") {
@@ -54,12 +56,12 @@ test("Admin 建档到 Participant 上传与不可变纠正的完整闭环", asyn
     await page.setViewportSize({ width: 1440, height: 1000 });
     await loginAdmin(page, env.demoAdminPassword);
 
-    await page.goto("/admin/participants/new");
+    await page.goto(`${adminOrigin}/participants/new`);
     await page.getByLabel("Display Alias").fill(alias);
     await page.getByLabel("Consent Version").fill("e2e-consent-v1");
     await page.getByLabel("Notes").fill("Synthetic Playwright acceptance identity without PII");
     await page.getByRole("button", { name: "创建 Draft Participant" }).click();
-    await expect(page).toHaveURL(/\/admin\/participants\/PT-/);
+    await expect(page).toHaveURL(/\/participants\/PT-/);
     participantPublicId = publicId(page.url(), "PT");
 
     await page.getByRole("button", { name: "生成 / 重发邀请" }).click();
@@ -73,11 +75,11 @@ test("Admin 建档到 Participant 上传与不可变纠正的完整闭环", asyn
     await page.getByLabel("设置密码").fill(participantPassword);
     await page.getByLabel("再次输入").fill(participantPassword);
     await page.getByRole("button", { name: "接受邀请并进入任务" }).click();
-    await expect(page).toHaveURL(/\/participant\/tasks$/);
+    await expect(page).toHaveURL(/\/tasks$/);
 
     await logout(page);
     await loginAdmin(page, env.demoAdminPassword);
-    await page.goto(`/admin/participants/${participantPublicId}`);
+    await page.goto(`${adminOrigin}/participants/${participantPublicId}`);
     await page.getByPlaceholder("Manufacturer").fill("Synthetic");
     await page.getByPlaceholder("Model").fill("E2E Check Cam");
     await page.getByPlaceholder("Firmware").fill("1.0.0-e2e");
@@ -85,19 +87,19 @@ test("Admin 建档到 Participant 上传与不可变纠正的完整闭环", asyn
     await expect(page.getByText("Synthetic E2E Check Cam")).toBeVisible();
     devicePublicId = publicId(await page.locator("body").innerText(), "DEV");
 
-    await page.goto("/admin/tasks/new");
+    await page.goto(`${adminOrigin}/tasks/new`);
     const instructionsEditor = page.getByLabel("TaskInstructions · ego-task/1");
     const instructions = JSON.parse(await instructionsEditor.inputValue()) as Record<string, unknown>;
     instructions.title = taskTitle;
     instructions.description = "Playwright creates, publishes, assigns, records and uploads this frozen instruction version.";
     await instructionsEditor.fill(JSON.stringify(instructions, null, 2));
     await page.getByRole("button", { name: "创建 Draft" }).click();
-    await expect(page).toHaveURL(/\/admin\/tasks\/TSK-/);
+    await expect(page).toHaveURL(/\/tasks\/TSK-/);
     taskPublicId = publicId(page.url(), "TSK");
     await page.getByRole("button", { name: "发布新版本" }).click();
     await expect(page.getByText("Version 1", { exact: true })).toBeVisible();
 
-    await page.goto("/admin/assignments/new");
+    await page.goto(`${adminOrigin}/assignments/new`);
     await page.getByLabel("Participant").selectOption(participantPublicId);
     await page.getByLabel("Published TaskVersion").selectOption(`${taskPublicId}:1`);
     await page.getByLabel("Preferred Device").selectOption(devicePublicId);
@@ -105,7 +107,7 @@ test("Admin 建档到 Participant 上传与不可变纠正的完整闭环", asyn
     const localTomorrow = new Date(tomorrow.getTime() - tomorrow.getTimezoneOffset() * 60_000).toISOString().slice(0, 16);
     await page.getByLabel("Due At").fill(localTomorrow);
     await page.getByRole("button", { name: "创建 Assignment" }).click();
-    await expect(page).toHaveURL(/\/admin\/assignments$/);
+    await expect(page).toHaveURL(/\/assignments$/);
     const assignmentCard = page.getByRole("article").filter({ hasText: participantPublicId });
     await expect(assignmentCard).toContainText(taskTitle);
     const assignmentPublicId = publicId(await assignmentCard.innerText(), "AS");
@@ -113,8 +115,8 @@ test("Admin 建档到 Participant 上传与不可变纠正的完整闭环", asyn
     await logout(page);
     await page.setViewportSize({ width: 390, height: 844 });
     await loginParticipant(page, participantPublicId, participantPassword);
-    const unauthorized = await page.request.get("/api/admin/audit-events");
-    expect(unauthorized.status()).toBe(403);
+    const absentAdminApi = await page.request.get(`${participantOrigin}/api/admin/audit-events`);
+    expect(absentAdminApi.status()).toBe(404);
     await page.getByRole("link", { name: new RegExp(taskTitle) }).click();
     await expect(page.getByText(new RegExp(`${assignmentPublicId} · Version 1 · assigned`))).toBeVisible();
     await expect(page.getByRole("heading", { name: "环境准备" })).toBeVisible();
@@ -122,7 +124,7 @@ test("Admin 建档到 Participant 上传与不可变纠正的完整闭环", asyn
     await expect(page.getByRole("heading", { name: "上传与恢复" })).toBeVisible();
     await page.getByRole("button", { name: "我已阅读并确认这个版本" }).click();
     await page.getByRole("button", { name: "创建 Session 并显示 Marker" }).click();
-    await expect(page).toHaveURL(/\/participant\/sessions\/RS-/);
+    await expect(page).toHaveURL(/\/sessions\/RS-/);
     const sessionPublicId = publicId(page.url(), "RS");
     await expect(page.getByRole("img", { name: /签名二维码/ })).toBeVisible();
     await page.getByRole("button", { name: "我已拍摄二维码" }).click();
@@ -144,7 +146,7 @@ test("Admin 建档到 Participant 上传与不可变纠正的完整闭环", asyn
     await logout(page);
     await page.setViewportSize({ width: 1440, height: 1000 });
     await loginAdmin(page, env.demoAdminPassword);
-    await page.goto(`/admin/uploads/${uploadPublicId}`);
+    await page.goto(`${adminOrigin}/uploads/${uploadPublicId}`);
     await expect(page.getByText("Unable to Determine", { exact: true })).toBeVisible();
     const unmatchedReview = page.getByRole("link").filter({ hasText: "unmatched" }).first();
     const reviewPublicId = publicId((await unmatchedReview.textContent()) || "", "RV");
@@ -159,7 +161,7 @@ test("Admin 建档到 Participant 上传与不可变纠正的完整闭环", asyn
     await expect(page.getByText("admin_corrected", { exact: true })).toBeVisible();
     await expect(page.getByRole("article").filter({ hasText: "unmatched" }).filter({ hasText: "historical" })).toBeVisible();
 
-    await page.goto("/admin/audit");
+    await page.goto(`${adminOrigin}/audit`);
     const audit = page.getByRole("article").filter({ hasText: "review_case.correct_match" }).first();
     await expect(audit).toContainText(reviewPublicId);
     await expect(audit).toContainText(correctionReason);

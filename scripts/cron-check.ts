@@ -75,14 +75,14 @@ async function main() {
       `;
     });
 
-    const unauthorized = await api<{ error?: { code: string } }>(env.siteUrl, "/api/cron/reconcile");
+    const unauthorized = await api<{ error?: { code: string } }>(env.adminSiteUrl, "/api/cron/reconcile");
     assert(unauthorized.response.status === 401 && unauthorized.payload.error?.code === "CRON_UNAUTHORIZED", "Cron must reject a missing Bearer secret");
 
     const authorized = await api<{ data?: {
       expired: number;
       reconciliationFailures: number;
       demoBaselineRepaired: boolean;
-    } }>(env.siteUrl, "/api/cron/reconcile", {
+    } }>(env.adminSiteUrl, "/api/cron/reconcile", {
       headers: { authorization: `Bearer ${env.cronSecret}` },
     });
     assert(authorized.response.ok, "Authorized Cron request failed");

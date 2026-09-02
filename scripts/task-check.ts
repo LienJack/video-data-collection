@@ -82,23 +82,23 @@ async function main() {
     `;
     await db`update egocapture.participants set default_device_id = ${deviceId}::uuid where id = ${participantId}::uuid`;
 
-    const adminLogin = await api<{ data?: { redirectTo: string } }>(env.siteUrl, "/api/auth/admin-login", {
+    const adminLogin = await api<{ data?: { redirectTo: string } }>(env.adminSiteUrl, "/api/auth/admin-login", {
       method: "POST", jar: adminJar, headers: { "content-type": "application/json" },
       body: JSON.stringify({ email: adminEmail, password: adminPassword }),
     });
-    assert(adminLogin.response.ok && adminLogin.payload.data?.redirectTo === "/admin/dashboard", "Task check Admin login failed");
+    assert(adminLogin.response.ok && adminLogin.payload.data?.redirectTo === "/dashboard", "Task check Admin login failed");
 
     const v1Instructions = structuredClone(defaultTaskInstructions);
     v1Instructions.title = "Task Version One Fixture";
     const taskKey = randomUUID();
-    const created = await api<{ data?: { taskPublicId: string; updatedAt: string } }>(env.siteUrl, "/api/admin/tasks", {
+    const created = await api<{ data?: { taskPublicId: string; updatedAt: string } }>(env.adminSiteUrl, "/api/admin/tasks", {
       method: "POST", jar: adminJar,
       headers: { "content-type": "application/json", "idempotency-key": taskKey },
       body: JSON.stringify({ studyPublicId, instructions: v1Instructions }),
     });
     assert(created.response.status === 201 && created.payload.data?.taskPublicId, "Task creation failed");
     taskPublicId = created.payload.data.taskPublicId;
-    const replay = await api<{ data?: { taskPublicId: string } }>(env.siteUrl, "/api/admin/tasks", {
+    const replay = await api<{ data?: { taskPublicId: string } }>(env.adminSiteUrl, "/api/admin/tasks", {
       method: "POST", jar: adminJar,
       headers: { "content-type": "application/json", "idempotency-key": taskKey },
       body: JSON.stringify({ studyPublicId, instructions: v1Instructions }),
@@ -107,7 +107,7 @@ async function main() {
     await db`update egocapture.tasks set is_fixture = true where public_id = ${taskPublicId}`;
 
     const publishedV1 = await api<{ data?: { version: number; contentHash: string; updatedAt: string } }>(
-      env.siteUrl,
+      env.adminSiteUrl,
       `/api/admin/tasks/${taskPublicId}/publish`,
       { method: "POST", jar: adminJar, headers: { "idempotency-key": randomUUID() } },
     );
@@ -116,25 +116,25 @@ async function main() {
 
     const v2Instructions = structuredClone(v1Instructions);
     v2Instructions.title = "Task Version Two Fixture";
-    const updated = await api<{ data?: { updatedAt: string } }>(env.siteUrl, `/api/admin/tasks/${taskPublicId}`, {
+    const updated = await api<{ data?: { updatedAt: string } }>(env.adminSiteUrl, `/api/admin/tasks/${taskPublicId}`, {
       method: "PATCH", jar: adminJar, headers: { "content-type": "application/json" },
       body: JSON.stringify({ instructions: v2Instructions, expectedUpdatedAt: publishedV1.payload.data.updatedAt }),
     });
     assert(updated.response.ok && updated.payload.data?.updatedAt, "Task draft update failed");
-    const stale = await api<{ error?: { code: string } }>(env.siteUrl, `/api/admin/tasks/${taskPublicId}`, {
+    const stale = await api<{ error?: { code: string } }>(env.adminSiteUrl, `/api/admin/tasks/${taskPublicId}`, {
       method: "PATCH", jar: adminJar, headers: { "content-type": "application/json" },
       body: JSON.stringify({ instructions: v1Instructions, expectedUpdatedAt: publishedV1.payload.data.updatedAt }),
     });
     assert(stale.response.status === 409 && stale.payload.error?.code === "STALE_WRITE", "Task stale write was not rejected");
     const publishedV2 = await api<{ data?: { version: number; contentHash: string } }>(
-      env.siteUrl,
+      env.adminSiteUrl,
       `/api/admin/tasks/${taskPublicId}/publish`,
       { method: "POST", jar: adminJar, headers: { "idempotency-key": randomUUID() } },
     );
     assert(publishedV2.response.status === 201 && publishedV2.payload.data?.version === 2, "Task v2 publish failed");
     assert(publishedV2.payload.data.contentHash !== v1Hash, "Task versions did not freeze distinct content hashes");
 
-    const assignment = await api<{ data?: { assignmentPublicId: string } }>(env.siteUrl, "/api/admin/assignments", {
+    const assignment = await api<{ data?: { assignmentPublicId: string } }>(env.adminSiteUrl, "/api/admin/assignments", {
       method: "POST", jar: adminJar,
       headers: { "content-type": "application/json", "idempotency-key": randomUUID() },
       body: JSON.stringify({
@@ -145,7 +145,7 @@ async function main() {
     });
     assert(assignment.response.status === 201 && assignment.payload.data?.assignmentPublicId, "Assignment creation failed");
     assignmentPublicId = assignment.payload.data.assignmentPublicId;
-    const duplicate = await api<{ error?: { code: string } }>(env.siteUrl, "/api/admin/assignments", {
+    const duplicate = await api<{ error?: { code: string } }>(env.adminSiteUrl, "/api/admin/assignments", {
       method: "POST", jar: adminJar,
       headers: { "content-type": "application/json", "idempotency-key": randomUUID() },
       body: JSON.stringify({
@@ -156,33 +156,33 @@ async function main() {
     });
     assert(duplicate.response.status === 409 && duplicate.payload.error?.code === "ACTIVE_ASSIGNMENT_EXISTS", "Duplicate active Assignment was not rejected");
     const extendedDueAt = new Date(Date.now() + 96 * 60 * 60 * 1000).toISOString();
-    const extended = await api<{ data?: { dueAt: string } }>(env.siteUrl, `/api/admin/assignments/${assignmentPublicId}/extend`, {
+    const extended = await api<{ data?: { dueAt: string } }>(env.adminSiteUrl, `/api/admin/assignments/${assignmentPublicId}/extend`, {
       method: "POST", jar: adminJar, headers: { "content-type": "application/json" },
       body: JSON.stringify({ dueAt: extendedDueAt, reason: "Integration check verifies explicit due date extension" }),
     });
     assert(extended.response.ok && extended.payload.data?.dueAt === extendedDueAt, "Assignment extension failed");
 
-    const participantLogin = await api<{ data?: { redirectTo: string } }>(env.siteUrl, "/api/auth/participant-login", {
+    const participantLogin = await api<{ data?: { redirectTo: string } }>(env.participantSiteUrl, "/api/auth/participant-login", {
       method: "POST", jar: participantJar, headers: { "content-type": "application/json" },
       body: JSON.stringify({ participantPublicId, password: participantPassword }),
     });
     assert(participantLogin.response.ok, "Task check Participant login failed");
     const participantAssignments = await api<{ data?: Array<{ publicId: string; taskTitle: string; contentHash: string }> }>(
-      env.siteUrl,
+      env.participantSiteUrl,
       "/api/participant/assignments",
       { jar: participantJar },
     );
     const frozen = participantAssignments.payload.data?.find((item) => item.publicId === assignmentPublicId);
     assert(frozen?.taskTitle === "Task Version One Fixture" && frozen.contentHash === v1Hash, "Assigned TaskVersion did not remain frozen at v1");
     const wrongHash = await api<{ error?: { code: string } }>(
-      env.siteUrl,
+      env.participantSiteUrl,
       `/api/participant/assignments/${assignmentPublicId}/acknowledge`,
       { method: "POST", jar: participantJar, headers: { "content-type": "application/json" }, body: JSON.stringify({ contentHash: "0".repeat(64) }) },
     );
     assert(wrongHash.response.status === 409 && wrongHash.payload.error?.code === "CONTENT_HASH_MISMATCH", "Wrong Task content hash was not rejected");
     for (let attempt = 0; attempt < 2; attempt += 1) {
       const acknowledged = await api<{ data?: { status: string } }>(
-        env.siteUrl,
+        env.participantSiteUrl,
         `/api/participant/assignments/${assignmentPublicId}/acknowledge`,
         { method: "POST", jar: participantJar, headers: { "content-type": "application/json" }, body: JSON.stringify({ contentHash: v1Hash }) },
       );
@@ -207,7 +207,7 @@ async function main() {
       where task.public_id = ${taskPublicId}
     `;
     assert(evidence.versionCount === 2 && evidence.acknowledgedHash === v1Hash && evidence.auditCount >= 7, "Task/Assignment database evidence mismatch");
-    const canceled = await api<{ data?: { status: string } }>(env.siteUrl, `/api/admin/assignments/${assignmentPublicId}/cancel`, {
+    const canceled = await api<{ data?: { status: string } }>(env.adminSiteUrl, `/api/admin/assignments/${assignmentPublicId}/cancel`, {
       method: "POST", jar: adminJar, headers: { "content-type": "application/json" },
       body: JSON.stringify({ reason: "Integration check closes the synthetic Assignment after acceptance" }),
     });
