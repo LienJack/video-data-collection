@@ -1,0 +1,3 @@
+{"file":".trellis/spec/guides/cross-layer-thinking-guide.md","reason":"查询服务、Server Component、URL 状态和页面呈现跨层契约"}
+{"file":".trellis/spec/guides/code-reuse-thinking-guide.md","reason":"复用现有列表服务、SessionClose、UploadActions 和统一状态文案"}
+{"file":".trellis/tasks/09-02-admin-records-workspace/research/requirements-traceability.md","reason":"原始面试需求映射、缺失上传边界和延迟批量上传约束"}

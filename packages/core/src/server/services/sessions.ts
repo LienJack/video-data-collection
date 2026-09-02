@@ -31,7 +31,7 @@ export const sessionReasonSchema = z.object({ reason: z.string().trim().min(10).
 
 export const adminSessionListSchema = z.object({
   search: z.string().trim().max(160).optional(),
-  status: z.enum(["open", "closed"]).optional(),
+  status: z.enum(["open", "closed", "all"]).optional(),
   cursor: z.string().max(512).optional(),
   limit: z.coerce.number().int().min(1).max(100).default(50),
 });
@@ -395,27 +395,36 @@ export async function listAdminSessions(
     participantPublicId: string;
     participantAlias: string;
     taskTitle: string;
+    taskPublicId: string;
     devicePublicId: string;
     deviceLabel: string;
     status: string;
     markerAcknowledgedAt: Date | null;
+    closedAt: Date | null;
+    matchedVideoCount: number;
     createdAt: Date;
   }[]>`
-    select distinct
+    select
       session.public_id,
       assignment.public_id as assignment_public_id,
       participant.public_id as participant_public_id,
       participant.display_alias as participant_alias,
       version.instructions ->> 'title' as task_title,
+      task.public_id as task_public_id,
       device.public_id as device_public_id,
       device.manufacturer || ' ' || device.model as device_label,
       session.status,
       session.marker_acknowledged_at,
+      session.closed_at,
+      (select count(*)::integer
+        from egocapture.current_match_decisions decision
+        where decision.resolved_session_id = session.id) as matched_video_count,
       session.created_at
     from egocapture.recording_sessions session
     join egocapture.assignments assignment on assignment.id = session.assignment_id
     join egocapture.participants participant on participant.id = session.participant_id
     join egocapture.task_versions version on version.id = session.task_version_id
+    join egocapture.tasks task on task.id = version.task_id
     join egocapture.devices device on device.id = session.declared_device_id
     where (${input.search ?? null}::text is null
         or session.public_id ilike '%' || ${input.search ?? ""} || '%'
@@ -423,7 +432,7 @@ export async function listAdminSessions(
         or participant.public_id ilike '%' || ${input.search ?? ""} || '%'
         or participant.display_alias ilike '%' || ${input.search ?? ""} || '%'
         or version.instructions ->> 'title' ilike '%' || ${input.search ?? ""} || '%')
-      and (${input.status ?? null}::text is null or session.status = ${input.status ?? ""})
+      and (${input.status ?? null}::text is null or ${input.status ?? ""} = 'all' or session.status = ${input.status ?? ""})
       and (
         ${cursor?.createdAt ?? null}::timestamptz is null
         or (session.created_at, session.public_id) < (${cursor?.createdAt ?? null}::timestamptz, ${cursor?.publicId ?? ""})

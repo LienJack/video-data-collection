@@ -10,6 +10,16 @@ import {
 } from "@phosphor-icons/react/dist/ssr";
 import Link from "next/link";
 import type { getTaskOperations } from "@egocapture/core/server/services/tasks";
+import {
+  formatRecordBytes,
+  formatRecordDuration,
+  isUnhealthyMetadataStatus,
+  isUnhealthyTransferStatus,
+  matchDecisionLabel,
+  metadataStatusLabel,
+  recordHealth,
+  transferStatusLabel,
+} from "@/lib/record-presenters";
 
 type TaskOperations = Awaited<ReturnType<typeof getTaskOperations>>;
 
@@ -17,67 +27,8 @@ type Upload = Omit<TaskOperations["uploads"][number], "createdAt"> & { createdAt
 
 type TaskUploadsPanelProps = { uploads: Upload[] };
 
-const transferLabels: Record<string, string> = {
-  created: "等待上传",
-  uploading: "上传中",
-  reconciling: "正在核对",
-  verified: "上传已验证",
-  failed: "上传失败",
-  aborted: "上传已中止",
-  expired: "上传已过期",
-};
-
-const metadataLabels: Record<string, string> = {
-  pending: "等待解析",
-  processing: "解析中",
-  extracted: "解析完成",
-  partial: "部分解析",
-  unsupported: "格式不支持",
-  failed: "解析失败",
-};
-
-const matchLabels: Record<string, string> = {
-  participant_claim: "参与者声明",
-  admin_confirmed: "管理员已确认",
-  admin_corrected: "管理员已纠正",
-  rejected: "匹配已拒绝",
-};
-
-const healthyTransfers = new Set(["verified"]);
-const unhealthyTransfers = new Set(["failed", "aborted", "expired"]);
-const unhealthyMetadata = new Set(["partial", "unsupported", "failed"]);
-
-function formatBytes(bytes: number) {
-  if (bytes < 1024) return `${bytes} B`;
-  const units = ["KB", "MB", "GB", "TB"];
-  let value = bytes / 1024;
-  let unit = units[0];
-  for (let index = 1; index < units.length && value >= 1024; index += 1) {
-    value /= 1024;
-    unit = units[index];
-  }
-  return `${value >= 10 ? value.toFixed(0) : value.toFixed(1)} ${unit}`;
-}
-
-function formatDuration(durationMs: number | null) {
-  if (durationMs === null) return "时长待解析";
-  const seconds = Math.round(durationMs / 1000);
-  const minutes = Math.floor(seconds / 60);
-  return `${minutes}:${String(seconds % 60).padStart(2, "0")}`;
-}
-
-function uploadHealth(upload: Upload) {
-  if (unhealthyTransfers.has(upload.transferStatus) || unhealthyMetadata.has(upload.metadataStatus) || upload.reviewCount > 0) {
-    return { label: "需要处理", variant: "destructive" as const, icon: WarningCircle };
-  }
-  if (healthyTransfers.has(upload.transferStatus) && upload.decisionType) {
-    return { label: "已就绪", variant: "secondary" as const, icon: CheckCircle };
-  }
-  return { label: "处理中", variant: "outline" as const, icon: UploadSimple };
-}
-
 export function TaskUploadsPanel({ uploads }: TaskUploadsPanelProps) {
-  const attentionCount = uploads.filter((upload) => uploadHealth(upload).label === "需要处理").length;
+  const attentionCount = uploads.filter((upload) => recordHealth(upload).tone === "attention").length;
 
   return (
     <section aria-labelledby="task-uploads-heading" className="space-y-4">
@@ -95,8 +46,9 @@ export function TaskUploadsPanel({ uploads }: TaskUploadsPanelProps) {
 
       <div className="grid gap-4 xl:grid-cols-2">
         {uploads.map((upload) => {
-          const health = uploadHealth(upload);
-          const HealthIcon = health.icon;
+          const health = recordHealth(upload);
+          const HealthIcon = health.tone === "attention" ? WarningCircle : health.tone === "ready" ? CheckCircle : UploadSimple;
+          const healthVariant = health.tone === "attention" ? "destructive" : health.tone === "ready" ? "secondary" : "outline";
           return (
             <Card key={upload.publicId} as="article" className="gap-5 rounded-[1.35rem] border-white/70 bg-white/80 p-5 shadow-[var(--shadow-soft)] sm:p-6">
               <div className="flex min-w-0 flex-wrap items-start justify-between gap-3">
@@ -107,13 +59,13 @@ export function TaskUploadsPanel({ uploads }: TaskUploadsPanelProps) {
                     <p className="mt-1 break-all text-xs text-[var(--muted)]">{upload.publicId}</p>
                   </div>
                 </div>
-                <Badge variant={health.variant}><HealthIcon weight="fill" />{health.label}</Badge>
+                <Badge variant={healthVariant}><HealthIcon weight="fill" />{health.label}</Badge>
               </div>
 
               <dl className="grid grid-cols-1 gap-2.5 min-[28rem]:grid-cols-2">
-                <StatusItem label="上传" value={transferLabels[upload.transferStatus] ?? upload.transferStatus} warning={unhealthyTransfers.has(upload.transferStatus)} />
-                <StatusItem label="元数据" value={metadataLabels[upload.metadataStatus] ?? upload.metadataStatus} warning={unhealthyMetadata.has(upload.metadataStatus)} />
-                <StatusItem label="匹配" value={upload.decisionType ? matchLabels[upload.decisionType] ?? upload.decisionType : "等待匹配"} warning={!upload.decisionType} />
+                <StatusItem label="上传" value={transferStatusLabel(upload.transferStatus)} warning={isUnhealthyTransferStatus(upload.transferStatus)} />
+                <StatusItem label="元数据" value={metadataStatusLabel(upload.metadataStatus)} warning={isUnhealthyMetadataStatus(upload.metadataStatus)} />
+                <StatusItem label="匹配" value={matchDecisionLabel(upload.decisionType)} warning={!upload.decisionType || upload.decisionType === "unmatched" || upload.decisionType === "rejected"} />
                 <StatusItem label="人工复核" value={upload.reviewCount > 0 ? `${upload.reviewCount} 项待处理` : "无需处理"} warning={upload.reviewCount > 0} />
               </dl>
 
@@ -121,7 +73,7 @@ export function TaskUploadsPanel({ uploads }: TaskUploadsPanelProps) {
                 <p className="break-words font-semibold text-[var(--ink)]">{upload.participantAlias} · <span className="break-all">{upload.participantPublicId}</span></p>
                 <p className="mt-1 break-all">Session：{upload.sessionPublicId ?? "尚未确定"}</p>
                 <p className="mt-1 break-words">
-                  {formatBytes(upload.sizeBytes)} · {formatDuration(upload.durationMs)}
+                  {formatRecordBytes(upload.sizeBytes)} · {formatRecordDuration(upload.durationMs)}
                   {upload.width && upload.height ? ` · ${upload.width}×${upload.height}` : " · 分辨率待解析"}
                   {upload.frameRate ? ` · ${upload.frameRate.toFixed(2)} fps` : ""}
                 </p>

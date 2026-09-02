@@ -26,11 +26,14 @@ export const adminUploadListSchema = z.object({
   search: z.string().trim().max(160).optional(),
   transferStatus: z.enum(["created", "uploading", "reconciling", "verified", "failed", "aborted", "expired"]).optional(),
   metadataStatus: z.enum(["pending", "processing", "extracted", "partial", "unsupported", "failed"]).optional(),
+  attention: z.enum(["open"]).optional(),
   cursor: z.string().max(512).optional(),
   limit: z.coerce.number().int().min(1).max(100).default(50),
 });
 
 export const auditListSchema = z.object({
+  search: z.string().trim().max(160).optional(),
+  category: z.enum(["task", "participant", "assignment", "session", "upload", "metadata", "review", "system"]).optional(),
   cursor: z.string().max(512).optional(),
   limit: z.coerce.number().int().min(1).max(100).default(50),
 });
@@ -591,6 +594,11 @@ export async function listAdminUploads(
     decisionType: string | null;
     deviceConsistency: string | null;
     reviewCount: number;
+    primaryReviewPublicId: string | null;
+    claimedSessionPublicId: string | null;
+    resolvedSessionPublicId: string | null;
+    taskPublicId: string | null;
+    taskTitle: string | null;
     participantPublicId: string;
     participantAlias: string;
     createdAt: Date;
@@ -598,23 +606,49 @@ export async function listAdminUploads(
     select intent.public_id, intent.original_filename, intent.transfer_status, intent.metadata_status,
       intent.size_bytes::integer, asset.public_id as video_asset_public_id,
       decision.decision_type, metadata.device_consistency,
-      (select count(*)::integer from egocapture.review_cases review
-        where (review.video_asset_id = asset.id or review.upload_intent_id = intent.id)
-          and review.status in ('open', 'in_review')) as review_count,
+      coalesce(active_review.review_count, 0)::integer as review_count,
+      active_review.primary_review_public_id,
+      claimed_session.public_id as claimed_session_public_id,
+      resolved_session.public_id as resolved_session_public_id,
+      coalesce(resolved_task.public_id, claimed_task.public_id) as task_public_id,
+      coalesce(resolved_version.instructions ->> 'title', claimed_version.instructions ->> 'title') as task_title,
       participant.public_id as participant_public_id, participant.display_alias as participant_alias,
       intent.created_at
     from egocapture.upload_intents intent
     join egocapture.participants participant on participant.id = intent.participant_id
+    left join egocapture.recording_sessions claimed_session on claimed_session.id = intent.claimed_session_id
+    left join egocapture.assignments claimed_assignment on claimed_assignment.id = claimed_session.assignment_id
+    left join egocapture.task_versions claimed_version on claimed_version.id = claimed_assignment.task_version_id
+    left join egocapture.tasks claimed_task on claimed_task.id = claimed_version.task_id
     left join egocapture.video_assets asset on asset.upload_intent_id = intent.id
     left join egocapture.current_match_decisions decision on decision.video_asset_id = asset.id
+    left join egocapture.recording_sessions resolved_session on resolved_session.id = decision.resolved_session_id
+    left join egocapture.assignments resolved_assignment on resolved_assignment.id = resolved_session.assignment_id
+    left join egocapture.task_versions resolved_version on resolved_version.id = resolved_assignment.task_version_id
+    left join egocapture.tasks resolved_task on resolved_task.id = resolved_version.task_id
     left join egocapture.video_file_metadata metadata on metadata.video_asset_id = asset.id
+    left join lateral (
+      select
+        count(*)::integer as review_count,
+        (array_agg(review.public_id order by review.created_at desc, review.public_id desc))[1] as primary_review_public_id
+      from egocapture.review_cases review
+      where (review.video_asset_id = asset.id or review.upload_intent_id = intent.id)
+        and review.status in ('open', 'in_review')
+    ) active_review on true
     where (${input.search ?? null}::text is null
       or intent.public_id ilike '%' || ${input.search ?? ""} || '%'
       or intent.original_filename ilike '%' || ${input.search ?? ""} || '%'
       or participant.public_id ilike '%' || ${input.search ?? ""} || '%'
-      or participant.display_alias ilike '%' || ${input.search ?? ""} || '%')
+      or participant.display_alias ilike '%' || ${input.search ?? ""} || '%'
+      or claimed_session.public_id ilike '%' || ${input.search ?? ""} || '%'
+      or resolved_session.public_id ilike '%' || ${input.search ?? ""} || '%'
+      or claimed_task.public_id ilike '%' || ${input.search ?? ""} || '%'
+      or resolved_task.public_id ilike '%' || ${input.search ?? ""} || '%'
+      or claimed_version.instructions ->> 'title' ilike '%' || ${input.search ?? ""} || '%'
+      or resolved_version.instructions ->> 'title' ilike '%' || ${input.search ?? ""} || '%')
       and (${input.transferStatus ?? null}::text is null or intent.transfer_status = ${input.transferStatus ?? ""})
       and (${input.metadataStatus ?? null}::text is null or intent.metadata_status = ${input.metadataStatus ?? ""})
+      and (${input.attention ?? null}::text is null or coalesce(active_review.review_count, 0) > 0)
       and (
         ${cursor?.createdAt ?? null}::timestamptz is null
         or (intent.created_at, intent.public_id) < (${cursor?.createdAt ?? null}::timestamptz, ${cursor?.publicId ?? ""})
@@ -809,7 +843,28 @@ export async function listAuditEvents(
       audit.before_values, audit.after_values, audit.created_at
     from egocapture.audit_events audit
     left join egocapture.profiles profile on profile.id = audit.actor_profile_id
-    where (
+    where (${input.search ?? null}::text is null
+      or audit.entity_public_id ilike '%' || ${input.search ?? ""} || '%'
+      or audit.action ilike '%' || ${input.search ?? ""} || '%'
+      or profile.display_name ilike '%' || ${input.search ?? ""} || '%')
+      and (
+        ${input.category ?? null}::text is null
+        or case
+          when audit.action like 'task.%' then 'task'
+          when audit.action like 'participant.%' or audit.action like 'invitation.%' or audit.action like 'consent.%' or audit.action like 'device.%' then 'participant'
+          when audit.action like 'assignment.%' then 'assignment'
+          when audit.action like 'session.%' then 'session'
+          when audit.action like 'upload.%'
+            or audit.action like 'upload_attempt.%'
+            or audit.action like 'upload_batch.%'
+            or audit.action like 'upload_intent.%'
+            or audit.action like 'storage.%' then 'upload'
+          when audit.action like 'metadata.%' then 'metadata'
+          when audit.action like 'review.%' or audit.action like 'review_case.%' or audit.action like 'match.%' then 'review'
+          else 'system'
+        end = ${input.category ?? ""}
+      )
+      and (
       ${cursor?.createdAt ?? null}::timestamptz is null
       or (audit.created_at, audit.id::text) < (${cursor?.createdAt ?? null}::timestamptz, ${cursor?.publicId ?? ""})
     )

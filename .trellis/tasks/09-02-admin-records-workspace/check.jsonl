@@ -1,0 +1,3 @@
+{"file":".trellis/spec/guides/cross-layer-thinking-guide.md","reason":"核对数据库投影、服务返回、URL 筛选和 UI 状态的一致性"}
+{"file":".trellis/spec/guides/code-reuse-thinking-guide.md","reason":"检查重复查询、状态映射和并行页面实现"}
+{"file":".trellis/tasks/09-02-admin-records-workspace/research/requirements-traceability.md","reason":"逐项核验原始需求未因页面合并而丢失"}
