@@ -8,7 +8,19 @@ const supabaseOrigin = (() => {
     return null;
   }
 })();
-const externalDataSources = supabaseOrigin ? ` ${supabaseOrigin}` : "";
+const storageTusOrigin = (() => {
+  try {
+    return process.env.NEXT_PUBLIC_STORAGE_TUS_ENDPOINT
+      ? new URL(process.env.NEXT_PUBLIC_STORAGE_TUS_ENDPOINT).origin
+      : null;
+  } catch {
+    return null;
+  }
+})();
+const externalDataSources = [...new Set([supabaseOrigin, storageTusOrigin])]
+  .filter((origin): origin is string => origin !== null)
+  .map((origin) => ` ${origin}`)
+  .join("");
 const contentSecurityPolicy = [
   "default-src 'self'",
   `script-src 'self' 'unsafe-inline'${isDevelopment ? " 'unsafe-eval'" : ""}`,

@@ -106,7 +106,7 @@ function errorStatus(error: Error) {
 async function main() {
   const env = integrationEnvironment();
   const tusEndpoint = env.tusEndpoint;
-  assert(new URL(tusEndpoint).port !== new URL(env.participantSiteUrl).port, "TUS endpoint points at the Next.js control plane");
+  assert(new URL(tusEndpoint).origin !== new URL(env.participantSiteUrl).origin, "TUS endpoint points at the Next.js control plane");
   const generated = generateSyntheticMp4();
   const bytes = readFileSync(generated.file);
   const sphericalBytes = readFileSync(generated.sphericalFile);
@@ -453,8 +453,8 @@ async function main() {
       resumedUpload.start();
     });
     assert(requests.length >= 2, "TUS did not issue resumable Storage requests");
-    assert(requests.every((url) => new URL(url).port === new URL(tusEndpoint).port), "Video bytes were sent outside the Storage data plane");
-    assert(requests.every((url) => new URL(url).port !== new URL(env.participantSiteUrl).port), "Video bytes traversed the Next.js host");
+    assert(requests.every((url) => new URL(url).origin === new URL(tusEndpoint).origin), "Video bytes were sent outside the Storage data plane");
+    assert(requests.every((url) => new URL(url).origin !== new URL(env.participantSiteUrl).origin), "Video bytes traversed the Next.js host");
 
     const completed = await api<{ data?: { transferStatus: string; videoAssetPublicId: string } }>(
       env.participantSiteUrl,

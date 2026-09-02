@@ -164,7 +164,7 @@ describe("demo refresh CLI guard", () => {
     }
   });
 
-  it("accepts only matching dedicated Supabase database and API identities", () => {
+  it("accepts only the API or direct Storage TUS origin for the same dedicated Supabase ref", () => {
     const cloudSnapshot = snapshot({
       database: {
         ...snapshot().database,
@@ -172,13 +172,22 @@ describe("demo refresh CLI guard", () => {
         port: "5432",
       },
       apiUrl: "https://abcdefghijklmnopqrst.supabase.co",
-      storageTusUrl: "https://abcdefghijklmnopqrst.supabase.co/storage/v1/upload/resumable",
+      storageTusUrl: "https://abcdefghijklmnopqrst.storage.supabase.co/storage/v1/upload/resumable/sign",
     });
     expect(() => authorizeDemoPurge(
       { mode: "execute", confirm: "egocapture-demo-abcdefghijklmnopqrst" },
       "egocapture-demo-abcdefghijklmnopqrst",
       resetAllowedMarker("egocapture-demo-abcdefghijklmnopqrst"),
       cloudSnapshot,
+    )).not.toThrow();
+    expect(() => authorizeDemoPurge(
+      { mode: "execute", confirm: "egocapture-demo-abcdefghijklmnopqrst" },
+      "egocapture-demo-abcdefghijklmnopqrst",
+      resetAllowedMarker("egocapture-demo-abcdefghijklmnopqrst"),
+      {
+        ...cloudSnapshot,
+        storageTusUrl: "https://abcdefghijklmnopqrst.supabase.co/storage/v1/upload/resumable/sign",
+      },
     )).not.toThrow();
     expect(() => authorizeDemoPurge(
       { mode: "execute", confirm: "egocapture-demo-abcdefghijklmnopqrst" },
@@ -195,6 +204,19 @@ describe("demo refresh CLI guard", () => {
       resetAllowedMarker("egocapture-demo-us"),
       cloudSnapshot,
     )).toThrow(/project ref/);
+    for (const storageTusUrl of [
+      "https://differentprojectref.storage.supabase.co/storage/v1/upload/resumable/sign",
+      "https://abcdefghijklmnopqrst.storage.supabase.co/storage/v1/upload/resumable",
+      "https://abcdefghijklmnopqrst.storage.supabase.co/storage/v1/upload/resumable/sign?unsafe=1",
+      "https://storage.example.com/storage/v1/upload/resumable/sign",
+    ]) {
+      expect(() => authorizeDemoPurge(
+        { mode: "execute", confirm: "egocapture-demo-abcdefghijklmnopqrst" },
+        "egocapture-demo-abcdefghijklmnopqrst",
+        resetAllowedMarker("egocapture-demo-abcdefghijklmnopqrst"),
+        { ...cloudSnapshot, storageTusUrl },
+      )).toThrow(/same Supabase project/);
+    }
   });
 });
 

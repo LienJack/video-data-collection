@@ -100,6 +100,7 @@ export type DemoPurgeOperations = {
 
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 const TARGET_ID_PATTERN = /^egocapture-(nas|demo)-[a-z0-9]+(?:-[a-z0-9]+)*$/;
+const SUPABASE_PROJECT_REF_PATTERN = /^[a-z0-9]{20}$/;
 const FORBIDDEN_TARGET_WORDS = /(?:^|-)(?:shared|text2sql|data-agent|unknown|local|mac|default)(?:-|$)/;
 const APPROVED_NAS_TARGET = {
   environmentId: "egocapture-nas-interview",
@@ -252,11 +253,7 @@ export function assertConfiguredTargetEndpoints(
   const kind = targetKind(environmentId);
   const api = parseUrl(endpoints.apiUrl, "Supabase API URL");
   const tus = parseUrl(endpoints.storageTusUrl, "Storage TUS URL");
-  if (api.pathname !== "/" || api.search || api.hash
-    || api.origin !== tus.origin
-    || tus.pathname.replace(/\/$/, "") !== "/storage/v1/upload/resumable"
-    || tus.search
-    || tus.hash) {
+  if (api.pathname !== "/" || api.search || api.hash || tus.search || tus.hash) {
     throw new Error("HOLD: API and Storage TUS endpoints do not identify the same Supabase project");
   }
   if (endpoints.databaseName !== "postgres") {
@@ -270,18 +267,30 @@ export function assertConfiguredTargetEndpoints(
       || environmentId !== APPROVED_NAS_TARGET.environmentId
       || endpoints.databaseHostname !== APPROVED_NAS_TARGET.databaseHostname
       || endpoints.databasePort !== APPROVED_NAS_TARGET.databasePort
-      || api.origin !== APPROVED_NAS_TARGET.apiOrigin) {
+      || api.origin !== APPROVED_NAS_TARGET.apiOrigin
+      || tus.origin !== api.origin
+      || tus.pathname.replace(/\/$/, "") !== "/storage/v1/upload/resumable") {
       throw new Error("HOLD: NAS identity does not match the reviewed supervised tunnel target");
     }
     return;
   }
 
-  if (databaseIsLoopback || apiIsLoopback || api.protocol !== "https:" || !api.hostname.endsWith(".supabase.co")) {
+  if (databaseIsLoopback || apiIsLoopback || api.protocol !== "https:" || tus.protocol !== "https:"
+    || !api.hostname.endsWith(".supabase.co")) {
     throw new Error("HOLD: dedicated cloud identity requires non-local Supabase HTTPS endpoints");
   }
   const projectRef = api.hostname.slice(0, -".supabase.co".length);
-  if (environmentId !== `egocapture-demo-${projectRef}`) {
+  if (!SUPABASE_PROJECT_REF_PATTERN.test(projectRef)
+    || environmentId !== `egocapture-demo-${projectRef}`) {
     throw new Error("HOLD: dedicated cloud environment id is not bound to the Supabase project ref");
+  }
+  const allowedTusOrigins = new Set([
+    api.origin,
+    `https://${projectRef}.storage.supabase.co`,
+  ]);
+  if (!allowedTusOrigins.has(tus.origin)
+    || tus.pathname.replace(/\/$/, "") !== "/storage/v1/upload/resumable/sign") {
+    throw new Error("HOLD: API and Storage TUS endpoints do not identify the same Supabase project");
   }
   const directDatabase = endpoints.databaseHostname === `db.${projectRef}.supabase.co`;
   const pooledDatabase = endpoints.databaseHostname.endsWith(".pooler.supabase.com")
@@ -383,6 +392,7 @@ export function inspectionReport(environmentId: string, snapshot: DemoRefreshSna
   assertDemoRefreshTarget(environmentId, snapshot);
   if (!snapshot.bucket) throw new Error("HOLD: exact private egocapture-raw bucket is not present");
   const api = parseUrl(snapshot.apiUrl, "Supabase API URL");
+  const tus = parseUrl(snapshot.storageTusUrl, "Storage TUS URL");
   const totalRows = Object.values(snapshot.tableCounts).reduce((sum, count) => sum + count, 0);
   const tableCounts = EGOCAPTURE_BUSINESS_TABLES
     .map((table) => `${table}=${snapshot.tableCounts[table]}`)
@@ -391,7 +401,8 @@ export function inspectionReport(environmentId: string, snapshot: DemoRefreshSna
   return [
     `Environment: ${environmentId}`,
     `Database: ${snapshot.database.hostname}:${snapshot.database.port || "5432"}/${snapshot.database.databaseName}`,
-    `API/Storage origin: ${api.origin}`,
+    `API origin: ${api.origin}`,
+    `Storage TUS origin: ${tus.origin}`,
     `Migration frontier: ${REQUIRED_MIGRATION_FRONTIER}`,
     `Business rows: ${totalRows}`,
     `Tables: ${tableCounts}`,

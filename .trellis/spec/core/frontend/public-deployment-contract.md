@@ -56,6 +56,7 @@ Deploy each application from a clean worktree at the exact reviewed commit. The 
 - `DATABASE_URL` must use the dedicated Supabase transaction pooler on port `6543`. Serverless functions must not use the direct database endpoint or the session pooler.
 - `database()` uses `max: 1` in production because every Vercel function instance owns its own postgres.js pool. Local development may use `max: 2`.
 - Public uploads require `STORAGE_UPLOAD_AUTH_MODE=official_signed`. The NAS-only scoped-JWT workaround must never enter Vercel.
+- `NEXT_PUBLIC_STORAGE_TUS_ENDPOINT` uses `https://<ref>.storage.supabase.co/storage/v1/upload/resumable/sign`. The direct Storage host must carry the same project ref as `NEXT_PUBLIC_SUPABASE_URL`; Participant CSP allows that exact configured origin, and the signed token remains in `x-signature`.
 - Secret values may be written only to encrypted provider configuration or ignored local runtime files. Logs, task artifacts, Git, and acceptance receipts record key names and presence only.
 
 #### Authentication-cookie isolation
@@ -83,6 +84,7 @@ Deploy each application from a clean worktree at the exact reviewed commit. The 
 | Auth cookie lacks `Secure` or `HttpOnly` in production | Fail public acceptance and redeploy after fixing the shared cookie options. |
 | Participant cookie is accepted by Admin, or vice versa | Fail route/cookie isolation acceptance. |
 | Upload passes API creation but the MP4 cannot be decoded | Fail the business flow; use a genuinely decodable fixture and do not treat arbitrary bytes as video proof. |
+| Cloud TUS origin has a different project ref, an arbitrary host, or omits the `/sign` suffix | `HOLD` before refresh or deployment; do not weaken the endpoint binding or token validation. |
 | Signed TUS, reconciliation, metadata extraction, or review fails | Record the exact stage as failed; local evidence cannot replace the public observation. |
 | Logs or repository checks expose a secret-shaped value | Revoke/rotate the affected value, remove the exposure safely, and rerun the audit before claiming completion. |
 

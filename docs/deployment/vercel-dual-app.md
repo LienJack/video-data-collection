@@ -15,11 +15,13 @@
 
 ```dotenv
 STORAGE_UPLOAD_AUTH_MODE=official_signed
+NEXT_PUBLIC_STORAGE_TUS_ENDPOINT=https://phchhsatgoxlqqhpnnfk.storage.supabase.co/storage/v1/upload/resumable/sign
 PARTICIPANT_SITE_URL=https://egocapture-participant.vercel.app
 ADMIN_SITE_URL=https://egocapture-admin.vercel.app
 ```
 
 不要把 NAS URL、NAS JWT 模式或本地数据库 URL 配到公网 Project。
+公网签名 TUS 必须使用同一 Supabase project ref 的直连 Storage 域名和 `/storage/v1/upload/resumable/sign`；Participant CSP 从这个精确配置派生允许的 `connect-src` origin，签名仍只通过 `x-signature` 请求头发送。
 
 ## Project 独立变量
 

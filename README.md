@@ -188,7 +188,7 @@ Seed 是幂等 Fixture 恢复，不是生产证明。它提供：
 - Complete API 只查询对象存在与大小，不完整读取视频，并保持幂等。
 - Duplicate Candidate 只进入 Review，不自动删除或拒绝。
 
-Cloud/default 使用 Supabase 官方 signed upload token。当前自托管 Storage 版本的 signed `x-signature` TUS 路径会拒绝自身生成的 compact JWS，见 [Supabase Storage issue #1268](https://github.com/supabase/storage/issues/1268)。因此 NAS/local profile 使用 `nas_scoped_jwt`：短期 authenticated JWT 只授权一个精确 object key，仍由 bucket-specific RLS 限制；浏览器永远拿不到 service role key。该 workaround 不代表云端官方 signed upload 已失败，也不会被部署到 cloud profile。
+Cloud/default 使用 Supabase 官方 signed upload token，通过同一项目 ref 的直连 Storage 域名和 `/storage/v1/upload/resumable/sign` 发送 `x-signature`。当前自托管 Storage 版本的 signed `x-signature` TUS 路径会拒绝自身生成的 compact JWS，见 [Supabase Storage issue #1268](https://github.com/supabase/storage/issues/1268)。因此 NAS/local profile 使用 `nas_scoped_jwt`：短期 authenticated JWT 只授权一个精确 object key，仍由 bucket-specific RLS 限制；浏览器永远拿不到 service role key。该 workaround 不代表云端官方 signed upload 已失败，也不会被部署到 cloud profile。
 
 ## Metadata 与设备一致性
 
@@ -256,7 +256,7 @@ Playwright 的主流程真实上传一个有效 MP4，并验证视频请求目�
 1. 确认 Supabase CLI 与 Vercel CLI 登录，核对组织、项目名、region 和 receipt 中的 project ref/id；不按名称猜测目标。
 2. 只使用专用 `egocapture-demo`；读取 PostgreSQL 版本、Exposed Schemas、Auth 和 bucket，任何 ref 不一致或同名非本项目对象都进入 `HOLD`。绝不恢复、复用或修改无关 Text2SQL 项目。
 3. 云数据库使用同一 ref 的官方 pooler；设置 `DATABASE_URL` 后执行 `pnpm db:migrate && pnpm db:verify`。
-4. 确认 private `egocapture-raw` bucket 的 50,000,000 bytes limit。
+4. 确认 private `egocapture-raw` bucket 的 50,000,000 bytes limit，并把 `NEXT_PUBLIC_STORAGE_TUS_ENDPOINT` 绑定到同一 project ref 的 `https://<ref>.storage.supabase.co/storage/v1/upload/resumable/sign`。
 5. 将 `egocapture` 追加到 Exposed Schemas，禁止覆盖现有值。
 6. 先运行只读 `pnpm db:demo:refresh -- --inspect`；只有 environment id、数据库、API/TUS、Migration 和 bucket 全部绑定同一 ref 后，才使用 exact confirm/marker 执行 guarded refresh，并运行 `pnpm db:test:seed && pnpm db:test:rls`。
 7. 创建两个 Vercel Project，Root Directory 分别设为 `apps/participant-web` 与 `apps/admin-web`，不要把它们合并为同一 Project 的路径路由。

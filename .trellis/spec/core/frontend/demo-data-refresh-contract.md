@@ -68,14 +68,14 @@ Required integration environment keys:
 | `DEMO_SEED_ANCHOR` | Optional ISO date-time used for deterministic chronology. The command `--anchor` overrides it. |
 | `DATABASE_URL` | Must resolve to the same reviewed Supabase project as the API endpoint. |
 | `NEXT_PUBLIC_SUPABASE_URL` | Root API URL for the exact Supabase project. |
-| `NEXT_PUBLIC_STORAGE_TUS_ENDPOINT` | Same origin as the API URL and exact path `/storage/v1/upload/resumable`. |
+| `NEXT_PUBLIC_STORAGE_TUS_ENDPOINT` | NAS uses the API origin and exact path `/storage/v1/upload/resumable`. Cloud uses exact path `/storage/v1/upload/resumable/sign` on either the API origin or the matching `https://<ref>.storage.supabase.co` direct Storage origin. |
 | `SUPABASE_SERVICE_ROLE_KEY` | Server-only credential used for scoped Auth and Storage administration; never print or expose it. |
 | `DEMO_ADMIN_*`, `DEMO_PARTICIPANT_PASSWORD` | Runtime-only fixture credentials; never commit their values. |
 
 Target identity rules:
 
 - NAS: database `127.0.0.1:56522/postgres`, API origin `http://127.0.0.1:56521`, and environment id `egocapture-nas-interview` must all match.
-- Cloud: API must be `https://<ref>.supabase.co`; the environment id must be `egocapture-demo-<ref>`; the direct database host must be `db.<ref>.supabase.co`, or the pooler username must be `postgres.<ref>`.
+- Cloud: API must be `https://<ref>.supabase.co`; the signed TUS origin must be that API origin or exactly `https://<ref>.storage.supabase.co` with the same ref; the environment id must be `egocapture-demo-<ref>`; the direct database host must be `db.<ref>.supabase.co`, or the pooler username must be `postgres.<ref>`.
 - Both targets require the exact migration frontier `0001` through `0024`, the exact reviewed schema manifest, and a private bucket whose id and name are both `egocapture-raw`.
 
 Execution order is fixed:
