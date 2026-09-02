@@ -20,7 +20,7 @@ async function loadTab(viewer: Awaited<ReturnType<typeof requireAdmin>>, query: 
       metadataStatus: query.metadataStatus,
       attention: query.attention,
       page: query.page,
-      pageSize: 50,
+      pageSize: query.pageSize,
     });
     return { tab: "videos" as const, query, result: await listAdminUploads(viewer, input) };
   }
@@ -29,7 +29,7 @@ async function loadTab(viewer: Awaited<ReturnType<typeof requireAdmin>>, query: 
       search: query.search,
       status: query.status,
       page: query.page,
-      pageSize: 50,
+      pageSize: query.pageSize,
     });
     return { tab: "sessions" as const, query, result: await listAdminSessions(viewer, input) };
   }
@@ -37,7 +37,7 @@ async function loadTab(viewer: Awaited<ReturnType<typeof requireAdmin>>, query: 
     search: query.search,
     category: query.category,
     page: query.page,
-    pageSize: 50,
+    pageSize: query.pageSize,
   });
   return { tab: "activity" as const, query, result: await listAuditEvents(viewer, input) };
 }
@@ -100,7 +100,7 @@ export default async function RecordsPage({ searchParams }: { searchParams: Prom
 
       <nav className="apple-toolbar mt-6 flex gap-1 overflow-x-auto p-1.5" aria-label="采集记录视图">
         {tabs.map((item) => (
-          <Link key={item.value} href={`/records?tab=${item.value}`} aria-current={query.tab === item.value ? "page" : undefined} className={`flex min-h-11 shrink-0 items-center rounded-xl px-4 text-sm font-semibold outline-none transition-[background-color,color,box-shadow] focus-visible:ring-2 focus-visible:ring-[var(--ring)] ${query.tab === item.value ? "bg-white text-[var(--ink)] shadow-sm" : "text-[var(--muted)] hover:text-[var(--ink)]"}`}>
+          <Link key={item.value} href={`/records?tab=${item.value}&pageSize=${query.pageSize}`} aria-current={query.tab === item.value ? "page" : undefined} className={`flex min-h-11 shrink-0 items-center rounded-xl px-4 text-sm font-semibold outline-none transition-[background-color,color,box-shadow] focus-visible:ring-2 focus-visible:ring-[var(--ring)] ${query.tab === item.value ? "bg-white text-[var(--ink)] shadow-sm" : "text-[var(--muted)] hover:text-[var(--ink)]"}`}>
             {item.label}
           </Link>
         ))}

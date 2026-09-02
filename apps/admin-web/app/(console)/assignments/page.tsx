@@ -9,7 +9,7 @@ import Link from "next/link";
 import { AssignmentActions } from "@/app/(console)/assignments/assignment-actions";
 import { TablePagination } from "@/app/_components/table-pagination";
 import { requireAdmin } from "@/lib/auth";
-import { parsePageParam } from "@/lib/pagination";
+import { parsePageParam, parsePageSizeParam } from "@/lib/pagination";
 import { assignmentListSchema, listAssignments } from "@egocapture/core/server/services/tasks";
 
 export const dynamic = "force-dynamic";
@@ -17,7 +17,7 @@ export const dynamic = "force-dynamic";
 export default async function AssignmentsPage({ searchParams }: { searchParams: Promise<Record<string, string | string[] | undefined>> }) {
   const viewer = await requireAdmin();
   const params = await searchParams;
-  const query = assignmentListSchema.parse({ search: typeof params.search === "string" && params.search ? params.search : undefined, status: typeof params.status === "string" && params.status ? params.status : undefined, page: parsePageParam(params.page), pageSize: 25 });
+  const query = assignmentListSchema.parse({ search: typeof params.search === "string" && params.search ? params.search : undefined, status: typeof params.status === "string" && params.status ? params.status : undefined, page: parsePageParam(params.page), pageSize: parsePageSizeParam(params.pageSize) });
   const result = await listAssignments(viewer, query);
   return (
     <main className="app-page">
@@ -26,6 +26,7 @@ export default async function AssignmentsPage({ searchParams }: { searchParams: 
         <Link href="/assignments/new" className={buttonVariants({ className: "" })}><Plus className="size-4" weight="bold" />创建 Assignment</Link>
       </header>
       <form className="rounded-xl border bg-card/80 text-card-foreground shadow-sm backdrop-blur-xl my-7 flex flex-wrap gap-3 p-3">
+        <input type="hidden" name="pageSize" value={query.pageSize} />
         <Input name="search" defaultValue={query.search} placeholder="Assignment / Participant / Task" className="min-w-56 flex-1 border border-[var(--line)] bg-[var(--paper)] px-4 py-3" />
         <NativeSelect name="status" defaultValue={query.status || ""} className="border border-[var(--line)] bg-[var(--paper)] px-3"><NativeSelectOption value="">全部状态</NativeSelectOption>{["assigned","acknowledged","session_created","uploading","submitted","needs_review","rework_required","accepted","expired","missing_upload","canceled"].map((status) => <NativeSelectOption key={status} value={status}>{status}</NativeSelectOption>)}</NativeSelect>
         <Button>筛选</Button>

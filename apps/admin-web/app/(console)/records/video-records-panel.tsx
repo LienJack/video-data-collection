@@ -37,11 +37,12 @@ export function VideoRecordsPanel({ query, result }: { query: VideoRecordsQuery;
 
       <form className="apple-toolbar grid gap-3 p-3 sm:grid-cols-2 xl:grid-cols-[minmax(15rem,1fr)_repeat(3,minmax(10rem,auto))_auto]" action="/records">
         <input type="hidden" name="tab" value="videos" />
+        <input type="hidden" name="pageSize" value={query.pageSize} />
         <label className="space-y-1.5 text-xs font-semibold text-[var(--muted)]"><span>搜索视频记录</span><span className="relative block"><MagnifyingGlass className="pointer-events-none absolute left-3.5 top-1/2 size-4 -translate-y-1/2" aria-hidden="true" /><Input name="search" defaultValue={query.search} placeholder="文件名、参与者、任务或 Session" className="pl-10" /></span></label>
         <label className="space-y-1.5 text-xs font-semibold text-[var(--muted)]"><span>传输状态</span><NativeSelect name="transferStatus" defaultValue={query.transferStatus ?? ""} className="w-full"><NativeSelectOption value="">全部传输状态</NativeSelectOption>{transferStatuses.map((status) => <NativeSelectOption key={status} value={status}>{transferStatusLabel(status)}</NativeSelectOption>)}</NativeSelect></label>
         <label className="space-y-1.5 text-xs font-semibold text-[var(--muted)]"><span>元数据状态</span><NativeSelect name="metadataStatus" defaultValue={query.metadataStatus ?? ""} className="w-full"><NativeSelectOption value="">全部元数据状态</NativeSelectOption>{metadataStatuses.map((status) => <NativeSelectOption key={status} value={status}>{metadataStatusLabel(status)}</NativeSelectOption>)}</NativeSelect></label>
         <label className="space-y-1.5 text-xs font-semibold text-[var(--muted)]"><span>处理状态</span><NativeSelect name="attention" defaultValue={query.attention ?? ""} className="w-full"><NativeSelectOption value="">全部记录</NativeSelectOption><NativeSelectOption value="open">仅看待处理</NativeSelectOption></NativeSelect></label>
-        <div className="flex items-end gap-2"><Button className="flex-1">筛选</Button>{hasFilters ? <Link href="/records?tab=videos" className={buttonVariants({ variant: "outline", className: "flex-1" })}>清除筛选</Link> : null}</div>
+        <div className="flex items-end gap-2"><Button className="flex-1">筛选</Button>{hasFilters ? <Link href={`/records?tab=videos&pageSize=${query.pageSize}`} className={buttonVariants({ variant: "outline", className: "flex-1" })}>清除筛选</Link> : null}</div>
       </form>
 
       <div className="overflow-hidden rounded-[1.35rem] border border-white/70 bg-white/80 shadow-[var(--shadow-soft)]">

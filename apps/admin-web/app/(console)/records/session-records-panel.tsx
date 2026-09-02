@@ -20,9 +20,10 @@ export function SessionRecordsPanel({ query, result }: { query: SessionRecordsQu
       <div><h2 id="session-records-heading" className="display text-2xl font-semibold">录制会话</h2><p className="mt-2 max-w-3xl text-sm leading-6 text-[var(--muted)]">默认聚焦未关闭会话；全部历史和已关闭会话仍可搜索，便于追溯数小时或数天后到达的视频。</p></div>
       <form className="apple-toolbar grid gap-3 p-3 sm:grid-cols-[minmax(15rem,1fr)_minmax(10rem,auto)_auto]" action="/records">
         <input type="hidden" name="tab" value="sessions" />
+        <input type="hidden" name="pageSize" value={query.pageSize} />
         <label className="space-y-1.5 text-xs font-semibold text-[var(--muted)]"><span>搜索录制会话</span><span className="relative block"><MagnifyingGlass className="pointer-events-none absolute left-3.5 top-1/2 size-4 -translate-y-1/2" aria-hidden="true" /><Input name="search" defaultValue={query.search} placeholder="Session、参与者、任务或分配" className="pl-10" /></span></label>
         <label className="space-y-1.5 text-xs font-semibold text-[var(--muted)]"><span>会话状态</span><NativeSelect name="status" defaultValue={query.status} className="w-full"><NativeSelectOption value="open">未关闭</NativeSelectOption><NativeSelectOption value="closed">已关闭</NativeSelectOption><NativeSelectOption value="all">全部历史</NativeSelectOption></NativeSelect></label>
-        <div className="flex items-end gap-2"><Button className="flex-1">筛选</Button>{hasCustomFilters ? <Link href="/records?tab=sessions" className={buttonVariants({ variant: "outline", className: "flex-1" })}>清除筛选</Link> : null}</div>
+        <div className="flex items-end gap-2"><Button className="flex-1">筛选</Button>{hasCustomFilters ? <Link href={`/records?tab=sessions&pageSize=${query.pageSize}`} className={buttonVariants({ variant: "outline", className: "flex-1" })}>清除筛选</Link> : null}</div>
       </form>
 
       <div className="overflow-hidden rounded-[1.35rem] border border-white/70 bg-white/80 shadow-[var(--shadow-soft)]">

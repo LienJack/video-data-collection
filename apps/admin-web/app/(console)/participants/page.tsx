@@ -10,7 +10,7 @@ import { requireAdmin } from "@/lib/auth";
 import { listParticipants, participantListSchema } from "@egocapture/core/server/services/participants";
 import { CountrySelect, LocaleSelect } from "@/app/_components/regional-preferences-fields";
 import { TablePagination } from "@/app/_components/table-pagination";
-import { parsePageParam } from "@/lib/pagination";
+import { parsePageParam, parsePageSizeParam } from "@/lib/pagination";
 
 export const dynamic = "force-dynamic";
 
@@ -33,7 +33,7 @@ export default async function ParticipantsPage({ searchParams }: { searchParams:
     missing: typeof params.missing === "string" && params.missing ? params.missing : undefined,
     needsReview: typeof params.needsReview === "string" && params.needsReview ? params.needsReview : undefined,
     page: parsePageParam(params.page),
-    pageSize: 25,
+    pageSize: parsePageSizeParam(params.pageSize),
   });
   const result = await listParticipants(viewer, query);
   return (
@@ -52,6 +52,7 @@ export default async function ParticipantsPage({ searchParams }: { searchParams:
         </Link>
       </header>
       <form className="my-7 grid items-stretch gap-2 rounded-xl border bg-card/80 p-3 text-card-foreground shadow-sm backdrop-blur-xl sm:grid-cols-2 sm:gap-3 xl:grid-cols-4">
+        <input type="hidden" name="pageSize" value={query.pageSize} />
         <div className="relative">
           <MagnifyingGlass aria-hidden="true" className="pointer-events-none absolute top-1/2 left-3.5 z-10 size-4 -translate-y-1/2 text-[var(--muted)]" />
           <Input name="search" aria-label="Public ID 或 Alias" defaultValue={query.search} placeholder="Public ID 或 Alias" className={`${filterFieldClass} pl-10`} />

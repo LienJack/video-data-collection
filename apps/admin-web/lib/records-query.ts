@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { buildPageHref, parsePageParam } from "./pagination";
+import { buildPageHref, parsePageParam, parsePageSizeParam } from "./pagination";
 
 const tabSchema = z.enum(["videos", "sessions", "activity"]);
 const transferStatusSchema = z.enum(["created", "uploading", "reconciling", "verified", "failed", "aborted", "expired"]);
@@ -13,6 +13,7 @@ export type RecordsTab = z.infer<typeof tabSchema>;
 type SharedRecordsQuery = {
   search?: string;
   page: number;
+  pageSize: number;
 };
 
 export type VideoRecordsQuery = SharedRecordsQuery & {
@@ -54,6 +55,7 @@ export function parseRecordsQuery(params: RawRecordsSearchParams): RecordsQuery 
   const shared = {
     search: optionalText(params.search, 160),
     page: parsePageParam(params.page),
+    pageSize: parsePageSizeParam(params.pageSize, 50),
   };
 
   if (tab === "sessions") {
@@ -85,6 +87,7 @@ export function recordsHref(query: RecordsQuery, page = query.page) {
   const params: Record<string, string | undefined> = {
     tab: query.tab,
     search: query.search,
+    pageSize: String(query.pageSize),
   };
   if (query.tab === "videos") {
     params.transferStatus = query.transferStatus;

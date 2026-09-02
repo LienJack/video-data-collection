@@ -19,20 +19,20 @@ describe("records workspace query", () => {
       attention: "all",
       search: "x".repeat(161),
       page: "not-a-page",
-    })).toEqual({ tab: "videos", search: undefined, page: 1, transferStatus: undefined, metadataStatus: undefined, attention: undefined });
+    })).toEqual({ tab: "videos", search: undefined, page: 1, pageSize: 50, transferStatus: undefined, metadataStatus: undefined, attention: undefined });
   });
 
   it("defaults sessions to open and preserves delayed-upload history filters", () => {
     const query = parseRecordsQuery({ tab: "sessions", status: "all", search: " RS-23456789 ", page: "3" });
-    expect(query).toEqual({ tab: "sessions", status: "all", search: "RS-23456789", page: 3 });
-    expect(recordsHref(query, 2)).toBe("/records?tab=sessions&search=RS-23456789&status=all&page=2");
+    expect(query).toEqual({ tab: "sessions", status: "all", search: "RS-23456789", page: 3, pageSize: 50 });
+    expect(recordsHref(query, 2)).toBe("/records?tab=sessions&search=RS-23456789&pageSize=50&status=all&page=2");
     expect(parseRecordsQuery({ tab: "sessions", status: "invalid" })).toMatchObject({ tab: "sessions", status: "open" });
   });
 
   it("keeps only activity filters when the activity tab is selected", () => {
     const query = parseRecordsQuery({ tab: "activity", category: "review", transferStatus: "failed", page: "4" });
-    expect(query).toEqual({ tab: "activity", category: "review", search: undefined, page: 4 });
-    expect(recordsHref(query)).toBe("/records?tab=activity&category=review&page=4");
+    expect(query).toEqual({ tab: "activity", category: "review", search: undefined, page: 4, pageSize: 50 });
+    expect(recordsHref(query)).toBe("/records?tab=activity&pageSize=50&category=review&page=4");
   });
 });
 

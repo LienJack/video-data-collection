@@ -8,7 +8,7 @@ import { ArrowRight, Plus } from "@phosphor-icons/react/dist/ssr";
 import Link from "next/link";
 import { TablePagination } from "@/app/_components/table-pagination";
 import { requireAdmin } from "@/lib/auth";
-import { parsePageParam } from "@/lib/pagination";
+import { parsePageParam, parsePageSizeParam } from "@/lib/pagination";
 import { listTasks, taskListSchema } from "@egocapture/core/server/services/tasks";
 
 export const dynamic = "force-dynamic";
@@ -38,7 +38,7 @@ export default async function TasksPage({ searchParams }: { searchParams: Promis
     search: typeof params.search === "string" && params.search ? params.search : undefined,
     lifecycle: typeof params.lifecycle === "string" && params.lifecycle ? params.lifecycle : undefined,
     page: parsePageParam(params.page),
-    pageSize: 25,
+    pageSize: parsePageSizeParam(params.pageSize),
   });
   const result = await listTasks(viewer, query);
 
@@ -54,6 +54,7 @@ export default async function TasksPage({ searchParams }: { searchParams: Promis
       </header>
 
       <form className="apple-toolbar my-5 flex flex-wrap gap-3 p-2.5" aria-label="筛选采集任务">
+        <input type="hidden" name="pageSize" value={query.pageSize} />
         <Input aria-label="搜索任务" name="search" defaultValue={query.search} placeholder="搜索任务名称或编号" className="min-w-64 flex-1 border-0 bg-white/70 px-4 py-3 shadow-inner" />
         <NativeSelect aria-label="任务生命周期" name="lifecycle" defaultValue={query.lifecycle || ""} className="border-0 bg-white/70 px-4 shadow-inner">
           <NativeSelectOption value="">全部任务</NativeSelectOption>

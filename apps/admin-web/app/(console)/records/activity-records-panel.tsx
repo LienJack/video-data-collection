@@ -24,9 +24,10 @@ export function ActivityRecordsPanel({ query, result }: { query: ActivityRecords
       <div><h2 id="activity-records-heading" className="display text-2xl font-semibold">操作记录</h2><p className="mt-2 max-w-3xl text-sm leading-6 text-[var(--muted)]">以中文摘要呈现只读审计证据；原始动作、请求 ID 和变更 JSON 可按需展开。</p></div>
       <form className="apple-toolbar grid gap-3 p-3 sm:grid-cols-[minmax(15rem,1fr)_minmax(11rem,auto)_auto]" action="/records">
         <input type="hidden" name="tab" value="activity" />
+        <input type="hidden" name="pageSize" value={query.pageSize} />
         <label className="space-y-1.5 text-xs font-semibold text-[var(--muted)]"><span>搜索操作记录</span><span className="relative block"><MagnifyingGlass className="pointer-events-none absolute left-3.5 top-1/2 size-4 -translate-y-1/2" aria-hidden="true" /><Input name="search" defaultValue={query.search} placeholder="对象 ID、原始动作或操作者" className="pl-10" /></span></label>
         <label className="space-y-1.5 text-xs font-semibold text-[var(--muted)]"><span>动作分类</span><NativeSelect name="category" defaultValue={query.category ?? ""} className="w-full"><NativeSelectOption value="">全部动作</NativeSelectOption>{categories.map(([value, label]) => <NativeSelectOption key={value} value={value}>{label}</NativeSelectOption>)}</NativeSelect></label>
-        <div className="flex items-end gap-2"><Button className="flex-1">筛选</Button>{hasFilters ? <Link href="/records?tab=activity" className={buttonVariants({ variant: "outline", className: "flex-1" })}>清除筛选</Link> : null}</div>
+        <div className="flex items-end gap-2"><Button className="flex-1">筛选</Button>{hasFilters ? <Link href={`/records?tab=activity&pageSize=${query.pageSize}`} className={buttonVariants({ variant: "outline", className: "flex-1" })}>清除筛选</Link> : null}</div>
       </form>
 
       <div className="overflow-hidden rounded-[1.35rem] border border-white/70 bg-white/80 shadow-[var(--shadow-soft)]">

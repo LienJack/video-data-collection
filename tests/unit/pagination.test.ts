@@ -2,8 +2,10 @@ import { describe, expect, it } from "vitest";
 import { createPageResult, pageNumberSchema, resolvePage } from "@egocapture/core/pagination";
 import {
   buildPageHref,
+  filterQueryEntries,
   paginationQueryEntries,
   parsePageParam,
+  parsePageSizeParam,
 } from "../../apps/admin-web/lib/pagination";
 
 describe("page-number pagination", () => {
@@ -50,6 +52,14 @@ describe("page-number pagination", () => {
     expect(parsePageParam(["2", "3"])).toBe(1);
   });
 
+  it("accepts only supported table page sizes", () => {
+    expect(parsePageSizeParam("10")).toBe(10);
+    expect(parsePageSizeParam("20")).toBe(20);
+    expect(parsePageSizeParam("50")).toBe(50);
+    expect(parsePageSizeParam("25")).toBe(20);
+    expect(parsePageSizeParam(["10", "50"], 50)).toBe(50);
+  });
+
   it("builds page results without leaking the internal offset", () => {
     expect(createPageResult(["last"], resolvePage(26, 2, 25))).toEqual({
       items: ["last"],
@@ -62,18 +72,25 @@ describe("page-number pagination", () => {
 
   it("preserves filters while replacing page state", () => {
     const query = { tab: "videos", search: "PT-23456789", attention: "open", page: 9, pageSize: 50 };
-    expect(buildPageHref("/records", query, 2)).toBe("/records?tab=videos&search=PT-23456789&attention=open&page=2");
-    expect(buildPageHref("/records", query, 1)).toBe("/records?tab=videos&search=PT-23456789&attention=open");
+    expect(buildPageHref("/records", query, 2)).toBe("/records?tab=videos&search=PT-23456789&attention=open&pageSize=50&page=2");
+    expect(buildPageHref("/records", query, 1)).toBe("/records?tab=videos&search=PT-23456789&attention=open&pageSize=50");
     expect(paginationQueryEntries(query)).toEqual([
+      ["tab", "videos"],
+      ["search", "PT-23456789"],
+      ["attention", "open"],
+      ["pageSize", "50"],
+    ]);
+    expect(filterQueryEntries(query)).toEqual([
       ["tab", "videos"],
       ["search", "PT-23456789"],
       ["attention", "open"],
     ]);
   });
 
-  it("drops pagination-only state when returning to the first page", () => {
-    expect(buildPageHref("/participants", { page: 7, pageSize: 25 }, 1)).toBe("/participants");
-    expect(paginationQueryEntries({ page: 7, pageSize: 25, search: "", missing: false })).toEqual([
+  it("preserves page size while returning to the first page", () => {
+    expect(buildPageHref("/participants", { page: 7, pageSize: 20 }, 1)).toBe("/participants?pageSize=20");
+    expect(paginationQueryEntries({ page: 7, pageSize: 20, search: "", missing: false })).toEqual([
+      ["pageSize", "20"],
       ["missing", "false"],
     ]);
   });

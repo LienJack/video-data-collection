@@ -57,8 +57,9 @@ test("参与者分页保持筛选、顺序、任意页和浏览器历史", async
 
     const pagination = page.getByRole("navigation", { name: "表格分页" });
     await expect(pagination).toContainText("共 27 条 · 第 1 / 2 页");
-    await expect(page.locator("tbody tr")).toHaveCount(25);
-    expect(await visibleParticipantIds(page)).toEqual(publicIds.slice(0, 25));
+    await expect(pagination.getByRole("combobox", { name: "每页行数" })).toHaveValue("20");
+    await expect(page.locator("tbody tr")).toHaveCount(20);
+    expect(await visibleParticipantIds(page)).toEqual(publicIds.slice(0, 20));
     await expect(pagination.getByText("上一页", { exact: true }))
       .toHaveAttribute("aria-disabled", "true");
 
@@ -66,39 +67,49 @@ test("参与者分页保持筛选、顺序、任意页和浏览器历史", async
     const nextUrl = new URL(nextHref || "", adminOrigin);
     expect(nextUrl.pathname).toBe("/participants");
     expect(nextUrl.searchParams.get("search")).toBe(marker);
+    expect(nextUrl.searchParams.get("pageSize")).toBe("20");
     expect(nextUrl.searchParams.get("page")).toBe("2");
 
     await pagination.getByRole("spinbutton", { name: "前往页码，范围 1 到 2" }).fill("2");
     await pagination.getByRole("button", { name: "跳转" }).click();
     await expect(page).toHaveURL(new RegExp(`search=${marker}.*page=2`));
     await expect(page.getByRole("navigation", { name: "表格分页" })).toContainText("共 27 条 · 第 2 / 2 页");
-    await expect(page.locator("tbody tr")).toHaveCount(2);
-    expect(await visibleParticipantIds(page)).toEqual(publicIds.slice(25));
+    await expect(page.locator("tbody tr")).toHaveCount(7);
+    expect(await visibleParticipantIds(page)).toEqual(publicIds.slice(20));
 
     await page.goBack();
     await expect(page).toHaveURL(new RegExp(`search=${marker}(?:$|&)`));
-    await expect(page.locator("tbody tr")).toHaveCount(25);
-    expect(await visibleParticipantIds(page)).toEqual(publicIds.slice(0, 25));
+    await expect(page.locator("tbody tr")).toHaveCount(20);
+    expect(await visibleParticipantIds(page)).toEqual(publicIds.slice(0, 20));
 
     await page.goForward();
     await expect(page).toHaveURL(new RegExp(`search=${marker}.*page=2`));
-    await expect(page.locator("tbody tr")).toHaveCount(2);
-    expect(await visibleParticipantIds(page)).toEqual(publicIds.slice(25));
+    await expect(page.locator("tbody tr")).toHaveCount(7);
+    expect(await visibleParticipantIds(page)).toEqual(publicIds.slice(20));
 
     await page.goBack();
     await expect(page).toHaveURL(new RegExp(`search=${marker}(?:$|&)`));
 
     await page.getByRole("navigation", { name: "表格分页" }).getByRole("link", { name: "下一页" }).click();
     await expect(page).toHaveURL(new RegExp(`search=${marker}.*page=2`));
-    expect(await visibleParticipantIds(page)).toEqual(publicIds.slice(25));
+    expect(await visibleParticipantIds(page)).toEqual(publicIds.slice(20));
 
     await page.goto(`${adminOrigin}/participants?search=${encodeURIComponent(marker)}&page=99`);
     await expect(page.getByRole("navigation", { name: "表格分页" })).toContainText("共 27 条 · 第 2 / 2 页");
-    expect(await visibleParticipantIds(page)).toEqual(publicIds.slice(25));
+    expect(await visibleParticipantIds(page)).toEqual(publicIds.slice(20));
+
+    await pagination.getByRole("combobox", { name: "每页行数" }).selectOption("10");
+    await pagination.getByRole("button", { name: "应用" }).click();
+    expect(new URL(page.url()).searchParams.get("page")).toBeNull();
+    expect(new URL(page.url()).searchParams.get("pageSize")).toBe("10");
+    await expect(page.getByRole("navigation", { name: "表格分页" })).toContainText("共 27 条 · 第 1 / 3 页");
+    await expect(page.locator("tbody tr")).toHaveCount(10);
+    expect(await visibleParticipantIds(page)).toEqual(publicIds.slice(0, 10));
 
     await page.getByRole("textbox", { name: "Public ID 或 Alias" }).fill(aliases[26]);
     await page.getByRole("button", { name: "筛选" }).click();
     expect(new URL(page.url()).searchParams.get("page")).toBeNull();
+    expect(new URL(page.url()).searchParams.get("pageSize")).toBe("10");
     await expect(page.getByRole("navigation", { name: "表格分页" })).toContainText("共 1 条 · 第 1 / 1 页");
     expect(await visibleParticipantIds(page)).toEqual([publicIds[26]]);
   } finally {
