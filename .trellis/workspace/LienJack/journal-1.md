@@ -49,3 +49,25 @@
 ### Status
 
 [OK] **Completed**
+
+
+## Session 3: Deliver Admin system documentation center
+
+**Date**: 2026-09-02
+**Task**: Deliver Admin system documentation center
+**Package**: admin-web
+**Branch**: `codex/egocapture-mvp`
+
+### Summary
+
+Added the Admin-only system guide entry and four Chinese technical articles, delivered four validated Archify diagrams with browser evidence, documented the same-origin iframe security contract, and verified the feature with full checks plus focused Playwright coverage.
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `6f65fae` | (see git log) |
+
+### Status
+
+[OK] **Completed**
