@@ -13,10 +13,8 @@ export default async function ParticipantDetailPage({ params }: { params: Promis
   const locale = await requestLocale();
   const i18n = createTranslator(locale);
   const { participantPublicId } = await params;
-  const [participant, devices] = await Promise.all([
-    getParticipant(viewer, participantPublicId),
-    listDevices(viewer, participantPublicId),
-  ]);
+  const participant = await getParticipant(viewer, participantPublicId);
+  const devices = await listDevices(viewer, participantPublicId);
   return (
     <main className="app-page">
       <Link href="/participants" className="text-sm font-bold text-[var(--teal)]">← {i18n.t("adminUi.participantsBack")}</Link>

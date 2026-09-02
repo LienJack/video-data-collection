@@ -16,11 +16,9 @@ export default async function ParticipantUploadsPage({
 }) {
   const [viewer, locale] = await Promise.all([requireParticipant(), requestLocale()]);
   const i18n = createTranslator(locale);
-  const [sessions, uploads, query] = await Promise.all([
-    listParticipantSessions(viewer),
-    listParticipantUploads(viewer),
-    searchParams,
-  ]);
+  const query = await searchParams;
+  const sessions = await listParticipantSessions(viewer);
+  const uploads = await listParticipantUploads(viewer);
   const openSessions = sessions.filter((session) => session.status === "open");
   const sessionContext = resolveUploadSessionContext(query.session, sessions);
   return (

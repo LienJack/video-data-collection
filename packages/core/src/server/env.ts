@@ -46,6 +46,20 @@ const serverEnvironmentSchema = browserEnvironmentSchema.extend({
       message: "NAS scoped upload 模式必须配置 Supabase JWT secret",
     });
   }
+  let supabaseHostname = "";
+  try {
+    supabaseHostname = new URL(environment.NEXT_PUBLIC_SUPABASE_URL).hostname;
+  } catch {
+    // The field-level URL validator owns the stable validation error.
+  }
+  if (supabaseHostname.endsWith(".supabase.co")
+    && environment.STORAGE_UPLOAD_AUTH_MODE === "nas_scoped_jwt") {
+    context.addIssue({
+      code: "custom",
+      path: ["STORAGE_UPLOAD_AUTH_MODE"],
+      message: "Supabase Cloud 必须使用 official_signed 上传模式",
+    });
+  }
 });
 
 export type ServerEnvironment = z.infer<typeof serverEnvironmentSchema>;

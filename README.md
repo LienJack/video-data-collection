@@ -255,7 +255,7 @@ Playwright 的主流程真实上传一个有效 MP4，并验证视频请求目�
 
 1. 确认 Supabase CLI 与 Vercel CLI 登录，核对组织、项目名、region 和 receipt 中的 project ref/id；不按名称猜测目标。
 2. 只使用专用 `egocapture-demo`；读取 PostgreSQL 版本、Exposed Schemas、Auth 和 bucket，任何 ref 不一致或同名非本项目对象都进入 `HOLD`。绝不恢复、复用或修改无关 Text2SQL 项目。
-3. 云数据库使用同一 ref 的官方 pooler；设置 `DATABASE_URL` 后执行 `pnpm db:migrate && pnpm db:verify`。
+3. 云数据库使用同一 ref 的 transaction pooler `6543` 端口，禁止 Vercel 使用 direct database 或 session pooler；设置 `DATABASE_URL` 后执行 `pnpm db:migrate && pnpm db:verify`。
 4. 确认 private `egocapture-raw` bucket 的 50,000,000 bytes limit，并把 `NEXT_PUBLIC_STORAGE_TUS_ENDPOINT` 绑定到同一 project ref 的 `https://<ref>.storage.supabase.co/storage/v1/upload/resumable/sign`。
 5. 将 `egocapture` 追加到 Exposed Schemas，禁止覆盖现有值。
 6. 先运行只读 `pnpm db:demo:refresh -- --inspect`；只有 environment id、数据库、API/TUS、Migration 和 bucket 全部绑定同一 ref 后，才使用 exact confirm/marker 执行 guarded refresh，并运行 `pnpm db:test:seed && pnpm db:test:rls`。
@@ -263,7 +263,8 @@ Playwright 的主流程真实上传一个有效 MP4，并验证视频请求目�
 8. 两个 Project 都配置 `.env.example` 中的共享后端变量；cloud 设置 `STORAGE_UPLOAD_AUTH_MODE=official_signed`。Participant 设置 `AUTH_COOKIE_NAME=egocapture-participant-auth`，Admin 设置 `AUTH_COOKIE_NAME=egocapture-admin-auth`。
 9. 设置 `PARTICIPANT_SITE_URL` 和 `ADMIN_SITE_URL` 为各自正式域名；邀请链接必须使用前者。只有 Admin Project 包含 `/api/cron/reconcile` 和 Vercel Cron。
 10. 从固定 commit 部署 Production，运行 `/api/health`、三语言登录、Cookie/双向 404 隔离、真实可解码小 MP4 的 TUS、metadata、Review 与 Audit smoke。
-11. 把两条真实 URL、deployment id、commit、region、日期和 observed PASS/SKIP 写入 `docs/acceptance/`；只交付密码的变量名或通过安全渠道交付值，不在 README 中写明文。
+11. 公网 smoke 会写入短期 fixture；交付前对同一 project ref 再次执行 guarded refresh，重跑 seed digest/RLS，并确认 Storage 对象已清理。
+12. 把两条真实 URL、deployment id、commit、region、日期和 observed PASS/SKIP 写入 `docs/acceptance/`；只交付密码的变量名或通过安全渠道交付值，不在 README 中写明文。
 
 两套 Vercel Project 的精确配置见 [双应用部署说明](docs/deployment/vercel-dual-app.md)。
 

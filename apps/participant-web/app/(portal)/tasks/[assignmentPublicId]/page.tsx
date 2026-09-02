@@ -16,12 +16,13 @@ export const dynamic = "force-dynamic";
 export default async function ParticipantAssignmentPage({ params }: { params: Promise<{ assignmentPublicId: string }> }) {
   const [viewer, { assignmentPublicId }, locale] = await Promise.all([requireParticipant(), params, requestLocale()]);
   const i18n = createTranslator(locale);
-  const [assignment, devices, sessions] = await Promise.all([
-    getParticipantAssignment(viewer, assignmentPublicId),
-    listParticipantDevices(viewer),
-    listParticipantSessions(viewer, assignmentPublicId),
-  ]);
-  const markers = await Promise.all(sessions.map((session) => getMarker(viewer, session.publicId)));
+  const assignment = await getParticipantAssignment(viewer, assignmentPublicId);
+  const devices = await listParticipantDevices(viewer);
+  const sessions = await listParticipantSessions(viewer, assignmentPublicId);
+  const markers: Awaited<ReturnType<typeof getMarker>>[] = [];
+  for (const session of sessions) {
+    markers.push(await getMarker(viewer, session.publicId));
+  }
   const instructions = assignment.instructions;
   const uploadSourceLabels: Record<string, string> = {
     camera: i18n.t("participantUi.sourceCamera"), ssd: i18n.t("participantUi.sourceSsd"), mobile: i18n.t("participantUi.sourceMobile"),

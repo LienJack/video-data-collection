@@ -21,6 +21,7 @@ ADMIN_SITE_URL=https://egocapture-admin.vercel.app
 ```
 
 不要把 NAS URL、NAS JWT 模式或本地数据库 URL 配到公网 Project。
+两个 Project 的 `DATABASE_URL` 都必须使用同一 project ref 的 transaction pooler `6543` 端口，不能使用 direct database 或 session pooler。
 公网签名 TUS 必须使用同一 Supabase project ref 的直连 Storage 域名和 `/storage/v1/upload/resumable/sign`；Participant CSP 从这个精确配置派生允许的 `connect-src` origin，签名仍只通过 `x-signature` 请求头发送。
 
 ## Project 独立变量
@@ -50,5 +51,6 @@ Supabase SSR Cookie 不设置共享 `Domain` 属性，因此正式子域之间�
 7. 使用管理员 Cookie 访问 Participant `/tasks` 必须进入 Participant 登录页；反向同理。
 8. 从 Admin 生成邀请，URL host 必须等于 `PARTICIPANT_SITE_URL`。
 9. 运行 `pnpm test:e2e:public`；该命令从环境读取 URL 与密码，并覆盖三地区登录、Cookie、健康检查和真实业务闭环，不在代码或报告中写秘密值。
+10. 公网业务闭环会写入短期 fixture；交付前必须对同一 project ref 再次执行 guarded refresh，重跑 seed digest/RLS，并确认 Storage 对象已清理。
 
 这份配置实现的是部署单元隔离，不是数据库租户隔离。两端仍通过相同的服务层、RLS、角色检查和审计规则访问同一业务权威数据库。

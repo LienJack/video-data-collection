@@ -24,7 +24,8 @@ export default async function TaskDetailPage({ params, searchParams }: { params:
   const tabLabels: Record<Tab, string> = { overview: i18n.t("adminUi.overview"), participants: i18n.t("adminUi.participants"), uploads: i18n.t("adminUi.uploadedVideos"), instructions: i18n.t("adminUi.instructions"), audit: i18n.t("adminUi.activityLog") };
   const { taskPublicId } = await params;
   const search = await searchParams;
-  const [task, operations] = await Promise.all([getTask(viewer, taskPublicId), getTaskOperations(viewer, taskPublicId)]);
+  const task = await getTask(viewer, taskPublicId);
+  const operations = await getTaskOperations(viewer, taskPublicId);
   const requestedTab = typeof search.tab === "string" && search.tab in tabLabels ? search.tab as Tab : "overview";
   const activeTab: Tab = requestedTab;
   const serializedParticipants = operations.participants.map((participant) => ({ ...participant, dueAt: participant.dueAt.toISOString(), createdAt: participant.createdAt.toISOString(), canceledAt: participant.canceledAt?.toISOString() ?? null }));
