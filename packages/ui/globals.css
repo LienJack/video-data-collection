@@ -148,6 +148,102 @@ a { color: inherit; text-decoration: none; }
   backdrop-filter: blur(28px) saturate(135%);
 }
 
+/* Floating operational surfaces. Keep each material to one layer so text and
+   controls stay crisp instead of stacking translucent fills. */
+.apple-toolbar {
+  border: 1px solid rgb(255 255 255 / 72%);
+  border-radius: 1.1rem;
+  background: rgb(255 255 255 / 66%);
+  box-shadow:
+    inset 0 1px rgb(255 255 255 / 72%),
+    0 10px 32px rgb(15 23 42 / 6%);
+  -webkit-backdrop-filter: blur(22px) saturate(165%);
+  backdrop-filter: blur(22px) saturate(165%);
+}
+
+.apple-toolbar :is(input, select) {
+  background-color: var(--surface-solid);
+}
+
+.apple-dialog {
+  border: 1px solid rgb(255 255 255 / 78%);
+  border-radius: 1.55rem;
+  background: rgb(251 251 253 / 94%);
+  box-shadow:
+    inset 0 1px rgb(255 255 255 / 90%),
+    0 32px 90px rgb(15 23 42 / 20%),
+    0 4px 18px rgb(15 23 42 / 10%);
+  -webkit-backdrop-filter: blur(32px) saturate(170%);
+  backdrop-filter: blur(32px) saturate(170%);
+  overscroll-behavior: contain;
+}
+
+.apple-dialog::backdrop {
+  background: rgb(15 23 42 / 30%);
+  -webkit-backdrop-filter: blur(4px) saturate(90%);
+  backdrop-filter: blur(4px) saturate(90%);
+}
+
+.apple-dialog-header,
+.apple-dialog-footer {
+  position: relative;
+  z-index: 1;
+  flex: none;
+  background: rgb(251 251 253 / 97%);
+}
+
+.apple-dialog-header {
+  box-shadow: 0 1.25rem 1.4rem -1.45rem rgb(15 23 42 / 35%);
+}
+
+.apple-dialog-footer {
+  box-shadow: 0 -1.25rem 1.4rem -1.45rem rgb(15 23 42 / 35%);
+}
+
+:is(.apple-toolbar, .apple-dialog, .mobile-tab-bar)
+  :where(a, button, input, select, textarea, [role="button"]):focus-visible {
+  outline: 3px solid rgb(57 117 173 / 48%);
+  outline-offset: 2px;
+}
+
+.apple-dialog label:has([role="checkbox"][data-state="checked"]) {
+  background-color: var(--teal-soft);
+  box-shadow:
+    inset 0 0 0 1px rgb(57 117 173 / 20%),
+    0 3px 12px rgb(15 23 42 / 5%);
+}
+
+.mobile-tab-bar {
+  position: fixed;
+  z-index: 45;
+  right: max(0.6rem, env(safe-area-inset-right));
+  bottom: max(0.6rem, env(safe-area-inset-bottom));
+  left: max(0.6rem, env(safe-area-inset-left));
+  gap: 0.25rem;
+  padding: 0.35rem;
+  border: 1px solid rgb(255 255 255 / 76%);
+  border-radius: 1.25rem;
+  background: rgb(249 249 251 / 78%);
+  box-shadow:
+    inset 0 1px rgb(255 255 255 / 88%),
+    0 14px 42px rgb(15 23 42 / 16%);
+  -webkit-backdrop-filter: blur(24px) saturate(180%);
+  backdrop-filter: blur(24px) saturate(180%);
+}
+
+.mobile-tab-bar a {
+  touch-action: manipulation;
+}
+
+.mobile-tab-bar a[aria-current="page"] {
+  background-color: var(--surface-solid);
+}
+
+.mobile-tab-bar a:active {
+  transform: scale(0.95);
+  transition-duration: 80ms;
+}
+
 .reveal { animation: reveal 720ms cubic-bezier(0.22, 1, 0.36, 1) both; }
 .reveal-delay { animation: reveal 720ms 120ms cubic-bezier(0.22, 1, 0.36, 1) both; }
 
@@ -159,11 +255,107 @@ a { color: inherit; text-decoration: none; }
   pre { max-width: calc(100vw - 3rem); }
 }
 
+@media (max-width: 1023px) {
+  .mobile-tab-bar {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 639px) {
+  .apple-toolbar {
+    border-radius: 1rem;
+  }
+
+  .apple-dialog {
+    position: fixed;
+    inset: auto 0.375rem 0.375rem;
+    width: calc(100% - 0.75rem);
+    max-width: none;
+    max-height: calc(100dvh - 0.75rem);
+    margin: 0 auto;
+    border-radius: 1.45rem;
+  }
+
+  .apple-dialog-header,
+  .apple-dialog-footer {
+    padding-right: 1.15rem;
+    padding-left: 1.15rem;
+  }
+
+  .apple-dialog-footer > :last-child {
+    width: 100%;
+  }
+
+  .apple-dialog-footer button {
+    min-height: 2.75rem;
+  }
+
+  .apple-dialog-footer button:last-child {
+    flex: 1;
+  }
+}
+
+@media (prefers-reduced-transparency: reduce) {
+  .glass-nav,
+  .apple-toolbar,
+  .apple-dialog,
+  .apple-dialog-header,
+  .apple-dialog-footer,
+  .mobile-tab-bar {
+    -webkit-backdrop-filter: none;
+    backdrop-filter: none;
+  }
+
+  .glass-nav { background: #242426; }
+  .apple-toolbar,
+  .apple-dialog,
+  .apple-dialog-header,
+  .apple-dialog-footer,
+  .mobile-tab-bar { background: var(--surface-solid); }
+
+  .apple-dialog::backdrop {
+    -webkit-backdrop-filter: none;
+    backdrop-filter: none;
+    background: rgb(15 23 42 / 48%);
+  }
+}
+
+@media (prefers-contrast: more) {
+  .apple-toolbar,
+  .apple-dialog,
+  .mobile-tab-bar {
+    border-color: var(--ink);
+    background: var(--surface-solid);
+    box-shadow: none;
+  }
+
+  .apple-dialog-header,
+  .apple-dialog-footer {
+    background: var(--surface-solid);
+    box-shadow: none;
+  }
+
+  .apple-dialog-header { border-bottom: 2px solid var(--ink); }
+  .apple-dialog-footer { border-top: 2px solid var(--ink); }
+
+  :is(.apple-toolbar, .apple-dialog, .mobile-tab-bar)
+    :where(a, button, input, select, textarea, [role="button"]):focus-visible {
+    outline-color: var(--ink);
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
   html { scroll-behavior: auto; }
   *, *::before, *::after {
     animation-duration: 0.01ms !important;
     animation-iteration-count: 1 !important;
     transition-duration: 0.01ms !important;
+  }
+
+  .mobile-tab-bar a:active,
+  button:not(:disabled):active,
+  [role="button"]:active {
+    transform: none;
   }
 }
