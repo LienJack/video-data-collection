@@ -1,111 +1,133 @@
-import { ArrowUpRight, CheckCircle, Database, Fingerprint, QrCode, UploadSimple } from "@phosphor-icons/react/dist/ssr";
 import Link from "next/link";
+import { FieldSessionPreview } from "@/app/_components/field-session-preview";
 import { MagneticLink } from "@/app/_components/magnetic-link";
+import styles from "@/app/home.module.css";
 
-const steps = [
-  { code: "01", title: "冻结任务", copy: "发布不可变 TaskVersion，让每次采集都绑定清晰、可追溯的说明。", icon: Fingerprint },
-  { code: "02", title: "标记录制", copy: "为应用外录制生成不含个人信息的 Ed25519 签名二维码。", icon: QrCode },
-  { code: "03", title: "直接上传", copy: "视频以 6 MiB 分片直达私有 Storage，不经过 Next.js 数据面。", icon: UploadSimple },
+const proofPoints = [
+  { value: "TaskVersion", label: "任务说明不可变" },
+  { value: "Ed25519", label: "Session Marker 签名" },
+  { value: "6 MiB", label: "可恢复上传分片" },
+  { value: "0 byte", label: "视频经 Next.js" },
+];
+
+const workflow = [
+  {
+    code: "01",
+    title: "接收一份不会变的任务",
+    copy: "参与者看到的是已发布版本。后续草稿修改不会悄悄改变已经开始的采集。",
+  },
+  {
+    code: "02",
+    title: "在录制前建立 Session",
+    copy: "系统生成不含个人信息的签名标记，让应用外拍摄也能与本次任务准确对应。",
+  },
+  {
+    code: "03",
+    title: "直接上传，交给人工复核",
+    copy: "文件可暂停、可恢复地直达私有存储；异常和重复候选进入复核，不做草率的自动删除。",
+  },
 ];
 
 export default function Home() {
   return (
-    <main className="min-h-[100dvh] overflow-hidden px-5 py-5 sm:px-8 lg:px-12">
-      <header className="surface mx-auto flex max-w-[1500px] items-center justify-between rounded-full px-5 py-3 sm:px-6">
-        <Link href="/" className="display text-lg font-semibold tracking-[-0.04em]">EgoCapture</Link>
-        <div className="hidden items-center gap-2 text-xs text-[var(--muted)] sm:flex">
-          <span className="size-1.5 rounded-full bg-[var(--signal)]" />
-          Research operations system
-        </div>
-        <Link href="/login" className="secondary-action min-h-9 px-4 py-2">
-          登录 <ArrowUpRight className="size-4" weight="bold" />
+    <main className={`${styles.page} min-h-[100dvh] overflow-hidden px-4 pb-6 pt-3 sm:px-6 lg:px-10`}>
+      <header className={`${styles.header} sticky top-3 mx-auto flex max-w-[1400px] items-center justify-between px-4 py-3 sm:px-5`}>
+        <Link href="/" className="display text-[1.05rem] font-semibold tracking-[-0.045em]">
+          EgoCapture
+        </Link>
+        <p className="hidden text-[0.68rem] font-semibold uppercase tracking-[0.18em] text-[var(--home-muted)] sm:block">
+          Research field system
+        </p>
+        <Link href="/login" className={styles.navAction}>
+          登录工作台
         </Link>
       </header>
 
-      <section className="relative mx-auto grid max-w-[1500px] gap-12 py-16 lg:grid-cols-[1.15fr_0.85fr] lg:items-center lg:py-28">
-        <div className="reveal relative z-10 max-w-4xl">
-          <p className="page-kicker flex items-center gap-2">
-            <span className="inline-block size-2 rounded-full bg-[var(--signal)]" />
-            Egocentric video fieldwork
+      <section className="mx-auto grid max-w-[1400px] gap-12 pb-16 pt-16 md:pt-24 lg:grid-cols-12 lg:items-center lg:gap-8 lg:pb-28 lg:pt-24">
+        <div className="lg:col-span-7 lg:pr-10 xl:pr-20">
+          <p className={styles.kicker}>
+            <span aria-hidden="true" />
+            第一人称视频采集 / 工作台
           </p>
-          <h1 className="display mt-6 text-[clamp(3.8rem,8vw,8.8rem)] font-semibold leading-[0.88] tracking-[-0.075em]">
-            让每段录制，
-            <br />
-            <span className="text-[var(--signal)]">都有来路。</span>
+          <h1 className={`${styles.heroTitle} mt-7 max-w-[12ch]`}>
+            视频记录现场。
+            <span>我们记录来路。</span>
           </h1>
-          <p className="mt-8 max-w-2xl text-base leading-8 text-[var(--muted)] sm:text-lg">
-            从不可变任务、应用外录制，到断点直传与人工复核。EgoCapture 把第一人称视频采集变成一条可信、可恢复的证据链。
+          <p className="mt-7 max-w-[39rem] text-[1rem] leading-8 text-[var(--home-muted)] sm:mt-8 sm:text-[1.08rem]">
+            任务说明、录制会话、分片上传和人工复核，落在同一条证据链上。参与者按任务行动，研究团队随时知道每段视频为何采集、属于哪次会话、现在走到哪一步。
           </p>
-          <div className="mt-9 flex flex-wrap items-center gap-4">
-            <MagneticLink href="/login">
-              进入控制台 <ArrowUpRight className="size-4" weight="bold" />
-            </MagneticLink>
-            <p className="max-w-xs text-xs leading-5 text-[var(--muted)]">公开 Demo 仅使用合成身份与无敏感信息视频。</p>
+          <div className={`${styles.heroActions} mt-9 flex flex-wrap items-center gap-5`}>
+            <MagneticLink href="/login">进入工作台</MagneticLink>
+            <Link href="#workflow" className={styles.textAction}>
+              查看采集流程
+            </Link>
           </div>
+          <p className="mt-7 flex max-w-lg items-start gap-3 text-xs leading-6 text-[var(--home-muted)]">
+            <span className="mt-[0.55rem] size-1.5 shrink-0 rounded-full bg-[var(--home-accent)]" aria-hidden="true" />
+            演示环境仅使用合成身份与无敏感信息的视频；真实采集仍需遵守项目知情同意与数据治理要求。
+          </p>
         </div>
 
-        <aside className="reveal-delay relative min-h-[560px]">
-          <div className="absolute right-[-15%] top-[-18%] size-[430px] rounded-full bg-[rgb(57_117_173_/_10%)] blur-3xl" aria-hidden="true" />
-          <div className="surface absolute inset-x-0 top-6 p-7 sm:left-10 sm:p-9">
-            <div className="flex items-start justify-between gap-5">
-              <div>
-                <p className="page-kicker">Live architecture</p>
-                <h2 className="display mt-2 text-3xl font-semibold">控制面与数据面分离</h2>
-              </div>
-              <span className="status-pill">Ready</span>
-            </div>
-            <div className="mt-9 space-y-1">
-              {["浏览器创建 UploadIntent", "Storage 接收 TUS 字节", "PostgreSQL 保存业务权威"].map((item, index) => (
-                <div key={item} className="flex items-center gap-4 border-b border-[var(--line)] py-4 last:border-0">
-                  <span className="flex size-9 shrink-0 items-center justify-center rounded-full bg-[var(--paper)] text-xs font-semibold">{index + 1}</span>
-                  <p className="text-sm font-medium">{item}</p>
-                  <CheckCircle className="ml-auto size-5 text-[var(--signal)]" weight="fill" />
-                </div>
-              ))}
-            </div>
-          </div>
-          <div className="surface-solid absolute bottom-0 right-0 grid w-[78%] grid-cols-2 gap-px overflow-hidden p-1 sm:w-[72%]">
-            <Metric value="50 MB" label="单文件上限" />
-            <Metric value="6 MiB" label="TUS 分片" />
-            <Metric value="24 h" label="Marker 有效期" />
-            <Metric value="0 byte" label="经 Next.js 视频" accent />
-          </div>
-        </aside>
+        <div className="lg:col-span-5">
+          <FieldSessionPreview />
+        </div>
       </section>
 
-      <section className="mx-auto max-w-[1500px] pb-16 lg:pb-24">
-        <div className="mb-8 flex flex-wrap items-end justify-between gap-4">
+      <section className={`${styles.proofBand} mx-auto max-w-[1400px] px-6 py-8 sm:px-9 sm:py-10 lg:px-12`} aria-labelledby="proof-title">
+        <div className="grid gap-9 lg:grid-cols-[1fr_2fr] lg:items-end">
           <div>
-            <p className="page-kicker">Operational chain</p>
-            <h2 className="display mt-2 text-3xl font-semibold sm:text-5xl">三个清晰节点，一条完整证据链。</h2>
+            <p className="text-[0.66rem] font-semibold uppercase tracking-[0.18em] text-white/48">Provenance, not just storage</p>
+            <h2 id="proof-title" className="display mt-3 max-w-md text-2xl font-semibold leading-tight tracking-[-0.04em] text-white sm:text-3xl">
+              每段视频都有可检查的上下文。
+            </h2>
           </div>
-          <p className="flex items-center gap-2 text-sm text-[var(--muted)]"><Database className="size-4" /> PostgreSQL 是业务权威</p>
-        </div>
-        <div className="grid gap-4 lg:grid-cols-[1.1fr_0.95fr_0.95fr]">
-          {steps.map((step, index) => {
-            const Icon = step.icon;
-            return (
-              <article key={step.code} className={`surface-solid group p-7 transition duration-300 hover:-translate-y-1 hover:shadow-[var(--shadow)] ${index === 0 ? "lg:py-10" : ""}`}>
-                <div className="flex items-start justify-between">
-                  <span className="text-xs font-semibold tracking-[0.16em] text-[var(--muted)]">{step.code}</span>
-                  <span className="flex size-11 items-center justify-center rounded-full bg-[var(--teal-soft)] text-[var(--signal-dark)]"><Icon className="size-5" weight="duotone" /></span>
-                </div>
-                <h3 className="display mt-12 text-2xl font-semibold">{step.title}</h3>
-                <p className="mt-3 text-sm leading-7 text-[var(--muted)]">{step.copy}</p>
-              </article>
-            );
-          })}
+          <dl className="grid grid-cols-2 border-l border-white/10 lg:grid-cols-4">
+            {proofPoints.map((item) => (
+              <div key={item.value} className="border-r border-white/10 px-4 py-1 last:border-r-0 sm:px-6">
+                <dt className="font-mono text-lg font-medium tracking-[-0.04em] text-white sm:text-xl">{item.value}</dt>
+                <dd className="mt-2 text-[0.7rem] leading-5 text-white/48">{item.label}</dd>
+              </div>
+            ))}
+          </dl>
         </div>
       </section>
-    </main>
-  );
-}
 
-function Metric({ value, label, accent = false }: { value: string; label: string; accent?: boolean }) {
-  return (
-    <div className="rounded-[18px] bg-[var(--paper)] p-4">
-      <p className={`display text-2xl font-semibold ${accent ? "text-[var(--signal)]" : ""}`}>{value}</p>
-      <p className="mt-1 text-[11px] text-[var(--muted)]">{label}</p>
-    </div>
+      <section id="workflow" className="mx-auto grid max-w-[1400px] gap-12 px-1 py-20 sm:px-3 lg:grid-cols-12 lg:gap-8 lg:py-32">
+        <div className="lg:col-span-5">
+          <p className={styles.kicker}>
+            <span aria-hidden="true" />
+            一次可信采集
+          </p>
+          <h2 className="display mt-6 max-w-[12ch] text-4xl font-semibold leading-[1.02] tracking-[-0.055em] sm:text-5xl">
+            参与者只管完成任务，研究团队掌握每一步。
+          </h2>
+          <p className="mt-6 max-w-md text-sm leading-7 text-[var(--home-muted)]">
+            常用路径保持简单，系统在背后保存任务版本、会话标记、上传状态与复核决定。
+          </p>
+        </div>
+
+        <div className="lg:col-span-7 lg:pl-8">
+          {workflow.map((step) => (
+            <article key={step.code} className={styles.workflowRow}>
+              <p className={styles.stepCode}>{step.code}</p>
+              <div>
+                <h3 className="display text-2xl font-semibold tracking-[-0.04em] sm:text-[1.75rem]">{step.title}</h3>
+                <p className="mt-3 max-w-[42rem] text-sm leading-7 text-[var(--home-muted)]">{step.copy}</p>
+              </div>
+            </article>
+          ))}
+        </div>
+      </section>
+
+      <footer className={`${styles.footer} mx-auto flex max-w-[1400px] flex-col gap-7 px-2 py-9 sm:flex-row sm:items-center sm:justify-between sm:px-4`}>
+        <div>
+          <p className="display text-xl font-semibold tracking-[-0.04em]">准备好后，从身份验证开始。</p>
+          <p className="mt-2 text-xs leading-5 text-[var(--home-muted)]">参与者使用 Participant ID，管理员使用工作邮箱。</p>
+        </div>
+        <Link href="/login" className={styles.footerAction}>
+          打开登录页
+        </Link>
+      </footer>
+    </main>
   );
 }
