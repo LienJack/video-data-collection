@@ -44,13 +44,13 @@
 
 ## Acceptance Criteria
 
-- [ ] Supabase 专用项目位于 `us-west-1`，两个 Vercel 项目 Functions 位于 `sfo1`。
-- [ ] migration ledger、RLS、Auth、private Storage、signed TUS 和 demo seed checks 在云环境通过。
-- [ ] 两个 production URL 可公开访问，健康检查通过且应用路由/Cookie 互相隔离。
-- [ ] `zh-CN`、`en`、`ja` 三语言在 production 切换并持久化。
-- [ ] 公网核心业务链及真实小对象直传完成，验收文档清楚区分 observed PASS、SKIP 与 WAITING_EXTERNAL。
-- [ ] Vercel/Supabase 日志和仓库中没有秘密泄漏，`pnpm repo:safety` 通过。
-- [ ] 若出现计费/权限/配额阻塞，未发生未经授权的购买或对无关项目的写入，并给出精确恢复步骤。
+- [x] Supabase 专用项目位于 `us-west-1`，两个 Vercel 项目 Functions 位于 `sfo1`。
+- [x] migration ledger、RLS、Auth、private Storage、signed TUS 和 demo seed checks 在云环境通过。
+- [x] 两个 production URL 可公开访问，健康检查通过且应用路由/Cookie 互相隔离。
+- [x] `zh-CN`、`en`、`ja` 三语言在 production 切换并持久化。
+- [x] 公网核心业务链及真实小对象直传完成，验收文档清楚区分 observed PASS、SKIP 与 WAITING_EXTERNAL。
+- [x] Vercel/Supabase 日志和仓库中没有秘密泄漏，`pnpm repo:safety` 通过。
+- [x] 若出现计费/权限/配额阻塞，未发生未经授权的购买或对无关项目的写入，并给出精确恢复步骤。
 
 ## Out of Scope
 

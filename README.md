@@ -2,20 +2,20 @@
 
 EgoCapture 是一套第一人称视频数据采集与人工复核系统。它把“任务说明 → 外部录制 → Session Marker → 私有对象存储直传 → 轻量 metadata → 人工纠正 → 不可变审计”串成一条可操作证据链。
 
-当前代码已经在 NAS 基础设施 + Mac 本地 Next.js 拓扑上完成真实浏览器闭环。专用 Supabase 数据环境已经在美国西部完成 Migration、确定性演示数据和 RLS 验证；两个 Vercel Production 部署仍需以公网验收记录为准，不能把下面的本地证据或“资源已创建”理解为公开生产验收通过。
+当前代码已经在 NAS 基础设施 + Mac 本地 Next.js 拓扑上完成真实浏览器闭环，并已从固定提交部署到美国西部的专用 Supabase 与两个 Vercel Production Project。公网结果、边界和清理证明见 [2026-09-03 公网验收记录](docs/acceptance/2026-09-03-public-deployment.md)。
 
 ## 交付状态
 
 | 项目 | 当前状态 |
 |---|---|
-| Public URL | Participant `https://egocapture-participant.vercel.app`；Admin `https://egocapture-admin.vercel.app`（目标域名，发布后以公网验收记录为准） |
+| Public URL | Participant <https://egocapture-participant.vercel.app>；Admin <https://egocapture-admin.vercel.app> |
 | Repository | [LienJack/video-data-collection](https://github.com/LienJack/video-data-collection) |
-| Deployed Commit | `DEPLOY_PENDING` |
+| Deployed Commit | `4e6422c24dcc9a93889c0e7755dc8045530d4881` |
 | Admin Demo | 账号来自 `DEMO_ADMIN_USERNAME`（默认 `admin`）；密码来自 `DEMO_ADMIN_PASSWORD` |
 | Participant Demo | 中国 `PT-5YTSMK53SU`、美国 `PT-DQ2HDNKM76`、日本 `PT-L96ESMAD8E`；共享密码来自 `DEMO_PARTICIPANT_PASSWORD` |
 | Supabase Project / Region | `egocapture-demo` / `phchhsatgoxlqqhpnnfk` / `us-west-1` |
 | Demo Upload Limit | `50,000,000 bytes` / 文件，5 文件 / 批次 |
-| Deployment Date | `DEPLOY_PENDING` |
+| Deployment Date | `2026-09-03`；公网 `4/4` 与真实 MP4 metadata/TUS 均为 GO |
 | NAS Development Smoke | 2026-09-02 本地 MVP 全链路通过，详见 [验收记录](docs/acceptance/2026-09-02-local-mvp.md) |
 | CI Result | [GitHub Actions CI](https://github.com/LienJack/video-data-collection/actions/workflows/ci.yml)；最终交付以固定 commit 对应的绿色 run 为准 |
 
@@ -168,8 +168,8 @@ pnpm db:test:rls
 
 Seed 是幂等 Fixture 恢复，不是生产证明。它提供：
 
-- 1 个受保护 Admin Demo 与 1 个 Participant Demo。
-- 4 个不可变 TaskVersion。
+- 1 个受保护 Admin Demo 与 18 个 Participant 展示身份，其中中国、美国、日本 3 个身份按上方固定 Public ID 登录。
+- 6 个不可变 TaskVersion 与 12 个 Assignment。
 - Missing、Upload Failed、Metadata Failed、Duplicate Candidate、Unmatched、Device Mismatch、Needs Review 七类可见异常。
 - 明确标记为 `Demo Fixture` 的逻辑样本。
 
@@ -267,7 +267,7 @@ Playwright 的主流程真实上传一个有效 MP4，并验证视频请求目�
 
 两套 Vercel Project 的精确配置见 [双应用部署说明](docs/deployment/vercel-dual-app.md)。
 
-当前专用 Supabase `phchhsatgoxlqqhpnnfk` 已在 `us-west-1` 创建并完成 24 个 Migration、确定性 Seed/RLS 验证；Vercel Project 已分别绑定 `apps/participant-web` 与 `apps/admin-web`，Node 为 24.x。公开状态仍以固定 commit 的 Production deployment 和 `docs/acceptance/` 公网业务流证据为准；资源存在或本地 build 不能替代该证据。
+当前专用 Supabase `phchhsatgoxlqqhpnnfk` 已在 `us-west-1` 完成 24 个 Migration、确定性 Seed/RLS 与 private Storage 验证；Vercel Project 分别绑定 `apps/participant-web` 与 `apps/admin-web`，Node 为 24.x、Functions 为 `sfo1`。固定提交 `4e6422c24dcc9a93889c0e7755dc8045530d4881` 的两端 Production、公网三语言登录、官方 signed TUS、真实 MP4 metadata 与 Review/Audit 已通过，详见 [公网验收记录](docs/acceptance/2026-09-03-public-deployment.md)。
 
 ## 生产演进
 
@@ -295,7 +295,7 @@ MVP 只真实验证到 50 MB，不声称具备 50 GB、跨天、跨地区或 4K 
 | Range metadata / 360 / 损坏文件 | 已验证 | 手机 MP4、合成 360 MP4、损坏 MP4；16 MiB budget |
 | Admin 不可变纠正与 Audit | 已验证 | Playwright + `review:test` |
 | 本机 Docker 模式 | 已验证 | GitHub Ubuntu Runner 启动五服务 Docker；Next.js 在宿主机运行；最终交付以固定 commit 对应的 [CI](https://github.com/LienJack/video-data-collection/actions/workflows/ci.yml) 为准 |
-| Public Vercel/Supabase Demo | 部署中 | Supabase 专用项目已验证；两端 Production 与公网业务流尚待固定 commit 验收 |
+| Public Vercel/Supabase Demo | 已验证 | 固定提交的两端 Production、公网 `4/4`、真实 MP4 signed TUS/Range metadata、最终基线恢复；见 [公网验收记录](docs/acceptance/2026-09-03-public-deployment.md) |
 | 真实 INSV 私有字段 | 未验证 | 无合法样本 |
 | QR 自动识别 / 内容检查 | 未实现 | 仅演进接口文档 |
 | 数 GB / 4K / 跨天上传 | 未实现 | 仅 Multipart 数据模型与演进方案 |

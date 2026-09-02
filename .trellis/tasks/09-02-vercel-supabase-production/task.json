@@ -3,7 +3,7 @@
   "name": "vercel-supabase-production",
   "title": "Vercel Supabase 真实部署",
   "description": "预检并部署两个 Vercel 应用和独立 Supabase 项目，完成公网烟雾验收",
-  "status": "in_progress",
+  "status": "completed",
   "dev_type": null,
   "scope": null,
   "package": "core",
@@ -11,16 +11,20 @@
   "creator": "LienJack",
   "assignee": "LienJack",
   "createdAt": "2026-09-02",
-  "completedAt": null,
+  "completedAt": "2026-09-03",
   "branch": null,
   "base_branch": "main",
   "worktree_path": null,
-  "commit": null,
+  "commit": "4e6422c24dcc9a93889c0e7755dc8045530d4881",
   "pr_url": null,
   "subtasks": [],
   "children": [],
   "parent": "09-02-state-machine-i18n-demo-deploy",
-  "relatedFiles": [],
-  "notes": "",
+  "relatedFiles": [
+    "README.md",
+    "docs/acceptance/2026-09-03-public-deployment.md",
+    "docs/deployment/vercel-dual-app.md"
+  ],
+  "notes": "GO: dedicated us-west-1 Supabase and two sfo1 Vercel Production deployments passed public 4/4, signed direct-Storage TUS, genuine MP4 Range metadata, review/audit, redacted log audit, and deterministic baseline restoration. US-side independent latency remains an explicit SKIP.",
   "meta": {}
 }
