@@ -71,3 +71,25 @@ Added the Admin-only system guide entry and four Chinese technical articles, del
 ### Status
 
 [OK] **Completed**
+
+
+## Session 4: Unified admin table pagination
+
+**Date**: 2026-09-02
+**Task**: Unified admin table pagination
+**Package**: admin-web
+**Branch**: `codex/egocapture-mvp`
+
+### Summary
+
+Unified seven admin data lists on semantic tables and page-number pagination, added shared URL/UI/core contracts, migrated services from cursors, and verified unit, build, integration, and NAS Chromium flows.
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `50527a7` | (see git log) |
+
+### Status
+
+[OK] **Completed**
