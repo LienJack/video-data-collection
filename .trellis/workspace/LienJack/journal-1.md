@@ -183,3 +183,25 @@ Planned the four-stage delivery program, documented unattended execution, implem
 ### Status
 
 [OK] **Completed**
+
+
+## Session 9: Complete zh en ja internationalization
+
+**Date**: 2026-09-03
+**Task**: Complete zh en ja internationalization
+**Package**: admin-web
+**Branch**: `codex/egocapture-mvp`
+
+### Summary
+
+Added typed zh-CN, English, and Japanese catalogs, locale negotiation and persistence, translated Admin and Participant surfaces plus System Guide assets, and verified unit, type, lint, build, and NAS-backed browser flows while preserving parallel drawer work.
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `0145783` | (see git log) |
+
+### Status
+
+[OK] **Completed**

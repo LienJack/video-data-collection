@@ -8,7 +8,7 @@
 
 <!-- @@@auto:current-status -->
 - **Active File**: `journal-1.md`
-- **Total Sessions**: 8
+- **Total Sessions**: 9
 - **Last Active**: 2026-09-03
 <!-- @@@/auto:current-status -->
 
@@ -19,7 +19,7 @@
 <!-- @@@auto:active-documents -->
 | File | Lines | Status |
 |------|-------|--------|
-| `journal-1.md` | ~185 | Active |
+| `journal-1.md` | ~207 | Active |
 <!-- @@@/auto:active-documents -->
 
 ---
@@ -29,6 +29,7 @@
 <!-- @@@auto:session-history -->
 | # | Date | Title | Commits | Branch |
 |---|------|-------|---------|--------|
+| 9 | 2026-09-03 | Complete zh en ja internationalization | `0145783` | `codex/egocapture-mvp` |
 | 8 | 2026-09-03 | Implement XState lifecycle state machines | `db04e24`, `1aa4644`, `ef8c38e` | `codex/egocapture-mvp` |
 | 7 | 2026-09-03 | Bind participant uploads to Session QR | `2bcbb0f` | `codex/egocapture-mvp` |
 | 6 | 2026-09-02 | 系统指南业务流程与超大文件上传设计 | `b9e4fe8` | `codex/egocapture-mvp` |
