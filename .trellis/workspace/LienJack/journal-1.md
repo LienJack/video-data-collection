@@ -159,3 +159,27 @@ Displayed signed Session QR codes on participant task details, added Session-sco
 ### Status
 
 [OK] **Completed**
+
+
+## Session 8: Implement XState lifecycle state machines
+
+**Date**: 2026-09-03
+**Task**: Implement XState lifecycle state machines
+**Package**: admin-web
+**Branch**: `codex/egocapture-mvp`
+
+### Summary
+
+Planned the four-stage delivery program, documented unattended execution, implemented and independently reviewed XState v5 lifecycle machines, PostgreSQL transition guards, transactional service enforcement, and Participant upload actors; validated against NAS infrastructure with unit, integration, production build, and main-flow E2E checks.
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `db04e24` | (see git log) |
+| `1aa4644` | (see git log) |
+| `ef8c38e` | (see git log) |
+
+### Status
+
+[OK] **Completed**
