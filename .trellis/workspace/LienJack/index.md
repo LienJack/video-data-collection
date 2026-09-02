@@ -8,8 +8,8 @@
 
 <!-- @@@auto:current-status -->
 - **Active File**: `journal-1.md`
-- **Total Sessions**: 6
-- **Last Active**: 2026-09-02
+- **Total Sessions**: 7
+- **Last Active**: 2026-09-03
 <!-- @@@/auto:current-status -->
 
 ---
@@ -19,7 +19,7 @@
 <!-- @@@auto:active-documents -->
 | File | Lines | Status |
 |------|-------|--------|
-| `journal-1.md` | ~139 | Active |
+| `journal-1.md` | ~161 | Active |
 <!-- @@@/auto:active-documents -->
 
 ---
@@ -29,6 +29,7 @@
 <!-- @@@auto:session-history -->
 | # | Date | Title | Commits | Branch |
 |---|------|-------|---------|--------|
+| 7 | 2026-09-03 | Bind participant uploads to Session QR | `2bcbb0f` | `codex/egocapture-mvp` |
 | 6 | 2026-09-02 | 系统指南业务流程与超大文件上传设计 | `b9e4fe8` | `codex/egocapture-mvp` |
 | 5 | 2026-09-02 | Participant login credential management | `96709ec` | `codex/egocapture-mvp` |
 | 4 | 2026-09-02 | Unified admin table pagination | `50527a7` | `codex/egocapture-mvp` |

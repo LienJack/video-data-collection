@@ -137,3 +137,25 @@ Added admin-readable plaintext participant credentials in an isolated server-onl
 ### Status
 
 [OK] **Completed**
+
+
+## Session 7: Bind participant uploads to Session QR
+
+**Date**: 2026-09-03
+**Task**: Bind participant uploads to Session QR
+**Package**: admin-web
+**Branch**: `codex/egocapture-mvp`
+
+### Summary
+
+Displayed signed Session QR codes on participant task details, added Session-scoped upload entry, locked and server-validated upload context, protected cross-Session resume state, and preserved the generic upload fallback.
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `2bcbb0f` | (see git log) |
+
+### Status
+
+[OK] **Completed**
