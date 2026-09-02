@@ -1,5 +1,6 @@
 import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
+import { authCookieName } from "@egocapture/core/server/supabase/cookie";
 
 export async function refreshSession(request: NextRequest) {
   let response = NextResponse.next({ request });
@@ -8,6 +9,7 @@ export async function refreshSession(request: NextRequest) {
   if (!supabaseUrl || !anonKey) return response;
 
   const supabase = createServerClient(supabaseUrl, anonKey, {
+    cookieOptions: { name: authCookieName() },
     cookies: {
       getAll: () => request.cookies.getAll(),
       setAll: (cookiesToSet) => {

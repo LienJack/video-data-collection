@@ -13,7 +13,8 @@ const serverEnvironmentSchema = browserEnvironmentSchema.extend({
   SUPABASE_JWT_SECRET: z.string().min(32).optional(),
   STORAGE_UPLOAD_AUTH_MODE: z.enum(["official_signed", "nas_scoped_jwt"]).default("official_signed"),
   DATABASE_URL: z.string().startsWith("postgresql://"),
-  SITE_URL: z.string().url(),
+  PARTICIPANT_SITE_URL: z.string().url(),
+  ADMIN_SITE_URL: z.string().url(),
   MARKER_PRIVATE_KEY_JWK: z.string().transform((value, context) => {
     try {
       return JSON.parse(value) as Record<string, unknown>;

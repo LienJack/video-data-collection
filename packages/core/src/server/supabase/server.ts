@@ -3,6 +3,7 @@ import "server-only";
 import { createServerClient } from "@supabase/ssr";
 import { cookies } from "next/headers";
 import { serverEnvironment } from "@egocapture/core/server/env";
+import { authCookieName } from "@egocapture/core/server/supabase/cookie";
 
 export async function createSupabaseServerClient() {
   const environment = serverEnvironment();
@@ -11,6 +12,7 @@ export async function createSupabaseServerClient() {
     environment.NEXT_PUBLIC_SUPABASE_URL,
     environment.NEXT_PUBLIC_SUPABASE_ANON_KEY,
     {
+      cookieOptions: { name: authCookieName() },
       cookies: {
         getAll: () => cookieStore.getAll(),
         setAll: (cookiesToSet) => {

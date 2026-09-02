@@ -1,7 +1,6 @@
 import "server-only";
 
 import { cache } from "react";
-import { redirect } from "next/navigation";
 import { database } from "@egocapture/core/server/database";
 import { createSupabaseServerClient } from "@egocapture/core/server/supabase/server";
 
@@ -31,21 +30,3 @@ export const getViewer = cache(async (): Promise<Viewer | null> => {
   `;
   return profile ?? null;
 });
-
-export async function requireViewer(): Promise<Viewer> {
-  const viewer = await getViewer();
-  if (!viewer) redirect("/login");
-  return viewer;
-}
-
-export async function requireAdmin(): Promise<Viewer> {
-  const viewer = await requireViewer();
-  if (viewer.role !== "admin") redirect("/participant/tasks");
-  return viewer;
-}
-
-export async function requireParticipant(): Promise<Viewer> {
-  const viewer = await requireViewer();
-  if (viewer.role !== "participant") redirect("/admin/dashboard");
-  return viewer;
-}

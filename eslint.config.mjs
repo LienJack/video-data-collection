@@ -5,5 +5,6 @@ import nextTypeScript from "eslint-config-next/typescript";
 export default defineConfig([
   ...nextVitals,
   ...nextTypeScript,
-  globalIgnores([".next/**", "coverage/**", "playwright-report/**", "test-results/**"]),
+  { rules: { "@next/next/no-html-link-for-pages": "off" } },
+  globalIgnores(["**/.next/**", "coverage/**", "playwright-report/**", "test-results/**"]),
 ]);

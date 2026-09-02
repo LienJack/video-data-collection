@@ -461,7 +461,7 @@ export async function generateInvitation(
     },
   }));
   return {
-    invitationUrl: `${serverEnvironment().SITE_URL}/invite/${result.token}`,
+    invitationUrl: `${serverEnvironment().PARTICIPANT_SITE_URL}/invite/${result.token}`,
     expiresAt: result.expiresAt,
   };
 }
