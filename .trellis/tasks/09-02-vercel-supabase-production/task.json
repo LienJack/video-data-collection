@@ -3,7 +3,7 @@
   "name": "vercel-supabase-production",
   "title": "Vercel Supabase 真实部署",
   "description": "预检并部署两个 Vercel 应用和独立 Supabase 项目，完成公网烟雾验收",
-  "status": "planning",
+  "status": "in_progress",
   "dev_type": null,
   "scope": null,
   "package": "core",

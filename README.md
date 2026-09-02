@@ -2,24 +2,26 @@
 
 EgoCapture 是一套第一人称视频数据采集与人工复核系统。它把“任务说明 → 外部录制 → Session Marker → 私有对象存储直传 → 轻量 metadata → 人工纠正 → 不可变审计”串成一条可操作证据链。
 
-当前代码已经在 NAS 基础设施 + Mac 本地 Next.js 拓扑上完成真实浏览器闭环；公网 Vercel/Supabase 部署仍为 `WAITING_EXTERNAL`，不能把下面的本地证据理解为公开生产部署。
+当前代码已经在 NAS 基础设施 + Mac 本地 Next.js 拓扑上完成真实浏览器闭环。专用 Supabase 数据环境已经在美国西部完成 Migration、确定性演示数据和 RLS 验证；两个 Vercel Production 部署仍需以公网验收记录为准，不能把下面的本地证据或“资源已创建”理解为公开生产验收通过。
 
 ## 交付状态
 
 | 项目 | 当前状态 |
 |---|---|
-| Public URL | `WAITING_EXTERNAL`（尚未部署） |
+| Public URL | Participant `https://egocapture-participant.vercel.app`；Admin `https://egocapture-admin.vercel.app`（目标域名，发布后以公网验收记录为准） |
 | Repository | [LienJack/video-data-collection](https://github.com/LienJack/video-data-collection) |
-| Deployed Commit | `WAITING_EXTERNAL` |
+| Deployed Commit | `DEPLOY_PENDING` |
 | Admin Demo | 账号来自 `DEMO_ADMIN_USERNAME`（默认 `admin`）；密码来自 `DEMO_ADMIN_PASSWORD` |
-| Participant Demo | `PT-23456789`；密码来自 `DEMO_PARTICIPANT_PASSWORD` |
-| Supabase Project / Region | `WAITING_EXTERNAL` |
+| Participant Demo | 中国 `PT-5YTSMK53SU`、美国 `PT-DQ2HDNKM76`、日本 `PT-L96ESMAD8E`；共享密码来自 `DEMO_PARTICIPANT_PASSWORD` |
+| Supabase Project / Region | `egocapture-demo` / `phchhsatgoxlqqhpnnfk` / `us-west-1` |
 | Demo Upload Limit | `50,000,000 bytes` / 文件，5 文件 / 批次 |
-| Deployment Date | `WAITING_EXTERNAL` |
+| Deployment Date | `DEPLOY_PENDING` |
 | NAS Development Smoke | 2026-09-02 本地 MVP 全链路通过，详见 [验收记录](docs/acceptance/2026-09-02-local-mvp.md) |
 | CI Result | [GitHub Actions CI](https://github.com/LienJack/video-data-collection/actions/workflows/ci.yml)；最终交付以固定 commit 对应的绿色 run 为准 |
 
-公开部署完成前不会把 Demo 密码提交到 Git。开发环境的密码和密钥由脚本随机生成并保存在被忽略的 `.runtime/<profile>/`。
+Demo 密码不会提交到 Git。开发环境的密码和密钥由脚本随机生成并保存在被忽略的 `.runtime/<profile>/`；云环境只在 Vercel/Supabase 的加密配置中保存值，仓库和验收记录只保留变量名。
+
+三个 Participant 身份来自同一份确定性目录，分别固定到 `zh-CN / Asia/Shanghai`、`en-US / America/Los_Angeles` 与 `ja-JP / Asia/Tokyo`。人名和国家/时区组合使用常见、自然的展示数据，但全部是虚构演示身份，不代表真实个人。
 
 ## 推荐演示路径
 
@@ -232,8 +234,8 @@ pnpm test:e2e          # Chromium 主流程 + WebKit smoke
 
 Playwright 的主流程真实上传一个有效 MP4，并验证视频请求目标是 Storage/NAS Gateway，而不是 Next.js。本轮 [本地验收记录](docs/acceptance/2026-09-02-local-mvp.md) 包含：
 
-- quality：lint、type、47 个单元/组件测试、两套独立 production build。
-- browser-acceptance：在 NAS 五服务 Docker + Mac 本地 Next.js 上依次通过 14 个 Migration/checksum、RLS、Chromium 主流程与 WebKit 实际 TUS smoke（7 passed，1 个按项目条件 intentional skip）。
+- quality：lint、strict type、完整 Vitest suite 和两套独立 production build。
+- browser-acceptance：在 NAS 五服务 Docker + Mac 本地 Next.js 上依次通过当前 24 个 Migration/checksum、RLS、Chromium 主流程与 WebKit 实际 TUS smoke。
 - repository-safety：明显秘密和大媒体检查。
 
 ## 隐私与安全边界
@@ -249,24 +251,23 @@ Playwright 的主流程真实上传一个有效 MP4，并验证视频请求目�
 
 ## 公网部署 Runbook
 
-云端目标是既定共享 Supabase 项目 + Vercel Hobby；NAS 永远不是公网 Demo。
+云端目标是本任务专用 Supabase 项目 + 两个独立 Vercel Project；NAS 永远不是公网 Demo。
 
-1. 确认 Supabase CLI 与 Vercel CLI 登录，并人工确认 project ref。
-2. 读取 PostgreSQL 版本、现有 Exposed Schemas、Auth Email 和 bucket；任何同名非本项目对象都进入 `HOLD`。
-3. 备份已有 `egocapture` schema。
-4. 设置云 `DATABASE_URL`，执行 `pnpm db:migrate && pnpm db:verify`。
-5. 确认 private `egocapture-raw` bucket 的 50,000,000 bytes limit。
-6. 将 `egocapture` 追加到 Exposed Schemas，禁止覆盖现有值。
-7. 执行 `pnpm db:seed && pnpm db:test:seed`。
-8. 创建两个 Vercel Project，Root Directory 分别设为 `apps/participant-web` 与 `apps/admin-web`，不要把它们合并为同一 Project 的路径路由。
-9. 两个 Project 都配置 `.env.example` 中的共享后端变量；cloud 设置 `STORAGE_UPLOAD_AUTH_MODE=official_signed`。Participant 设置 `AUTH_COOKIE_NAME=egocapture-participant-auth`，Admin 设置 `AUTH_COOKIE_NAME=egocapture-admin-auth`。
-10. 设置 `PARTICIPANT_SITE_URL` 和 `ADMIN_SITE_URL` 为各自正式域名；邀请链接必须使用前者。只有 Admin Project 包含 `/api/cron/reconcile` 和 Vercel Cron。
-11. Preview 部署并运行登录、TUS、metadata、RLS、Review 与双向 404 隔离 smoke。
-12. 通过后发布 Production，并把两条真实 URL、账号密码、commit、region 和日期更新到本 README。
+1. 确认 Supabase CLI 与 Vercel CLI 登录，核对组织、项目名、region 和 receipt 中的 project ref/id；不按名称猜测目标。
+2. 只使用专用 `egocapture-demo`；读取 PostgreSQL 版本、Exposed Schemas、Auth 和 bucket，任何 ref 不一致或同名非本项目对象都进入 `HOLD`。绝不恢复、复用或修改无关 Text2SQL 项目。
+3. 云数据库使用同一 ref 的官方 pooler；设置 `DATABASE_URL` 后执行 `pnpm db:migrate && pnpm db:verify`。
+4. 确认 private `egocapture-raw` bucket 的 50,000,000 bytes limit。
+5. 将 `egocapture` 追加到 Exposed Schemas，禁止覆盖现有值。
+6. 先运行只读 `pnpm db:demo:refresh -- --inspect`；只有 environment id、数据库、API/TUS、Migration 和 bucket 全部绑定同一 ref 后，才使用 exact confirm/marker 执行 guarded refresh，并运行 `pnpm db:test:seed && pnpm db:test:rls`。
+7. 创建两个 Vercel Project，Root Directory 分别设为 `apps/participant-web` 与 `apps/admin-web`，不要把它们合并为同一 Project 的路径路由。
+8. 两个 Project 都配置 `.env.example` 中的共享后端变量；cloud 设置 `STORAGE_UPLOAD_AUTH_MODE=official_signed`。Participant 设置 `AUTH_COOKIE_NAME=egocapture-participant-auth`，Admin 设置 `AUTH_COOKIE_NAME=egocapture-admin-auth`。
+9. 设置 `PARTICIPANT_SITE_URL` 和 `ADMIN_SITE_URL` 为各自正式域名；邀请链接必须使用前者。只有 Admin Project 包含 `/api/cron/reconcile` 和 Vercel Cron。
+10. 从固定 commit 部署 Production，运行 `/api/health`、三语言登录、Cookie/双向 404 隔离、真实可解码小 MP4 的 TUS、metadata、Review 与 Audit smoke。
+11. 把两条真实 URL、deployment id、commit、region、日期和 observed PASS/SKIP 写入 `docs/acceptance/`；只交付密码的变量名或通过安全渠道交付值，不在 README 中写明文。
 
 两套 Vercel Project 的精确配置见 [双应用部署说明](docs/deployment/vercel-dual-app.md)。
 
-当前 Vercel CLI 已登录，但仓库尚未绑定 Vercel Project；Supabase CLI 可见的共享项目尚未被本仓库 link、目标 project ref 未获明确确认，并且项目状态为 `INACTIVE`。因此云阶段仍为 `WAITING_EXTERNAL`：确认并恢复既定共享 Supabase 项目后，才能执行冲突检查、Migration、Preview 验收和 Production 发布。不得使用新建 Supabase 项目、NAS 公网映射或关闭隔离规则绕过。
+当前专用 Supabase `phchhsatgoxlqqhpnnfk` 已在 `us-west-1` 创建并完成 24 个 Migration、确定性 Seed/RLS 验证；Vercel Project 已分别绑定 `apps/participant-web` 与 `apps/admin-web`，Node 为 24.x。公开状态仍以固定 commit 的 Production deployment 和 `docs/acceptance/` 公网业务流证据为准；资源存在或本地 build 不能替代该证据。
 
 ## 生产演进
 
@@ -287,14 +288,14 @@ MVP 只真实验证到 50 MB，不声称具备 50 GB、跨天、跨地区或 4K 
 | 能力 | 状态 | 证据边界 |
 |---|---|---|
 | NAS 仅五服务 Docker、Mac 本地 Next.js | 已验证 | 物理 NAS 容器、loopback binding、Tunnel 关闭检查 |
-| Migration / Seed 重跑 | 已验证 | 13 个 Migration checksum；Seed 幂等恢复与约束检查 |
+| Migration / Seed 重跑 | 已验证 | 24 个 Migration checksum；guarded refresh、确定性摘要与约束检查 |
 | Auth / RLS / Participant 所有权隔离 | 已验证 | Integration 与数据库测试 |
 | Ed25519 Marker | 已验证 | 单测、Session Integration、浏览器二维码 |
 | TUS 多分片、Pause/Resume、Complete | 已验证 | 约 9.8 MB 合成 MP4 物理上传；浏览器短 MP4 |
 | Range metadata / 360 / 损坏文件 | 已验证 | 手机 MP4、合成 360 MP4、损坏 MP4；16 MiB budget |
 | Admin 不可变纠正与 Audit | 已验证 | Playwright + `review:test` |
 | 本机 Docker 模式 | 已验证 | GitHub Ubuntu Runner 启动五服务 Docker；Next.js 在宿主机运行；最终交付以固定 commit 对应的 [CI](https://github.com/LienJack/video-data-collection/actions/workflows/ci.yml) 为准 |
-| Public Vercel/Supabase Demo | `WAITING_EXTERNAL` | 尚无公开 URL |
+| Public Vercel/Supabase Demo | 部署中 | Supabase 专用项目已验证；两端 Production 与公网业务流尚待固定 commit 验收 |
 | 真实 INSV 私有字段 | 未验证 | 无合法样本 |
 | QR 自动识别 / 内容检查 | 未实现 | 仅演进接口文档 |
 | 数 GB / 4K / 跨天上传 | 未实现 | 仅 Multipart 数据模型与演进方案 |

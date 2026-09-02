@@ -49,6 +49,7 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "test:e2e": "playwright test",
+    "test:e2e:public": "PUBLIC_ACCEPTANCE=1 playwright test --project=chromium tests/e2e/public-deployment.spec.ts tests/e2e/main-flow.spec.ts",
     "check": "pnpm lint && pnpm typecheck && pnpm test && pnpm build"
   },
   "dependencies": {
