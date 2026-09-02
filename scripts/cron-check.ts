@@ -1,6 +1,7 @@
 import { randomUUID } from "node:crypto";
 import postgres from "postgres";
 import { api, assert, integrationEnvironment } from "@/scripts/check-support";
+import { DEMO_CATALOG } from "@/scripts/fixtures/demo-catalog";
 import { createPublicId } from "@egocapture/core/domain/public-id";
 
 async function main() {
@@ -18,13 +19,14 @@ async function main() {
   const batchPublicId = createPublicId("UB");
   const expiredPublicId = createPublicId("UP");
   const reconcilingPublicId = createPublicId("UP");
+  const participantId = DEMO_CATALOG.people.find((person) => person.key === "cn-lin-xiaoyu")!.id;
   try {
     await db.begin(async (transaction) => {
       await transaction`
         insert into egocapture.upload_batches (id, public_id, participant_id)
         values (
           ${batchId}::uuid, ${batchPublicId},
-          '30000000-0000-4000-8000-000000000001'::uuid
+          ${participantId}::uuid
         )
       `;
       await transaction`
@@ -36,17 +38,17 @@ async function main() {
         ) values
         (
           ${expiredId}::uuid, ${expiredPublicId}, ${batchId}::uuid,
-          '30000000-0000-4000-8000-000000000001'::uuid,
+          ${participantId}::uuid,
           'cron-expired.mp4', 1000, 'video/mp4', 'mp4',
-          ${`participant/30000000-0000-4000-8000-000000000001/upload/${expiredId}/${randomUUID()}.mp4`},
+          ${`participant/${participantId}/upload/${expiredId}/${randomUUID()}.mp4`},
           true, ${"c".repeat(64)}, 'created', 'pending', now() - interval '1 hour',
           now() - interval '2 hours', now() - interval '2 hours'
         ),
         (
           ${reconcilingId}::uuid, ${reconcilingPublicId}, ${batchId}::uuid,
-          '30000000-0000-4000-8000-000000000001'::uuid,
+          ${participantId}::uuid,
           'cron-reconciling.mp4', 1000, 'video/mp4', 'mp4',
-          ${`participant/30000000-0000-4000-8000-000000000001/upload/${reconcilingId}/${randomUUID()}.mp4`},
+          ${`participant/${participantId}/upload/${reconcilingId}/${randomUUID()}.mp4`},
           true, ${"d".repeat(64)}, 'reconciling', 'pending', now() + interval '1 day',
           now() - interval '2 hours', now() - interval '2 hours'
         )

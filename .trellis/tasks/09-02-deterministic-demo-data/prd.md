@@ -42,13 +42,22 @@
 
 ## Acceptance Criteria
 
-- [ ] Dry-run 不修改数据，并显示精确目标和清理规模；错误环境 id 无法执行。
-- [ ] 经授权执行后旧业务表、关联 Auth 和 Storage 对象全部清空，再播种成功。
-- [ ] Seed 生成至少 18 个自然可信参与者及中/英/日三套可登录演示路径。
-- [ ] 数据完整性检查覆盖 FK、状态机合法快照、当前 MatchDecision 唯一性、凭据隔离和 RLS。
-- [ ] 使用同一 anchor 连续执行 refresh 两次，实体 identity、数量、状态和关键内容一致。
-- [ ] Admin/Participant 页面不再出现 `Participant Demo`、`Demo Region`、`Synthetic Demo Phone` 等占位数据。
-- [ ] `pnpm db:test:seed`、聚焦 E2E 和 repo safety 通过。
+- [x] Dry-run 不修改数据，并显示精确目标和清理规模；错误环境 id 无法执行。
+- [x] 经授权执行后旧业务表、关联 Auth 和 Storage 对象全部清空，再播种成功。
+- [x] Seed 生成至少 18 个自然可信参与者及中/英/日三套可登录演示路径。
+- [x] 数据完整性检查覆盖 FK、状态机合法快照、当前 MatchDecision 唯一性、凭据隔离和 RLS。
+- [x] 使用同一 anchor 连续执行 refresh 两次，实体 identity、数量、状态和关键内容一致。
+- [x] Admin/Participant 页面不再出现 `Participant Demo`、`Demo Region`、`Synthetic Demo Phone` 等占位数据。
+- [x] `pnpm db:test:seed`、聚焦 E2E 和 repo safety 通过。
+
+## Verification Evidence
+
+- Reviewed NAS target: `egocapture-nas-interview`, database tunnel `127.0.0.1:56522`, API/TUS origin `http://127.0.0.1:56521`, migration frontier `0024`.
+- Authorized dry-run observed 4,095 business rows, 208 dedicated Auth users, and 133 Storage objects before the first purge; inspection performed no writes.
+- Two consecutive same-anchor refreshes produced digest `11aa5520a737325f0fc3c290346eebe7dee16e7d033ba7c87edcad81d9f6ad80` and the same reviewed graph. Post-acceptance refresh restored that same digest.
+- Final graph includes 18 participants, 3 participant logins, 12 devices, 7 tasks, 12 assignments, 6 recording sessions, 7 review cases, and their verified dependent records.
+- Runtime acceptance: main flow 1/1, focused Chromium demo/UI flow 12/12 (one platform-specific skip), WebKit/TUS smoke 3/3.
+- Static acceptance: 33 Vitest files / 148 tests, typecheck, lint, both Next.js production builds, RLS, repository safety, and diff check passed.
 
 ## Out of Scope
 

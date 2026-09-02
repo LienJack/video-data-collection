@@ -1,5 +1,6 @@
 import { expect, test, type Page } from "@playwright/test";
 import { integrationEnvironment } from "@/scripts/check-support";
+import { DEMO_CATALOG } from "@/scripts/fixtures/demo-catalog";
 
 const participantOrigin = process.env.PARTICIPANT_SITE_URL || "http://localhost:3000";
 const adminOrigin = process.env.ADMIN_SITE_URL || "http://localhost:3001";
@@ -121,7 +122,7 @@ test("移动端保留独立说明入口且不改变五项主导航", async ({ pa
 test("Participant 登录后的产品界面不暴露系统说明入口", async ({ page }) => {
   const env = integrationEnvironment();
   await page.goto(`${participantOrigin}/login`);
-  await page.getByLabel("参与者 ID").fill("PT-23456789");
+  await page.getByLabel("参与者 ID").fill(DEMO_CATALOG.people.find((person) => person.key === "cn-lin-xiaoyu")!.publicId);
   await page.getByLabel("密码").fill(env.demoParticipantPassword);
   await page.getByRole("button", { name: "进入我的任务" }).click();
   await expect(page).toHaveURL(/\/tasks$/);

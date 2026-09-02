@@ -23,7 +23,6 @@ import {
 import { createSupabaseAdminClient } from "@egocapture/core/server/supabase/admin";
 
 const MAX_CRON_ITEMS = 10;
-const FIXTURE_STORED_OBJECT_ID = "73000000-0000-4000-8000-000000000001";
 type MaintenanceViewer = Viewer & { uploadPublicId: string };
 
 async function expireUploadIntents(limit: number) {
@@ -189,7 +188,6 @@ async function cleanExpiredDemoObjects() {
     where object.deleted_at is null
       and object.created_at < now() - interval '7 days'
       and (participant.is_fixture or asset.is_fixture)
-      and object.id <> ${FIXTURE_STORED_OBJECT_ID}::uuid
     order by object.created_at, object.id
     limit ${MAX_CRON_ITEMS}
   `;

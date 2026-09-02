@@ -28,6 +28,7 @@
     "db:migrate": "tsx scripts/database.ts migrate",
     "db:status": "tsx scripts/database.ts status",
     "db:verify": "tsx scripts/database.ts verify",
+    "db:demo:refresh": "tsx scripts/demo-refresh.ts",
     "db:reset:task-v2": "tsx scripts/reset-task-data.ts",
     "db:seed": "tsx scripts/seed.ts",
     "db:test:seed": "tsx scripts/seed-check.ts",

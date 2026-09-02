@@ -1,13 +1,17 @@
 import { expect, test } from "@playwright/test";
 import { integrationEnvironment } from "@/scripts/check-support";
+import { DEMO_CATALOG } from "@/scripts/fixtures/demo-catalog";
 
 const adminOrigin = process.env.ADMIN_SITE_URL || "http://localhost:3001";
+const failedScenario = DEMO_CATALOG.scenarios.find((scenario) => scenario.key === "failed-retry-us")!;
+const failedParticipant = DEMO_CATALOG.people.find((person) => person.key === failedScenario.participantKey)!;
+const openSessionScenario = DEMO_CATALOG.scenarios.find((scenario) => scenario.key === "failed-retry-us")!;
 
 async function loginAdmin(page: import("@playwright/test").Page) {
   const env = integrationEnvironment();
   await page.goto(`${adminOrigin}/login`);
-  await page.getByLabel("Admin Account").fill(env.demoAdminUsername);
-  await page.getByLabel("Password").fill(env.demoAdminPassword);
+  await page.getByLabel("管理员账号").fill(env.demoAdminUsername);
+  await page.getByLabel("密码").fill(env.demoAdminPassword);
   await page.getByRole("button", { name: "进入管理控制台" }).click();
   await expect(page).toHaveURL(/\/dashboard$/);
 }
@@ -27,8 +31,8 @@ test("统一入口展示视频记录、准确异常入口和一跳处理", async
   const missing = page.getByRole("link", { name: /缺少上传/ });
   await expect(missing).toHaveAttribute("href", "/participants?missing=yes");
 
-  const failedUpload = page.getByRole("row").filter({ hasText: "demo-upload-failed.mp4" });
-  await expect(failedUpload).toContainText("Participant Demo");
+  const failedUpload = page.getByRole("row").filter({ hasText: `fixture-${failedScenario.key}.mp4` });
+  await expect(failedUpload).toContainText(failedParticipant.displayAlias);
   const reviewLink = failedUpload.getByRole("link", { name: "处理异常" });
   await expect(reviewLink).toHaveAttribute("href", /\/review\/RV-/);
   await reviewLink.focus();
@@ -57,17 +61,17 @@ test("会话页默认开放、可查历史并保留关闭原因校验", async ({
   await page.goto(`${adminOrigin}/records?tab=sessions`);
   await expect(page.getByRole("heading", { name: "录制会话", level: 2 })).toBeVisible();
   await expect(page.getByLabel("会话状态")).toHaveValue("open");
-  const session = page.getByRole("row").filter({ hasText: "RS-23456789" });
+  const session = page.getByRole("row").filter({ hasText: openSessionScenario.sessionPublicId! });
   await expect(session).toContainText("匹配视频");
-  await expect(session.getByRole("link", { name: "查看相关视频" })).toHaveAttribute("href", "/records?tab=videos&search=RS-23456789");
+  await expect(session.getByRole("link", { name: "查看相关视频" })).toHaveAttribute("href", `/records?tab=videos&search=${openSessionScenario.sessionPublicId}`);
 
-  const closeSession = session.getByRole("button", { name: "关闭 Session" });
+  const closeSession = session.getByRole("button", { name: "关闭录制会话" });
   await closeSession.focus();
   await expect(closeSession).toBeFocused();
   await closeSession.press("Enter");
-  await session.getByPlaceholder("关闭原因，至少 10 字符").fill("太短");
+  await session.getByPlaceholder("关闭原因，至少 10 个字符").fill("太短");
   await session.getByRole("button", { name: "确认关闭" }).click();
-  await expect(session.getByText("关闭原因至少 10 个字符")).toBeVisible();
+  await expect(session.getByText("关闭原因至少需要 10 个字符。")).toBeVisible();
 
   await page.getByLabel("会话状态").selectOption("closed");
   await page.getByRole("textbox", { name: "搜索录制会话" }).fill("不存在的已关闭会话");
@@ -83,26 +87,42 @@ test("操作记录提供中文摘要、分类筛选和完整证据", async ({ pa
   await expect(firstEvent).toBeVisible();
   await firstEvent.getByText("查看变更详情").click();
   await expect(firstEvent.getByText(/原始动作：/)).toBeVisible();
-  await expect(firstEvent.getByText(/Request ID：/)).toBeVisible();
+  await expect(firstEvent.getByText(/请求 ID：/)).toBeVisible();
 
-  await page.getByLabel("动作分类").selectOption("session");
+  await page.getByLabel("动作分类").selectOption("system");
   await page.getByRole("button", { name: "筛选" }).click();
-  await expect(page).toHaveURL(/tab=activity.*category=session/);
-  await expect(page.getByText("关闭录制会话").or(page.getByText("创建录制会话")).first()).toBeVisible();
+  await expect(page).toHaveURL(/tab=activity.*category=system/);
+  await expect(page.getByText("demo.seed.scenario", { exact: true }).first()).toBeVisible();
 });
 
 test("旧列表地址临时跳转且上传详情保持原路由", async ({ page }) => {
-  await page.goto(`${adminOrigin}/uploads?search=demo-upload-failed.mp4&transferStatus=failed`);
-  await expect(page).toHaveURL(/\/records\?tab=videos&search=demo-upload-failed\.mp4&transferStatus=failed/);
-  await page.goto(`${adminOrigin}/sessions?status=all&search=RS-23456789`);
-  await expect(page).toHaveURL(/\/records\?tab=sessions&search=RS-23456789&status=all/);
+  await page.goto(`${adminOrigin}/uploads?search=fixture-${failedScenario.key}.mp4&transferStatus=failed`);
+  await expect(page).toHaveURL(/\/records\?/);
+  let redirected = new URL(page.url());
+  expect(Object.fromEntries(redirected.searchParams)).toMatchObject({
+    tab: "videos",
+    search: `fixture-${failedScenario.key}.mp4`,
+    transferStatus: "failed",
+  });
+  await page.goto(`${adminOrigin}/sessions?status=all&search=${openSessionScenario.sessionPublicId}`);
+  await expect(page).toHaveURL(/\/records\?/);
+  redirected = new URL(page.url());
+  expect(Object.fromEntries(redirected.searchParams)).toMatchObject({
+    tab: "sessions",
+    search: openSessionScenario.sessionPublicId!,
+    status: "all",
+  });
   await page.goto(`${adminOrigin}/sessions?status=open`);
-  await expect(page).toHaveURL(/\/records\?tab=sessions&status=open/);
+  await expect(page).toHaveURL(/\/records\?/);
+  redirected = new URL(page.url());
+  expect(Object.fromEntries(redirected.searchParams)).toMatchObject({ tab: "sessions", status: "open" });
   await page.goto(`${adminOrigin}/audit?category=session`);
-  await expect(page).toHaveURL(/\/records\?tab=activity&category=session/);
+  await expect(page).toHaveURL(/\/records\?/);
+  redirected = new URL(page.url());
+  expect(Object.fromEntries(redirected.searchParams)).toMatchObject({ tab: "activity", category: "session" });
 
-  await page.goto(`${adminOrigin}/uploads/UP-23456782`);
-  await expect(page).toHaveURL(/\/uploads\/UP-23456782$/);
+  await page.goto(`${adminOrigin}/uploads/${failedScenario.uploadPublicId}`);
+  await expect(page).toHaveURL(new RegExp(`/uploads/${failedScenario.uploadPublicId}$`));
   await expect(page.getByRole("link", { name: "采集记录", exact: true }).first()).toHaveAttribute("aria-current", "page");
 });
 

@@ -1,483 +1,616 @@
-import { randomUUID } from "node:crypto";
+import { createHash } from "node:crypto";
+import process from "node:process";
+import { pathToFileURL } from "node:url";
 import { createClient, type SupabaseClient, type User } from "@supabase/supabase-js";
+import { internalParticipantEmail } from "@egocapture/core/domain/invitation";
+import { taskContentHash } from "@egocapture/core/domain/task-instructions";
 import postgres from "postgres";
 import { integrationEnvironment } from "@/scripts/check-support";
-import { internalParticipantEmail } from "@egocapture/core/domain/invitation";
-import { defaultTaskInstructions } from "@egocapture/core/domain/task-template";
-import { taskContentHash, taskInstructionsSchema, type TaskInstructions } from "@egocapture/core/domain/task-instructions";
+import { EGOCAPTURE_BUSINESS_TABLES } from "@/scripts/demo-refresh-guard";
+import {
+  buildDemoCatalog,
+  DEMO_SEED_ANCHOR,
+  demoTime,
+  stableDemoUuid,
+} from "@/scripts/fixtures/demo-catalog";
 
-const ids = {
-  adminProfile: "20000000-0000-4000-8000-000000000001",
-  participantProfile: "20000000-0000-4000-8000-000000000002",
-  participant: "30000000-0000-4000-8000-000000000001",
-  consent: "31000000-0000-4000-8000-000000000001",
-  device: "40000000-0000-4000-8000-000000000001",
-  deviceAssignment: "41000000-0000-4000-8000-000000000001",
-  tasks: [
-    "50000000-0000-4000-8000-000000000001",
-    "50000000-0000-4000-8000-000000000002",
-    "50000000-0000-4000-8000-000000000003",
-    "50000000-0000-4000-8000-000000000004",
-  ],
-  versions: [
-    "51000000-0000-4000-8000-000000000001",
-    "51000000-0000-4000-8000-000000000002",
-    "51000000-0000-4000-8000-000000000003",
-    "51000000-0000-4000-8000-000000000004",
-  ],
-  assignments: [
-    "60000000-0000-4000-8000-000000000001",
-    "60000000-0000-4000-8000-000000000002",
-    "60000000-0000-4000-8000-000000000003",
-    "60000000-0000-4000-8000-000000000004",
-  ],
-  session: "61000000-0000-4000-8000-000000000001",
-  uploadBatch: "70000000-0000-4000-8000-000000000001",
-  failedBatch: "70000000-0000-4000-8000-000000000002",
-  upload: "71000000-0000-4000-8000-000000000001",
-  failedUpload: "71000000-0000-4000-8000-000000000002",
-  uploadAttempt: "72000000-0000-4000-8000-000000000001",
-  failedAttempt: "72000000-0000-4000-8000-000000000002",
-  storedObject: "73000000-0000-4000-8000-000000000001",
-  asset: "74000000-0000-4000-8000-000000000001",
-  assetFile: "75000000-0000-4000-8000-000000000001",
-  metadata: "76000000-0000-4000-8000-000000000001",
-  decision: "77000000-0000-4000-8000-000000000001",
-} as const;
+type IntegrationEnvironment = ReturnType<typeof integrationEnvironment>;
 
-const publicIds = {
-  participant: "PT-23456789",
-  device: "DEV-23456789",
-  tasks: ["TSK-23456782", "TSK-23456783", "TSK-23456784", "TSK-23456785"],
-  assignments: ["AS-23456782", "AS-23456783", "AS-23456784", "AS-23456785"],
-  session: "RS-23456789",
-  uploadBatch: "UB-23456789",
-  failedBatch: "UB-23456782",
-  upload: "UP-23456789",
-  failedUpload: "UP-23456782",
-  uploadAttempt: "UA-23456789",
-  failedAttempt: "UA-23456782",
-  asset: "VA-23456789",
-  reviews: ["RV-23456782", "RV-23456783", "RV-23456784", "RV-23456785", "RV-23456786", "RV-23456787", "RV-23456788"],
-} as const;
-
-function instructions(
-  title: string,
-  description: string,
-  configure: (value: TaskInstructions) => void,
-): TaskInstructions {
-  const value = structuredClone(defaultTaskInstructions);
-  value.title = title;
-  value.description = description;
-  configure(value);
-  return taskInstructionsSchema.parse(value);
+function argumentValue(name: string): string | undefined {
+  const index = process.argv.indexOf(name);
+  return index >= 0 ? process.argv[index + 1] : undefined;
 }
 
-const taskFixtures = [
-  instructions("清洁厨房台面", "清理并擦拭一小块厨房台面，展示清洁前后的状态。", (value) => {
-    value.environmentSetup = ["保持厨房光线充足，将无关私人物品移出画面"];
-    value.areaConstraints = ["活动范围限制在厨房台面附近"];
-    value.requiredObjects = [{ code: "cleaning-cloth", label: "清洁布", mustBeVisible: true }];
-    value.recordingGuide.steps = [
-      { order: 1, instruction: "展示清洁前的台面", expectedVisualEvidence: ["任务开始状态"] },
-      { order: 2, instruction: "清理杂物并擦拭台面", expectedVisualEvidence: ["参与者双手", "使用中的工具"] },
-      { order: 3, instruction: "展示完成后的干净台面", expectedVisualEvidence: ["任务完成结果"] },
-    ];
-  }),
-  instructions("制作一杯咖啡", "以第一人称视角展示准备杯子、冲泡与完成后的桌面。", (value) => {
-    value.environmentSetup = ["清理冲泡区域并确保光线充足"];
-    value.areaConstraints = ["全程在厨房或饮品准备区域内完成"];
-    value.requiredObjects = [
-      { code: "coffee-cup", label: "咖啡杯", mustBeVisible: true },
-      { code: "coffee-maker", label: "咖啡冲泡设备", mustBeVisible: true },
-    ];
-    value.recordingGuide.steps = [
-      { order: 1, instruction: "准备杯子和咖啡材料", expectedVisualEvidence: ["操作对象"] },
-      { order: 2, instruction: "完成冲泡", expectedVisualEvidence: ["参与者双手", "完整操作过程"] },
-      { order: 3, instruction: "将成品咖啡放在桌面并展示结果", expectedVisualEvidence: ["任务完成结果"] },
-    ];
-  }),
-  instructions("整理桌面", "以第一人称视角整理普通桌面物品，不拍摄屏幕通知或个人文件。", (value) => {
-    value.environmentSetup = ["锁屏所有显示设备，移走证件和私人信件"];
-    value.areaConstraints = ["仅整理指定书桌，不移动到其他房间"];
-    value.requiredObjects = [{ code: "storage-box", label: "收纳盒", mustBeVisible: true }];
-    value.recordingGuide.steps = [
-      { order: 1, instruction: "展示整理前的桌面", expectedVisualEvidence: ["任务开始状态"] },
-      { order: 2, instruction: "将桌面物品分类并收纳", expectedVisualEvidence: ["参与者双手", "操作对象"] },
-      { order: 3, instruction: "展示整理后的桌面", expectedVisualEvidence: ["任务完成结果"] },
-    ];
-  }),
-  instructions("将衣服放入洗衣机", "以第一人称视角展示将无识别信息的衣物放入洗衣机。", (value) => {
-    value.environmentSetup = ["将衣物口袋中的证件、单据和私人物品取出"];
-    value.areaConstraints = ["活动范围限制在洗衣区"];
-    value.requiredObjects = [{ code: "washing-machine", label: "洗衣机", mustBeVisible: true }];
-    value.recordingGuide.steps = [
-      { order: 1, instruction: "展示待洗衣物和洗衣机", expectedVisualEvidence: ["操作对象"] },
-      { order: 2, instruction: "打开洗衣机并放入衣物", expectedVisualEvidence: ["参与者双手", "完整操作过程"] },
-      { order: 3, instruction: "关闭洗衣机门并展示完成状态", expectedVisualEvidence: ["任务完成结果"] },
-    ];
-  }),
-];
+function fingerprint(value: string): string {
+  return createHash("sha256").update(`egocapture/demo-fixture/${value}`).digest("hex");
+}
+
+function addHours(value: string, hours: number): string {
+  return new Date(new Date(value).getTime() + hours * 60 * 60 * 1_000).toISOString();
+}
 
 async function allUsers(supabase: SupabaseClient): Promise<User[]> {
   const users: User[] = [];
-  for (let page = 1; page <= 10; page += 1) {
+  for (let page = 1; page <= 100; page += 1) {
     const { data, error } = await supabase.auth.admin.listUsers({ page, perPage: 100 });
     if (error) throw error;
     users.push(...data.users);
-    if (data.users.length < 100) break;
+    if (data.users.length < 100) return users;
   }
-  return users;
+  throw new Error("HOLD: Auth user inventory exceeded the bounded fixture scan");
 }
 
-async function ensureAuthUser(
+async function ensureFixtureUser(
   supabase: SupabaseClient,
   users: User[],
-  email: string,
-  password: string,
-  role: "admin" | "participant",
-) {
-  const existing = users.find((user) => user.email?.toLowerCase() === email.toLowerCase());
-  if (existing && (existing.user_metadata?.egocapture_fixture !== true || existing.user_metadata?.egocapture_role !== role)) {
-    throw new Error(`HOLD: Auth Email ${email} 已被非 EgoCapture Demo Fixture 使用`);
-  }
+  input: { email: string; password: string; role: "admin" | "participant"; catalogKey: string },
+): Promise<User> {
+  assertInternalDemoEmail(input.email);
+  const existing = assertFixtureAuthIdentityAvailable(users, input);
+  const userMetadata = {
+    ...(existing?.user_metadata ?? {}),
+    egocapture_fixture: true,
+    egocapture_role: input.role,
+    egocapture_catalog_key: input.catalogKey,
+  };
   if (existing) {
     const { data, error } = await supabase.auth.admin.updateUserById(existing.id, {
-      password,
+      password: input.password,
       email_confirm: true,
-      user_metadata: { egocapture_fixture: true, egocapture_role: role },
+      user_metadata: userMetadata,
     });
-    if (error || !data.user) throw error || new Error(`无法恢复 ${role} Demo Auth User`);
+    if (error || !data.user) throw error ?? new Error(`Unable to restore Auth fixture ${input.catalogKey}`);
     return data.user;
   }
   const { data, error } = await supabase.auth.admin.createUser({
-    email,
-    password,
+    email: input.email,
+    password: input.password,
     email_confirm: true,
-    user_metadata: { egocapture_fixture: true, egocapture_role: role },
+    user_metadata: userMetadata,
   });
-  if (error || !data.user) throw error || new Error(`无法创建 ${role} Demo Auth User`);
+  if (error || !data.user) throw error ?? new Error(`Unable to create Auth fixture ${input.catalogKey}`);
   users.push(data.user);
   return data.user;
 }
 
-async function main() {
-  const env = integrationEnvironment();
-  const db = postgres(env.databaseUrl, { max: 1, prepare: false, connect_timeout: 8, transform: postgres.camel });
+export function assertInternalDemoEmail(email: string): void {
+  const normalized = email.trim().toLowerCase();
+  const separator = normalized.lastIndexOf("@");
+  if (separator <= 0 || !normalized.slice(separator + 1).endsWith(".invalid")) {
+    throw new Error("HOLD: demo Auth email must use the reserved .invalid domain");
+  }
+}
+
+export function assertFixtureAuthIdentityAvailable<T extends {
+  email?: string;
+  user_metadata?: Record<string, unknown>;
+}>(
+  users: readonly T[],
+  input: { email: string; role: "admin" | "participant"; catalogKey: string },
+): T | undefined {
+  const desiredEmail = input.email.trim().toLowerCase();
+  const owners = users.filter(
+    (user) => user.user_metadata?.egocapture_catalog_key === input.catalogKey,
+  );
+  if (owners.length > 1 || owners.some((user) => user.email?.toLowerCase() !== desiredEmail)) {
+    throw new Error(`HOLD: Auth catalog identity collision for ${input.catalogKey}`);
+  }
+  const matchingEmails = users.filter((user) => user.email?.toLowerCase() === desiredEmail);
+  if (matchingEmails.length > 1) {
+    throw new Error(`HOLD: duplicate Auth email for ${input.catalogKey}`);
+  }
+  const existing = matchingEmails[0];
+  if (existing && (
+    existing.user_metadata?.egocapture_fixture !== true
+    || existing.user_metadata?.egocapture_catalog_key !== input.catalogKey
+    || existing.user_metadata?.egocapture_role !== input.role
+  )) {
+    throw new Error(`HOLD: Auth identity collision for ${input.catalogKey}`);
+  }
+  return existing;
+}
+
+async function requireEmptyBusinessGraph(db: postgres.Sql) {
+  let rowCount = 0;
+  for (const table of EGOCAPTURE_BUSINESS_TABLES) {
+    const [result] = await db.unsafe<{ count: number }[]>(
+      `select count(*)::integer as count from egocapture."${table}"`,
+    );
+    rowCount += result.count;
+  }
+  if (rowCount !== 0) {
+    throw new Error(`HOLD: EgoCapture business graph is not empty (${rowCount} rows); run the guarded demo refresh`);
+  }
+}
+
+function requiredMapValue<T>(map: ReadonlyMap<string, T>, key: string, kind: string): T {
+  const value = map.get(key);
+  if (!value) throw new Error(`Demo catalog ${kind} not found: ${key}`);
+  return value;
+}
+
+export async function seedDemoData(
+  env: IntegrationEnvironment,
+  anchor = DEMO_SEED_ANCHOR,
+): Promise<{ anchor: string; participants: number; participantLogins: number; tasks: number; scenarios: number }> {
+  const catalog = buildDemoCatalog(anchor);
+  const db = postgres(env.databaseUrl, { max: 1, prepare: false, connect_timeout: 8, idle_timeout: 2, transform: postgres.camel });
   const supabase = createClient(env.supabaseUrl, env.serviceRoleKey, {
     auth: { autoRefreshToken: false, detectSessionInUrl: false, persistSession: false },
   });
+
   try {
+    await requireEmptyBusinessGraph(db);
+    assertInternalDemoEmail(env.demoAdminEmail);
     const users = await allUsers(supabase);
-    const [adminUser, participantUser] = await Promise.all([
-      ensureAuthUser(supabase, users, env.demoAdminEmail, env.demoAdminPassword, "admin"),
-      ensureAuthUser(supabase, users, internalParticipantEmail(publicIds.participant), env.demoParticipantPassword, "participant"),
-    ]);
+    const adminUser = await ensureFixtureUser(supabase, users, {
+      email: env.demoAdminEmail,
+      password: env.demoAdminPassword,
+      role: "admin",
+      catalogKey: catalog.admin.key,
+    });
+    const participantUsers = new Map<string, User>();
+    for (const person of catalog.people.filter((candidate) => candidate.login)) {
+      participantUsers.set(person.key, await ensureFixtureUser(supabase, users, {
+        email: internalParticipantEmail(person.publicId),
+        password: env.demoParticipantPassword,
+        role: "participant",
+        catalogKey: person.key,
+      }));
+    }
 
     await db.begin(async (transaction) => {
-      const protectedRows = await transaction<{ kind: string; idMatches: boolean; isFixture: boolean }[]>`
-        select 'participant' as kind, id = ${ids.participant}::uuid as id_matches, is_fixture
-        from egocapture.participants
-        where id = ${ids.participant}::uuid or public_id = ${publicIds.participant}
-        union all
-        select 'device' as kind, id = ${ids.device}::uuid as id_matches, is_fixture
-        from egocapture.devices
-        where id = ${ids.device}::uuid or public_id = ${publicIds.device}
-        union all
-        select 'review' as kind, true as id_matches, is_fixture
-        from egocapture.review_cases
-        where public_id = any(${[...publicIds.reviews]})
-      `;
-      if (protectedRows.some((row) => !row.idMatches || !row.isFixture)) {
-        throw new Error("HOLD: Participant、Device 或 Review Public ID 已被非本 Demo Fixture 使用");
-      }
       await transaction`
-        insert into egocapture.profiles (id, auth_user_id, role, display_name, is_demo_admin)
-        values (${ids.adminProfile}::uuid, ${adminUser.id}::uuid, 'admin', 'Admin Demo', true)
-        on conflict (id) do update set auth_user_id = excluded.auth_user_id, role = 'admin', display_name = excluded.display_name, is_demo_admin = true
-      `;
-      await transaction`
-        insert into egocapture.profiles (id, auth_user_id, role, display_name, is_demo_admin)
-        values (${ids.participantProfile}::uuid, ${participantUser.id}::uuid, 'participant', 'Participant Demo', false)
-        on conflict (id) do update set auth_user_id = excluded.auth_user_id, role = 'participant', display_name = excluded.display_name
-      `;
-      await transaction`
-        insert into egocapture.participants (
-          id, public_id, auth_user_id, display_alias, locale, timezone,
-          country_region, status, consent_status, notes, is_fixture, created_by
+        insert into egocapture.profiles (
+          id, auth_user_id, role, display_name, is_demo_admin, created_at, updated_at
         ) values (
-          ${ids.participant}::uuid, ${publicIds.participant},
-          ${participantUser.id}::uuid, 'Participant Demo', 'zh-CN', 'Asia/Shanghai',
-          'Demo Region', 'active', 'valid', 'Synthetic fixture. Do not enter PII.', true,
-          ${ids.adminProfile}::uuid
+          ${catalog.admin.profileId}::uuid, ${adminUser.id}::uuid, 'admin', ${catalog.admin.displayName},
+          true, ${demoTime(anchor, -100)}::timestamptz, ${demoTime(anchor, -100)}::timestamptz
         )
-        on conflict (id) do update set
-          auth_user_id = excluded.auth_user_id, display_alias = excluded.display_alias,
-          status = 'active', consent_status = 'valid', withdrawn_at = null,
-          notes = excluded.notes, is_fixture = true
-      `;
-      await transaction`
-        insert into egocapture.participant_login_credentials (
-          participant_id, password, version, updated_at, synced_at
-        ) values (
-          ${ids.participant}::uuid, ${env.demoParticipantPassword}, 1, now(), now()
-        )
-        on conflict (participant_id) do update set
-          password = excluded.password,
-          version = case
-            when egocapture.participant_login_credentials.password is distinct from excluded.password
-              then egocapture.participant_login_credentials.version + 1
-            else egocapture.participant_login_credentials.version
-          end,
-          updated_at = case
-            when egocapture.participant_login_credentials.password is distinct from excluded.password
-              then excluded.updated_at
-            else egocapture.participant_login_credentials.updated_at
-          end,
-          synced_at = excluded.synced_at
-      `;
-      await transaction`
-        insert into egocapture.consent_records (
-          id, participant_id, status, recorded_by, accepted_at
-        ) values (
-          ${ids.consent}::uuid, ${ids.participant}::uuid, 'accepted',
-          ${ids.adminProfile}::uuid, '2026-09-01T00:00:00Z'
-        ) on conflict (id) do nothing
-      `;
-      await transaction`
-        insert into egocapture.devices (
-          id, public_id, manufacturer, model, device_type, status, is_fixture
-        ) values (
-          ${ids.device}::uuid, ${publicIds.device}, 'Synthetic', 'Demo Phone',
-          'phone', 'active', true
-        ) on conflict (id) do update set manufacturer = excluded.manufacturer,
-          model = excluded.model, status = 'active', retired_at = null, is_fixture = true
-      `;
-      await transaction`
-        insert into egocapture.device_assignments (
-          id, device_id, participant_id, assigned_by
-        ) values (
-          ${ids.deviceAssignment}::uuid, ${ids.device}::uuid, ${ids.participant}::uuid, ${ids.adminProfile}::uuid
-        ) on conflict (id) do update set ended_at = null, assigned_by = excluded.assigned_by
-      `;
-      await transaction`
-        update egocapture.participants set default_device_id = ${ids.device}::uuid
-        where id = ${ids.participant}::uuid
       `;
 
-      for (const [index, fixture] of taskFixtures.entries()) {
-        const contentHash = taskContentHash(fixture);
+      for (const person of catalog.people.filter((candidate) => candidate.login)) {
+        const user = requiredMapValue(participantUsers, person.key, "Auth user");
         await transaction`
-          insert into egocapture.tasks (
-            id, public_id, title, lifecycle, draft_instructions, is_fixture, created_by
+          insert into egocapture.profiles (
+            id, auth_user_id, role, display_name, is_demo_admin, created_at, updated_at
           ) values (
-            ${ids.tasks[index]}::uuid, ${publicIds.tasks[index]}, ${fixture.title},
-            'active', ${transaction.json(fixture)}, true, ${ids.adminProfile}::uuid
-          ) on conflict (id) do update set title = excluded.title, lifecycle = 'active',
-            draft_instructions = excluded.draft_instructions, is_fixture = true
-        `;
-        await transaction`
-          insert into egocapture.task_versions (
-            id, task_id, version, instructions, content_hash, published_by
-          ) values (
-            ${ids.versions[index]}::uuid, ${ids.tasks[index]}::uuid, 1,
-            ${transaction.json(fixture)}, ${contentHash}, ${ids.adminProfile}::uuid
-          ) on conflict (id) do nothing
-        `;
-        const [version] = await transaction<{ contentHash: string }[]>`
-          select content_hash from egocapture.task_versions where id = ${ids.versions[index]}::uuid
-        `;
-        if (version.contentHash !== contentHash) throw new Error(`HOLD: Demo TaskVersion ${index + 1} 内容与固定快照冲突`);
-      }
-
-      const assignmentStates = [
-        { status: "assigned", due: transaction`now() + interval '30 days'` },
-        { status: "assigned", due: transaction`now() - interval '1 day'` },
-        { status: "needs_review", due: transaction`now() + interval '7 days'` },
-        { status: "assigned", due: transaction`now() + interval '14 days'` },
-      ] as const;
-      for (const [index, state] of assignmentStates.entries()) {
-        await transaction`
-          insert into egocapture.assignments (
-            id, public_id, participant_id, task_version_id, preferred_device_id,
-            due_at, locale, status, created_by, created_at
-          ) values (
-            ${ids.assignments[index]}::uuid, ${publicIds.assignments[index]},
-            ${ids.participant}::uuid, ${ids.versions[index]}::uuid, ${ids.device}::uuid,
-            ${state.due}, 'zh-CN', ${state.status}, ${ids.adminProfile}::uuid,
-            now() - interval '60 days'
-          ) on conflict (id) do update set due_at = excluded.due_at, status = excluded.status,
-            acknowledged_at = null, acknowledged_content_hash = null, canceled_at = null
-        `;
-      }
-      await transaction`
-        insert into egocapture.recording_sessions (
-          id, public_id, assignment_id, participant_id, task_version_id,
-          declared_device_id, timezone, status
-        ) values (
-          ${ids.session}::uuid, ${publicIds.session}, ${ids.assignments[2]}::uuid,
-          ${ids.participant}::uuid, ${ids.versions[2]}::uuid,
-          ${ids.device}::uuid, 'Asia/Shanghai', 'open'
-        ) on conflict (id) do update set status = 'open', closed_at = null, close_reason = null
-      `;
-
-      const objectKey = `participant/${ids.participant}/upload/${ids.upload}/70000000-0000-4000-8000-000000000099.mp4`;
-      await transaction`
-        insert into egocapture.upload_batches (id, public_id, participant_id, status, completed_at)
-        values (${ids.uploadBatch}::uuid, ${publicIds.uploadBatch}, ${ids.participant}::uuid, 'completed', now())
-        on conflict (id) do update set status = 'completed', completed_at = now()
-      `;
-      await transaction`
-        insert into egocapture.upload_intents (
-          id, public_id, batch_id, participant_id, original_filename,
-          size_bytes, content_type, extension, object_key, unable_to_determine,
-          fingerprint_v1, transfer_status, metadata_status, expected_expires_at,
-          verified_at
-        ) values (
-          ${ids.upload}::uuid, ${publicIds.upload}, ${ids.uploadBatch}::uuid,
-          ${ids.participant}::uuid, 'demo-fixture.mp4', 1000, 'video/mp4', 'mp4',
-          ${objectKey}, true, ${"a".repeat(64)}, 'verified', 'failed', now() + interval '365 days', now()
-        ) on conflict (id) do update set transfer_status = 'verified', metadata_status = 'failed',
-          failure_code = null, expected_expires_at = now() + interval '365 days', verified_at = now()
-      `;
-      await transaction`
-        insert into egocapture.upload_attempts (
-          id, public_id, upload_intent_id, attempt_number, status, bytes_uploaded,
-          started_at, completed_at
-        ) values (
-          ${ids.uploadAttempt}::uuid, ${publicIds.uploadAttempt}, ${ids.upload}::uuid,
-          1, 'completed', 1000, now(), now()
-        ) on conflict (id) do update set status = 'completed', bytes_uploaded = 1000,
-          completed_at = now(), error_code = null
-      `;
-      await transaction`
-        insert into egocapture.stored_objects (
-          id, upload_intent_id, provider, bucket, object_key, size_bytes, verified_at
-        ) values (
-          ${ids.storedObject}::uuid, ${ids.upload}::uuid, 'supabase', 'egocapture-raw',
-          ${objectKey}, 1000, now()
-        ) on conflict (id) do update set verified_at = now(), deleted_at = null, delete_reason = null
-      `;
-      await transaction`
-        insert into egocapture.video_assets (
-          id, public_id, upload_intent_id, participant_id, status, is_fixture
-        ) values (
-          ${ids.asset}::uuid, ${publicIds.asset}, ${ids.upload}::uuid,
-          ${ids.participant}::uuid, 'active', true
-        ) on conflict (id) do update set status = 'active', is_fixture = true
-      `;
-      await transaction`
-        insert into egocapture.asset_files (id, video_asset_id, stored_object_id, file_role)
-        values (${ids.assetFile}::uuid, ${ids.asset}::uuid, ${ids.storedObject}::uuid, 'source')
-        on conflict (id) do nothing
-      `;
-      await transaction`
-        insert into egocapture.video_file_metadata (
-          id, video_asset_id, parser_name, parser_version, container_format, duration_ms,
-          file_size_bytes, video_codec, width, height, camera_manufacturer, camera_model,
-          device_consistency, extracted_at
-        ) values (
-          ${ids.metadata}::uuid, ${ids.asset}::uuid, 'demo_fixture', '1', 'MPEG-4', 10000,
-          1000, 'AVC', 1920, 960, 'Synthetic', 'Different Demo Camera', 'model_mismatch', now()
-        ) on conflict (id) do update set camera_manufacturer = excluded.camera_manufacturer,
-          camera_model = excluded.camera_model, device_consistency = 'model_mismatch', extracted_at = now()
-      `;
-      const [currentDecision] = await transaction<{
-        id: string;
-        decisionType: string;
-        resolvedSessionId: string | null;
-      }[]>`
-        select id, decision_type, resolved_session_id
-        from egocapture.match_decisions
-        where video_asset_id = ${ids.asset}::uuid and superseded_by is null
-        for update
-      `;
-      if (!currentDecision) {
-        await transaction`
-          insert into egocapture.match_decisions (
-            id, video_asset_id, decision_type, decided_by
-          ) values (${ids.decision}::uuid, ${ids.asset}::uuid, 'unmatched', ${ids.participantProfile}::uuid)
-        `;
-      } else if (currentDecision.decisionType !== "unmatched" || currentDecision.resolvedSessionId) {
-        const nextId = randomUUID();
-        await transaction`set constraints all deferred`;
-        await transaction`update egocapture.match_decisions set superseded_by = ${nextId}::uuid where id = ${currentDecision.id}::uuid`;
-        await transaction`
-          insert into egocapture.match_decisions (
-            id, video_asset_id, decision_type, supersedes_decision_id, decided_by
-          ) values (
-            ${nextId}::uuid, ${ids.asset}::uuid, 'unmatched', ${currentDecision.id}::uuid,
-            ${ids.participantProfile}::uuid
+            ${person.profileId}::uuid, ${user.id}::uuid, 'participant', ${person.displayAlias},
+            false, ${person.createdAt}::timestamptz, ${person.createdAt}::timestamptz
           )
         `;
       }
 
-      await transaction`
-        insert into egocapture.upload_batches (id, public_id, participant_id, status, completed_at)
-        values (${ids.failedBatch}::uuid, ${publicIds.failedBatch}, ${ids.participant}::uuid, 'completed', now())
-        on conflict (id) do update set status = 'completed', completed_at = now()
-      `;
-      await transaction`
-        insert into egocapture.upload_intents (
-          id, public_id, batch_id, participant_id, original_filename,
-          size_bytes, content_type, extension, object_key, claimed_session_id,
-          unable_to_determine, fingerprint_v1, transfer_status, metadata_status,
-          expected_expires_at, failure_code
-        ) values (
-          ${ids.failedUpload}::uuid, ${publicIds.failedUpload}, ${ids.failedBatch}::uuid,
-          ${ids.participant}::uuid, 'demo-upload-failed.mp4', 1000,
-          'video/mp4', 'mp4',
-          ${`participant/${ids.participant}/upload/${ids.failedUpload}/70000000-0000-4000-8000-000000000098.mp4`},
-          ${ids.session}::uuid, false, ${"b".repeat(64)}, 'failed', 'pending',
-          now() + interval '365 days', 'storage_missing'
-        ) on conflict (id) do update set transfer_status = 'failed', metadata_status = 'pending',
-          failure_code = 'storage_missing', expected_expires_at = now() + interval '365 days'
-      `;
-      await transaction`
-        insert into egocapture.upload_attempts (
-          id, public_id, upload_intent_id, attempt_number, status, bytes_uploaded,
-          started_at, completed_at, error_code
-        ) values (
-          ${ids.failedAttempt}::uuid, ${publicIds.failedAttempt}, ${ids.failedUpload}::uuid,
-          1, 'failed', 0, now(), now(), 'storage_missing'
-        ) on conflict (id) do update set status = 'failed', bytes_uploaded = 0,
-          completed_at = now(), error_code = 'storage_missing'
-      `;
-
-      const reviewFixtures = [
-        { publicId: publicIds.reviews[0], type: "missing", assignmentId: ids.assignments[1], assetId: null, uploadId: null, reason: "demo_fixture_missing_due_assignment" },
-        { publicId: publicIds.reviews[1], type: "upload_failed", assignmentId: ids.assignments[3], assetId: null, uploadId: ids.failedUpload, reason: "demo_fixture_storage_missing" },
-        { publicId: publicIds.reviews[2], type: "metadata_failed", assignmentId: ids.assignments[2], assetId: ids.asset, uploadId: null, reason: "demo_fixture_parser_failure" },
-        { publicId: publicIds.reviews[3], type: "duplicate_candidate", assignmentId: ids.assignments[2], assetId: ids.asset, uploadId: null, reason: "demo_fixture_matching_fingerprint" },
-        { publicId: publicIds.reviews[4], type: "unmatched", assignmentId: ids.assignments[2], assetId: ids.asset, uploadId: null, reason: "demo_fixture_unable_to_determine" },
-        { publicId: publicIds.reviews[5], type: "device_mismatch", assignmentId: ids.assignments[2], assetId: ids.asset, uploadId: null, reason: "demo_fixture_model_mismatch" },
-        { publicId: publicIds.reviews[6], type: "needs_review", assignmentId: ids.assignments[2], assetId: ids.asset, uploadId: null, reason: "demo_fixture_human_decision_required" },
-      ];
-      for (const fixture of reviewFixtures) {
+      for (const person of catalog.people) {
+        const user = person.login ? requiredMapValue(participantUsers, person.key, "Auth user") : null;
         await transaction`
-          insert into egocapture.review_cases (
-            public_id, video_asset_id, assignment_id, upload_intent_id,
-            case_type, status, reason, is_fixture
+          insert into egocapture.participants (
+            id, public_id, auth_user_id, display_alias, management_email, locale, timezone,
+            country_region, status, consent_status, notes, is_fixture, created_by,
+            created_at, updated_at, withdrawn_at
           ) values (
-            ${fixture.publicId}, ${fixture.assetId}::uuid, ${fixture.assignmentId}::uuid,
-            ${fixture.uploadId}::uuid,
-            ${fixture.type}, 'open', ${fixture.reason}, true
-          ) on conflict (public_id) do update set
-            video_asset_id = excluded.video_asset_id, assignment_id = excluded.assignment_id,
-            upload_intent_id = excluded.upload_intent_id, case_type = excluded.case_type,
-            status = 'open', reason = excluded.reason, resolution_reason = null,
-            resolved_at = null, is_fixture = true
+            ${person.id}::uuid, ${person.publicId}, ${user?.id ?? null}::uuid, ${person.displayAlias},
+            null, ${person.region.locale}, ${person.region.timezone}, ${person.region.countryCode},
+            ${person.status}, ${person.consentStatus},
+            'Fictional demonstration fixture; no real personal information.', true,
+            ${catalog.admin.profileId}::uuid, ${person.createdAt}::timestamptz,
+            ${person.createdAt}::timestamptz, ${person.withdrawnAt}::timestamptz
+          )
+        `;
+
+        if (person.login) {
+          await transaction`
+            insert into egocapture.participant_login_credentials (
+              participant_id, password, version, updated_at, synced_at
+            ) values (
+              ${person.id}::uuid, ${env.demoParticipantPassword}, 1,
+              ${person.createdAt}::timestamptz, ${person.createdAt}::timestamptz
+            )
+          `;
+        }
+
+        if (person.consentStatus !== "pending") {
+          const recordStatus = person.consentStatus === "valid" ? "accepted" : person.consentStatus;
+          const acceptedAt = recordStatus === "accepted" ? addHours(person.createdAt, 24) : null;
+          const effectiveUntil = recordStatus === "accepted"
+            ? demoTime(anchor, 180)
+            : recordStatus === "expired" ? demoTime(anchor, -1) : null;
+          await transaction`
+            insert into egocapture.consent_records (
+              id, participant_id, status, recorded_by, accepted_at, effective_until, reason, created_at
+            ) values (
+              ${stableDemoUuid("consent-record", person.key)}::uuid, ${person.id}::uuid,
+              ${recordStatus}, ${catalog.admin.profileId}::uuid, ${acceptedAt}::timestamptz,
+              ${effectiveUntil}::timestamptz,
+              ${recordStatus === "expired" ? "Demo consent validity period expired." : recordStatus === "withdrawn" ? "Demo participant withdrew consent." : null},
+              ${addHours(person.createdAt, 24)}::timestamptz
+            )
+          `;
+        }
+
+        if (person.status === "invited") {
+          const invited = catalog.people.filter((candidate) => candidate.status === "invited");
+          const invitationIndex = invited.findIndex((candidate) => candidate.key === person.key);
+          const invitationStatus = invitationIndex % 2 === 0 ? "generated" : "opened";
+          const createdAt = demoTime(anchor, -3 - invitationIndex);
+          await transaction`
+            insert into egocapture.participant_invitations (
+              id, participant_id, token_hash, status, expires_at, opened_at, created_by, created_at
+            ) values (
+              ${stableDemoUuid("participant-invitation", person.key)}::uuid, ${person.id}::uuid,
+              ${createHash("sha256").update(`demo-invitation/${person.key}`).digest()},
+              ${invitationStatus}, ${demoTime(anchor, 14)}::timestamptz,
+              ${invitationStatus === "opened" ? addHours(createdAt, 2) : null}::timestamptz,
+              ${catalog.admin.profileId}::uuid, ${createdAt}::timestamptz
+            )
+          `;
+        }
+      }
+
+      const people = new Map(catalog.people.map((person) => [person.key, person]));
+      const devicesByParticipant = new Map<string, (typeof catalog.devices)[number]>();
+      for (const device of catalog.devices) {
+        const person = requiredMapValue(people, device.participantKey, "participant");
+        await transaction`
+          insert into egocapture.devices (
+            id, public_id, manufacturer, model, device_type, serial_hmac, firmware_version,
+            status, is_fixture, created_at, updated_at, retired_at
+          ) values (
+            ${device.id}::uuid, ${device.publicId}, ${device.manufacturer}, ${device.model},
+            ${device.deviceType}, null, ${device.firmwareVersion}, ${device.status}, true,
+            ${device.assignedAt}::timestamptz, ${device.assignedAt}::timestamptz, ${device.endedAt}::timestamptz
+          )
+        `;
+        await transaction`
+          insert into egocapture.device_assignments (
+            id, device_id, participant_id, assigned_at, ended_at, assigned_by, reason
+          ) values (
+            ${device.assignmentId}::uuid, ${device.id}::uuid, ${person.id}::uuid,
+            ${device.assignedAt}::timestamptz, ${device.endedAt}::timestamptz,
+            ${catalog.admin.profileId}::uuid,
+            ${device.endedAt ? "Demo device assignment ended after retirement." : null}
+          )
+        `;
+        if (!devicesByParticipant.has(person.key) || device.isDefault) devicesByParticipant.set(person.key, device);
+        if (device.isDefault) {
+          await transaction`update egocapture.participants set default_device_id = ${device.id}::uuid where id = ${person.id}::uuid`;
+        }
+      }
+
+      const tasks = new Map(catalog.tasks.map((task) => [task.key, task]));
+      for (const task of catalog.tasks) {
+        await transaction`
+          insert into egocapture.tasks (
+            id, public_id, title, lifecycle, draft_instructions, is_fixture, created_by,
+            created_at, updated_at
+          ) values (
+            ${task.id}::uuid, ${task.publicId}, ${task.instructions.title}, ${task.lifecycle},
+            ${transaction.json(task.instructions)}, true, ${catalog.admin.profileId}::uuid,
+            ${task.createdAt}::timestamptz, ${task.createdAt}::timestamptz
+          )
+        `;
+        if (task.versionId && task.publishedAt) {
+          await transaction`
+            insert into egocapture.task_versions (
+              id, task_id, version, instructions, content_hash, published_by, published_at
+            ) values (
+              ${task.versionId}::uuid, ${task.id}::uuid, 1,
+              ${transaction.json(task.instructions)}, ${taskContentHash(task.instructions)},
+              ${catalog.admin.profileId}::uuid, ${task.publishedAt}::timestamptz
+            )
+          `;
+        }
+      }
+
+      const scenarios = new Map(catalog.scenarios.map((scenario) => [scenario.key, scenario]));
+      for (const scenario of catalog.scenarios) {
+        const person = requiredMapValue(people, scenario.participantKey, "participant");
+        const task = requiredMapValue(tasks, scenario.taskKey, "task");
+        if (!task.versionId) throw new Error(`Demo scenario cannot target draft task: ${scenario.key}`);
+        const preferredDevice = devicesByParticipant.get(person.key) ?? null;
+        const acknowledged = !["assigned", "expired", "missing_upload", "canceled"].includes(scenario.assignmentStatus);
+        const canceledAt = scenario.assignmentStatus === "canceled" ? demoTime(anchor, -1) : null;
+        await transaction`
+          insert into egocapture.assignments (
+            id, public_id, participant_id, task_version_id, task_id, preferred_device_id,
+            due_at, locale, note, status, acknowledged_at, acknowledged_content_hash,
+            canceled_at, created_by, created_at, updated_at
+          ) values (
+            ${scenario.assignmentId}::uuid, ${scenario.assignmentPublicId}, ${person.id}::uuid,
+            ${task.versionId}::uuid, ${task.id}::uuid, ${preferredDevice?.id ?? null}::uuid,
+            ${scenario.dueAt}::timestamptz, ${person.region.locale},
+            ${`Demo scenario: ${scenario.kind}.`}, ${scenario.assignmentStatus},
+            ${acknowledged ? addHours(scenario.createdAt, 24) : null}::timestamptz,
+            ${acknowledged ? taskContentHash(task.instructions) : null}, ${canceledAt}::timestamptz,
+            ${catalog.admin.profileId}::uuid, ${scenario.createdAt}::timestamptz, ${scenario.createdAt}::timestamptz
+          )
+        `;
+        await transaction`
+          insert into egocapture.task_participant_plans (
+            id, task_id, participant_id, preferred_device_id, due_at, locale, note,
+            assignment_id, created_by, created_at, updated_at
+          ) values (
+            ${stableDemoUuid("task-participant-plan", scenario.key)}::uuid, ${task.id}::uuid,
+            ${person.id}::uuid, ${preferredDevice?.id ?? null}::uuid, ${scenario.dueAt}::timestamptz,
+            ${person.region.locale}, ${`Demo plan for ${scenario.kind}.`},
+            ${scenario.assignmentId}::uuid, ${catalog.admin.profileId}::uuid,
+            ${scenario.createdAt}::timestamptz, ${scenario.createdAt}::timestamptz
+          )
         `;
       }
+
+      const draftTask = catalog.tasks.find((task) => task.lifecycle === "draft");
+      const draftPerson = catalog.people.find((person) => person.key === "us-sophia-brown");
+      if (!draftTask || !draftPerson) throw new Error("Demo draft plan authority is incomplete");
+      await transaction`
+        insert into egocapture.task_participant_plans (
+          id, task_id, participant_id, due_at, locale, note, created_by, created_at, updated_at
+        ) values (
+          ${stableDemoUuid("task-participant-plan", "draft-us-books")}::uuid,
+          ${draftTask.id}::uuid, ${draftPerson.id}::uuid, ${demoTime(anchor, 30)}::timestamptz,
+          ${draftPerson.region.locale}, 'Draft roster preview; no assignment exists yet.',
+          ${catalog.admin.profileId}::uuid, ${demoTime(anchor, -10)}::timestamptz,
+          ${demoTime(anchor, -10)}::timestamptz
+        )
+      `;
+
+      for (const scenario of catalog.scenarios) {
+        const sessionStatus = scenario.sessionStatus;
+        if (!scenario.sessionId || !sessionStatus) continue;
+        const person = requiredMapValue(people, scenario.participantKey, "participant");
+        const task = requiredMapValue(tasks, scenario.taskKey, "task");
+        const device = requiredMapValue(devicesByParticipant, person.key, "declared device");
+        await transaction`
+          insert into egocapture.recording_sessions (
+            id, public_id, assignment_id, participant_id, task_version_id,
+            declared_device_id, timezone, status, marker_acknowledged_at,
+            closed_at, close_reason, created_at, updated_at
+          ) values (
+            ${scenario.sessionId}::uuid, ${scenario.sessionPublicId}, ${scenario.assignmentId}::uuid,
+            ${person.id}::uuid, ${task.versionId}::uuid, ${device.id}::uuid,
+            ${person.region.timezone}, ${sessionStatus}, ${addHours(scenario.createdAt, 1)}::timestamptz,
+            ${sessionStatus === "closed" ? addHours(scenario.createdAt, 3) : null}::timestamptz,
+            ${sessionStatus === "closed" ? "Demo recording session completed normally." : null},
+            ${scenario.createdAt}::timestamptz, ${scenario.createdAt}::timestamptz
+          )
+        `;
+      }
+
+      for (const [scenarioIndex, scenario] of catalog.scenarios.entries()) {
+        const person = requiredMapValue(people, scenario.participantKey, "participant");
+        const device = devicesByParticipant.get(person.key) ?? null;
+        const sizeBytes = 1_024 + scenarioIndex * 128;
+        const objectFilename = stableDemoUuid("object-file", scenario.key);
+        const objectKey = `participant/${person.id}/upload/${scenario.uploadIntentId}/${objectFilename}.mp4`;
+
+        if (scenario.uploadBatchId) {
+          const uploadBatchStatus = scenario.uploadBatchStatus;
+          if (!uploadBatchStatus) throw new Error(`Demo upload batch status missing: ${scenario.key}`);
+          await transaction`
+            insert into egocapture.upload_batches (
+              id, public_id, participant_id, status, created_at, completed_at
+            ) values (
+              ${scenario.uploadBatchId}::uuid, ${scenario.uploadBatchPublicId}, ${person.id}::uuid,
+              ${uploadBatchStatus}, ${scenario.createdAt}::timestamptz,
+              ${uploadBatchStatus === "open" ? null : addHours(scenario.createdAt, 4)}::timestamptz
+            )
+          `;
+        }
+
+        if (scenario.uploadIntentId && scenario.uploadBatchId) {
+          const transferStatus = scenario.transferStatus;
+          const metadataStatus = scenario.metadataStatus;
+          if (!transferStatus || !metadataStatus) throw new Error(`Demo upload state missing: ${scenario.key}`);
+          await transaction`
+            insert into egocapture.upload_intents (
+              id, public_id, batch_id, participant_id, original_filename, size_bytes,
+              content_type, extension, local_modified_at, object_key, claimed_session_id,
+              unable_to_determine, participant_note, fingerprint_v1, transfer_status,
+              metadata_status, expected_expires_at, verified_at, failure_code,
+              created_at, updated_at
+            ) values (
+              ${scenario.uploadIntentId}::uuid, ${scenario.uploadPublicId}, ${scenario.uploadBatchId}::uuid,
+              ${person.id}::uuid, ${`fixture-${scenario.key}.mp4`}, ${sizeBytes}, 'video/mp4', 'mp4',
+              ${scenario.createdAt}::timestamptz, ${objectKey}, ${scenario.sessionId}::uuid,
+              ${scenario.sessionId === null}, 'Fixture metadata only; no media object is shipped.',
+              ${fingerprint(scenario.key)}, ${transferStatus}, ${metadataStatus},
+              ${transferStatus === "expired" ? demoTime(anchor, -1) : demoTime(anchor, 365)}::timestamptz,
+              ${transferStatus === "verified" ? addHours(scenario.createdAt, 4) : null}::timestamptz,
+              ${transferStatus === "failed" ? "demo_fixture_upload_failure" : null},
+              ${scenario.createdAt}::timestamptz, ${scenario.createdAt}::timestamptz
+            )
+          `;
+        }
+
+        for (const [attemptIndex, status] of (scenario.uploadAttemptStatuses ?? []).entries()) {
+          const terminal = ["completed", "failed", "aborted", "expired"].includes(status);
+          await transaction`
+            insert into egocapture.upload_attempts (
+              id, public_id, upload_intent_id, attempt_number, status, bytes_uploaded,
+              expires_at, started_at, completed_at, error_code, created_at, updated_at
+            ) values (
+              ${scenario.uploadAttemptIds[attemptIndex]}::uuid, ${scenario.uploadAttemptPublicIds[attemptIndex]},
+              ${scenario.uploadIntentId}::uuid, ${attemptIndex + 1}, ${status},
+              ${status === "completed" ? sizeBytes : status === "paused" ? Math.floor(sizeBytes / 2) : 0},
+              ${status === "expired" ? demoTime(anchor, -1) : demoTime(anchor, 365)}::timestamptz,
+              ${addHours(scenario.createdAt, attemptIndex + 1)}::timestamptz,
+              ${terminal ? addHours(scenario.createdAt, attemptIndex + 2) : null}::timestamptz,
+              ${status === "failed" ? "demo_fixture_network_failure" : null},
+              ${addHours(scenario.createdAt, attemptIndex + 1)}::timestamptz,
+              ${addHours(scenario.createdAt, attemptIndex + 1)}::timestamptz
+            )
+          `;
+        }
+
+        if (scenario.videoAssetId && scenario.storedObjectId && scenario.assetFileId && scenario.uploadIntentId) {
+          const videoAssetStatus = scenario.videoAssetStatus;
+          if (!videoAssetStatus) throw new Error(`Demo video asset state missing: ${scenario.key}`);
+          await transaction`
+            insert into egocapture.stored_objects (
+              id, upload_intent_id, provider, bucket, object_key, size_bytes, etag,
+              verified_at, created_at, deleted_at, delete_reason
+            ) values (
+              ${scenario.storedObjectId}::uuid, ${scenario.uploadIntentId}::uuid, 'supabase',
+              'egocapture-raw', ${objectKey}, ${sizeBytes}, ${fingerprint(`etag/${scenario.key}`)},
+              ${addHours(scenario.createdAt, 4)}::timestamptz, ${addHours(scenario.createdAt, 4)}::timestamptz,
+              ${addHours(scenario.createdAt, 5)}::timestamptz, 'demo_fixture_no_media_object'
+            )
+          `;
+          await transaction`
+            insert into egocapture.video_assets (
+              id, public_id, upload_intent_id, participant_id, status, is_fixture, created_at, updated_at
+            ) values (
+              ${scenario.videoAssetId}::uuid, ${scenario.videoAssetPublicId}, ${scenario.uploadIntentId}::uuid,
+              ${person.id}::uuid, ${videoAssetStatus}, true,
+              ${addHours(scenario.createdAt, 4)}::timestamptz, ${addHours(scenario.createdAt, 4)}::timestamptz
+            )
+          `;
+          await transaction`
+            insert into egocapture.asset_files (id, video_asset_id, stored_object_id, file_role, created_at)
+            values (
+              ${scenario.assetFileId}::uuid, ${scenario.videoAssetId}::uuid,
+              ${scenario.storedObjectId}::uuid, 'source', ${addHours(scenario.createdAt, 4)}::timestamptz
+            )
+          `;
+        }
+
+        if (scenario.metadataAttemptId && scenario.videoAssetId) {
+          const metadataAttemptStatus = scenario.metadataAttemptStatus;
+          if (!metadataAttemptStatus) throw new Error(`Demo metadata attempt state missing: ${scenario.key}`);
+          await transaction`
+            insert into egocapture.metadata_attempts (
+              id, video_asset_id, attempt_number, parser_name, parser_version, status,
+              range_request_count, bytes_read, started_at, completed_at, error_code, created_at
+            ) values (
+              ${scenario.metadataAttemptId}::uuid, ${scenario.videoAssetId}::uuid, 1,
+              'demo_fixture_parser', '1.0', ${metadataAttemptStatus}, 2, 1024,
+              ${addHours(scenario.createdAt, 5)}::timestamptz, ${addHours(scenario.createdAt, 6)}::timestamptz,
+              ${metadataAttemptStatus === "failed" ? "demo_fixture_metadata_failure" : null},
+              ${addHours(scenario.createdAt, 5)}::timestamptz
+            )
+          `;
+        }
+
+        if (scenario.fileMetadataId && scenario.videoAssetId && scenario.metadataEvidenceId) {
+          const mismatch = scenario.kind === "device_mismatch";
+          await transaction`
+            insert into egocapture.video_file_metadata (
+              id, video_asset_id, parser_name, parser_version, container_format,
+              duration_ms, file_size_bytes, video_codec, width, height, frame_rate,
+              capture_time_source, capture_time_confidence, camera_manufacturer,
+              camera_model, gps_metadata_present, is_360, device_consistency, extracted_at
+            ) values (
+              ${scenario.fileMetadataId}::uuid, ${scenario.videoAssetId}::uuid,
+              'demo_fixture_parser', '1.0', 'MPEG-4', 600000, ${sizeBytes}, 'AVC',
+              1920, 1080, 30, 'container', 'high',
+              ${mismatch ? "GoPro" : device?.manufacturer ?? "Unknown"},
+              ${mismatch ? "HERO12 Black" : device?.model ?? "Unknown"}, false, false,
+              ${mismatch ? "model_mismatch" : scenario.metadataAttemptStatus === "partial" ? "partial_match" : "matched"},
+              ${addHours(scenario.createdAt, 6)}::timestamptz
+            )
+          `;
+          await transaction`
+            insert into egocapture.metadata_evidence (
+              id, video_asset_id, field_name, normalized_value, parser_name, source, created_at
+            ) values (
+              ${scenario.metadataEvidenceId}::uuid, ${scenario.videoAssetId}::uuid, 'camera_model',
+              ${transaction.json({ value: mismatch ? "HERO12 Black" : device?.model ?? "Unknown", fixture: true })},
+              'demo_fixture_parser', 'fixture metadata; no media bytes included',
+              ${addHours(scenario.createdAt, 6)}::timestamptz
+            )
+          `;
+        }
+
+        if (scenario.matchDecisionId && scenario.videoAssetId) {
+          const isHealthy = scenario.kind === "healthy";
+          const isClaim = scenario.kind === "pending_review";
+          await transaction`
+            insert into egocapture.match_decisions (
+              id, video_asset_id, claimed_session_id, resolved_session_id, resolved_device_id,
+              decision_type, reason, decided_by, decided_at, created_at
+            ) values (
+              ${scenario.matchDecisionId}::uuid, ${scenario.videoAssetId}::uuid,
+              ${isHealthy || isClaim ? scenario.sessionId : null}::uuid,
+              ${isHealthy || isClaim ? scenario.sessionId : null}::uuid,
+              ${isHealthy || isClaim ? device?.id ?? null : null}::uuid,
+              ${isHealthy ? "admin_confirmed" : isClaim ? "participant_claim" : "unmatched"},
+              ${isHealthy ? "Demo administrator confirmed session and device match." : null},
+              ${isClaim && person.profileId ? person.profileId : catalog.admin.profileId}::uuid,
+              ${addHours(scenario.createdAt, 7)}::timestamptz, ${addHours(scenario.createdAt, 7)}::timestamptz
+            )
+          `;
+        }
+
+        if (scenario.reviewId) {
+          const reviewStatus = scenario.reviewStatus;
+          if (!reviewStatus) throw new Error(`Demo review state missing: ${scenario.key}`);
+          const caseType = scenario.kind === "missing_upload" ? "missing"
+            : scenario.kind === "device_mismatch" ? "device_mismatch"
+              : scenario.kind === "failed_retry" || scenario.transferStatus === "failed" ? "upload_failed"
+                : scenario.metadataStatus === "failed" ? "metadata_failed" : "needs_review";
+          const terminal = reviewStatus === "resolved" || reviewStatus === "dismissed";
+          await transaction`
+            insert into egocapture.review_cases (
+              id, public_id, video_asset_id, assignment_id, upload_intent_id,
+              case_type, status, reason, resolution_reason, is_fixture,
+              created_at, updated_at, resolved_at
+            ) values (
+              ${scenario.reviewId}::uuid, ${scenario.reviewPublicId}, ${scenario.videoAssetId}::uuid,
+              ${scenario.assignmentId}::uuid, ${scenario.uploadIntentId}::uuid,
+              ${caseType}, ${reviewStatus}, ${`Demo ${scenario.kind} review fixture.`},
+              ${terminal ? "Demo review fixture reached its terminal state." : null}, true,
+              ${addHours(scenario.createdAt, 8)}::timestamptz, ${addHours(scenario.createdAt, 8)}::timestamptz,
+              ${terminal ? addHours(scenario.createdAt, 9) : null}::timestamptz
+            )
+          `;
+        }
+
+        await transaction`
+          insert into egocapture.audit_events (
+            id, actor_profile_id, actor_auth_user_id, action, entity_type,
+            entity_public_id, reason, request_id, after_values, metadata, created_at
+          ) values (
+            ${scenario.auditEventId}::uuid, ${catalog.admin.profileId}::uuid, ${adminUser.id}::uuid,
+            'demo.seed.scenario', 'assignment', ${scenario.assignmentPublicId},
+            'Deterministic demonstration fixture creation.', ${scenario.auditRequestId}::uuid,
+            ${transaction.json({ status: scenario.assignmentStatus })},
+            ${transaction.json({ fixture: true, scenarioKey: scenario.key, anchor })},
+            ${addHours(scenario.createdAt, 10)}::timestamptz
+          )
+        `;
+      }
+
+      if (scenarios.size !== catalog.scenarios.length) throw new Error("Demo scenario identities are not unique");
     });
 
-    console.log(`Demo Seed restored: Admin ${env.demoAdminUsername}; Participant ${publicIds.participant}; 4 TaskVersions; 7 Demo Fixture ReviewCases`);
+    return {
+      anchor: catalog.anchor,
+      participants: catalog.people.length,
+      participantLogins: participantUsers.size,
+      tasks: catalog.tasks.length,
+      scenarios: catalog.scenarios.length,
+    };
+  } catch (error) {
+    if (error instanceof Error && /duplicate key|violates.*constraint/i.test(error.message)) {
+      throw new Error(`HOLD: deterministic fixture identity collision (${error.message})`, { cause: error });
+    }
+    throw error;
   } finally {
     await db.end({ timeout: 2 });
   }
 }
 
-main().catch((error) => {
-  console.error(error instanceof Error ? `EgoCapture seed: ${error.message}` : error);
-  process.exitCode = 1;
-});
+async function main() {
+  const anchor = argumentValue("--anchor") ?? process.env.DEMO_SEED_ANCHOR ?? DEMO_SEED_ANCHOR;
+  const result = await seedDemoData(integrationEnvironment(), anchor);
+  console.log(
+    `Demo seed complete: anchor=${result.anchor}; participants=${result.participants}; participant_logins=${result.participantLogins}; tasks=${result.tasks}; scenarios=${result.scenarios}`,
+  );
+}
+
+if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
+  main().catch((error) => {
+    console.error(error instanceof Error ? `EgoCapture seed: ${error.message}` : error);
+    process.exitCode = 1;
+  });
+}

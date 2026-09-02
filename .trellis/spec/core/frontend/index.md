@@ -24,6 +24,7 @@ This directory contains guidelines for frontend development. Fill in each file w
 | [Participant Login Credentials](./participant-credential-contract.md) | Plaintext participant credential authority, sync, API, and test contract | Active |
 | [Lifecycle State Machines](./lifecycle-state-machine-contract.md) | XState, service transaction, PostgreSQL guard, upload actor, and test contract | Active |
 | [Internationalization](./i18n-contract.md) | Locale resolution, catalogs, formatting, error/status mapping, and test contract | Active |
+| [Deterministic Demo Data Refresh](./demo-data-refresh-contract.md) | Guarded PostgreSQL/Auth/Storage reset, deterministic catalog, and acceptance contract | Active |
 
 ---
 

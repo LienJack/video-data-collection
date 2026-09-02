@@ -13,11 +13,15 @@ function readEnv(file: string) {
   try { return parseEnv(readFileSync(file, "utf8")); } catch { return {}; }
 }
 
-export function integrationEnvironment() {
+function mergedIntegrationEnvironment() {
   const root = process.cwd();
   const local = readEnv(path.join(root, ".env.development.local"));
-  const profile = local.EGOCAPTURE_DEV_PROFILE || "local";
-  const merged = { ...readEnv(path.join(root, ".runtime", profile, "app.env")), ...process.env };
+  const profile = process.env.EGOCAPTURE_DEV_PROFILE || local.EGOCAPTURE_DEV_PROFILE || "local";
+  return { ...readEnv(path.join(root, ".runtime", profile, "app.env")), ...process.env };
+}
+
+export function integrationEnvironment() {
+  const merged = mergedIntegrationEnvironment();
   for (const key of [
     "DATABASE_URL",
     "NEXT_PUBLIC_SUPABASE_URL",
@@ -49,6 +53,18 @@ export function integrationEnvironment() {
     demoAdminEmail: merged.DEMO_ADMIN_EMAIL!,
     demoAdminPassword: merged.DEMO_ADMIN_PASSWORD!,
     demoParticipantPassword: merged.DEMO_PARTICIPANT_PASSWORD!,
+  };
+}
+
+export function demoRefreshEnvironment() {
+  const integration = integrationEnvironment();
+  const merged = mergedIntegrationEnvironment();
+  if (!merged.EGOCAPTURE_ENVIRONMENT_ID) throw new Error("缺少 EGOCAPTURE_ENVIRONMENT_ID");
+  return {
+    ...integration,
+    environmentId: merged.EGOCAPTURE_ENVIRONMENT_ID,
+    resetAllowedMarker: merged.EGOCAPTURE_DEMO_RESET_ALLOWED,
+    seedAnchor: merged.DEMO_SEED_ANCHOR,
   };
 }
 
