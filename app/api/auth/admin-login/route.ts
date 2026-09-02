@@ -2,13 +2,16 @@ import { z } from "zod";
 import { apiError, apiSuccess, hasTrustedOrigin, requestId } from "@/src/server/api";
 import { database } from "@/src/server/database";
 import { createSupabaseServerClient } from "@/src/server/supabase/server";
+import { resolveAdminEmail } from "@/src/domain/admin-identity";
+import { serverEnvironment } from "@/src/server/env";
 
 export const runtime = "nodejs";
 
 const loginSchema = z.object({
-  email: z.string().trim().email().max(254),
-  password: z.string().min(10).max(128),
-});
+  identity: z.string().trim().min(1).max(254).optional(),
+  email: z.string().trim().email().max(254).optional(),
+  password: z.string().min(8).max(128),
+}).refine((value) => Boolean(value.identity || value.email));
 
 export async function POST(request: Request) {
   const id = requestId(request);
@@ -16,8 +19,19 @@ export async function POST(request: Request) {
   const parsed = loginSchema.safeParse(await request.json().catch(() => null));
   if (!parsed.success) return apiError("VALIDATION_FAILED", "登录信息格式不正确", id, 422, parsed.error);
 
+  const environment = serverEnvironment();
+  const email = resolveAdminEmail(parsed.data.identity || parsed.data.email || "", {
+    username: environment.DEMO_ADMIN_USERNAME,
+    email: environment.DEMO_ADMIN_EMAIL,
+  });
+  const validEmail = z.string().email().safeParse(email);
+  if (!validEmail.success) return apiError("INVALID_CREDENTIALS", "账号或密码不正确", id, 401);
+
   const supabase = await createSupabaseServerClient();
-  const { data, error } = await supabase.auth.signInWithPassword(parsed.data);
+  const { data, error } = await supabase.auth.signInWithPassword({
+    email: validEmail.data,
+    password: parsed.data.password,
+  });
   if (error || !data.user) return apiError("INVALID_CREDENTIALS", "账号或密码不正确", id, 401);
 
   const db = database();

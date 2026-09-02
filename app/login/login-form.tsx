@@ -15,7 +15,7 @@ export function LoginForm() {
     setError("");
     const form = new FormData(event.currentTarget);
     const body = mode === "admin"
-      ? { email: form.get("identity"), password: form.get("password") }
+      ? { identity: form.get("identity"), password: form.get("password") }
       : { participantPublicId: form.get("identity"), password: form.get("password") };
     try {
       const response = await fetch(`/api/auth/${mode}-login`, {
@@ -58,16 +58,16 @@ export function LoginForm() {
       <form className="mt-7 space-y-5" onSubmit={submit}>
         <label className="block">
           <span className="mb-2 block text-xs font-bold uppercase tracking-[0.16em]">
-            {mode === "participant" ? "Participant ID" : "Admin Email"}
+            {mode === "participant" ? "Participant ID" : "Admin Account"}
           </span>
           <input
             key={mode}
             name="identity"
             className="w-full border border-[var(--line)] bg-white/70 px-4 py-3.5 outline-none transition"
-            placeholder={mode === "participant" ? "PT-XXXXXXXX" : "admin@example.com"}
-            type={mode === "participant" ? "text" : "email"}
+            placeholder={mode === "participant" ? "PT-XXXXXXXX" : "admin"}
+            type="text"
             autoCapitalize="none"
-            autoComplete={mode === "participant" ? "username" : "email"}
+            autoComplete="username"
             required
           />
         </label>
@@ -77,8 +77,8 @@ export function LoginForm() {
             name="password"
             className="w-full border border-[var(--line)] bg-white/70 px-4 py-3.5 outline-none transition"
             type="password"
-            placeholder="至少 10 位"
-            minLength={10}
+            placeholder={mode === "participant" ? "至少 10 位" : "至少 8 位"}
+            minLength={mode === "participant" ? 10 : 8}
             maxLength={128}
             autoComplete="current-password"
             required

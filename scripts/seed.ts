@@ -64,8 +64,6 @@ const publicIds = {
   reviews: ["RV-23456782", "RV-23456783", "RV-23456784", "RV-23456785", "RV-23456786", "RV-23456787", "RV-23456788"],
 } as const;
 
-const adminEmail = "admin.demo@egocapture.invalid";
-
 function instructions(title: string, description: string): TaskInstructions {
   const value = structuredClone(defaultTaskInstructions);
   value.title = title;
@@ -131,7 +129,7 @@ async function main() {
   try {
     const users = await allUsers(supabase);
     const [adminUser, participantUser] = await Promise.all([
-      ensureAuthUser(supabase, users, adminEmail, env.demoAdminPassword, "admin"),
+      ensureAuthUser(supabase, users, env.demoAdminEmail, env.demoAdminPassword, "admin"),
       ensureAuthUser(supabase, users, internalParticipantEmail(publicIds.participant), env.demoParticipantPassword, "participant"),
     ]);
 
@@ -431,7 +429,7 @@ async function main() {
       }
     });
 
-    console.log(`Demo Seed restored: Admin ${adminEmail}; Participant ${publicIds.participant}; 4 TaskVersions; 7 Demo Fixture ReviewCases`);
+    console.log(`Demo Seed restored: Admin ${env.demoAdminUsername}; Participant ${publicIds.participant}; 4 TaskVersions; 7 Demo Fixture ReviewCases`);
   } finally {
     await db.end({ timeout: 2 });
   }

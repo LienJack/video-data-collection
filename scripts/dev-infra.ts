@@ -155,6 +155,8 @@ async function createSecrets(profile: Profile) {
     "MARKER_KEY_ID=marker-key-v1",
     `STUDY_SERIAL_HMAC_KEY=${randomBytes(32).toString("base64url")}`,
     `CRON_SECRET=${randomBytes(32).toString("base64url")}`,
+    "DEMO_ADMIN_USERNAME=admin",
+    "DEMO_ADMIN_EMAIL=admin.demo@egocapture.invalid",
     `DEMO_ADMIN_PASSWORD=${randomBytes(18).toString("base64url")}`,
     `DEMO_PARTICIPANT_PASSWORD=${randomBytes(18).toString("base64url")}`,
   ].join("\n") + "\n";

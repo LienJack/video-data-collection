@@ -26,7 +26,7 @@ async function loginParticipant(page: Page, participantPublicId: string, passwor
 async function loginAdmin(page: Page, password: string) {
   await page.goto("/login");
   await page.getByRole("tab", { name: "管理员" }).click();
-  await page.getByLabel("Admin Email").fill("admin.demo@egocapture.invalid");
+  await page.getByLabel("Admin Account").fill("admin");
   await page.getByLabel("Password").fill(password);
   await page.getByRole("button", { name: "进入管理控制台" }).click();
   await expect(page).toHaveURL(/\/admin\/dashboard$/);

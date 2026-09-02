@@ -33,7 +33,9 @@ const serverEnvironmentSchema = browserEnvironmentSchema.extend({
   MARKER_KEY_ID: z.string().min(1).max(80),
   STUDY_SERIAL_HMAC_KEY: z.string().min(32),
   CRON_SECRET: z.string().min(32),
-  DEMO_ADMIN_PASSWORD: z.string().min(10),
+  DEMO_ADMIN_USERNAME: z.string().trim().min(1).max(64),
+  DEMO_ADMIN_EMAIL: z.string().trim().email().max(254),
+  DEMO_ADMIN_PASSWORD: z.string().min(8),
   DEMO_PARTICIPANT_PASSWORD: z.string().min(10),
 }).superRefine((environment, context) => {
   if (environment.STORAGE_UPLOAD_AUTH_MODE === "nas_scoped_jwt" && !environment.SUPABASE_JWT_SECRET) {

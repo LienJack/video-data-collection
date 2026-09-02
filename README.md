@@ -11,7 +11,7 @@ EgoCapture 是一套第一人称视频数据采集与人工复核系统。它把
 | Public URL | `WAITING_EXTERNAL`（尚未部署） |
 | Repository | [LienJack/video-data-collection](https://github.com/LienJack/video-data-collection) |
 | Deployed Commit | `WAITING_EXTERNAL` |
-| Admin Demo | `admin.demo@egocapture.invalid`；密码来自 `DEMO_ADMIN_PASSWORD` |
+| Admin Demo | 账号来自 `DEMO_ADMIN_USERNAME`（默认 `admin`）；密码来自 `DEMO_ADMIN_PASSWORD` |
 | Participant Demo | `PT-23456789`；密码来自 `DEMO_PARTICIPANT_PASSWORD` |
 | Supabase Project / Region | `WAITING_EXTERNAL` |
 | Demo Upload Limit | `50,000,000 bytes` / 文件，5 文件 / 批次 |
