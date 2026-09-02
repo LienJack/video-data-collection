@@ -8,7 +8,7 @@
 
 <!-- @@@auto:current-status -->
 - **Active File**: `journal-1.md`
-- **Total Sessions**: 10
+- **Total Sessions**: 11
 - **Last Active**: 2026-09-03
 <!-- @@@/auto:current-status -->
 
@@ -19,7 +19,7 @@
 <!-- @@@auto:active-documents -->
 | File | Lines | Status |
 |------|-------|--------|
-| `journal-1.md` | ~229 | Active |
+| `journal-1.md` | ~251 | Active |
 <!-- @@@/auto:active-documents -->
 
 ---
@@ -29,6 +29,7 @@
 <!-- @@@auto:session-history -->
 | # | Date | Title | Commits | Branch |
 |---|------|-------|---------|--------|
+| 11 | 2026-09-03 | Deterministic multi-region demo data | `070462c` | `codex/egocapture-mvp` |
 | 10 | 2026-09-03 | Harden state machine registry RLS | `c2228c9` | `codex/egocapture-mvp` |
 | 9 | 2026-09-03 | Complete zh en ja internationalization | `0145783` | `codex/egocapture-mvp` |
 | 8 | 2026-09-03 | Implement XState lifecycle state machines | `db04e24`, `1aa4644`, `ef8c38e` | `codex/egocapture-mvp` |

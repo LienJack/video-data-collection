@@ -227,3 +227,25 @@ Added migration 0024 to enable RLS on the lifecycle registry without policies or
 ### Status
 
 [OK] **Completed**
+
+
+## Session 11: Deterministic multi-region demo data
+
+**Date**: 2026-09-03
+**Task**: Deterministic multi-region demo data
+**Package**: admin-web
+**Branch**: `codex/egocapture-mvp`
+
+### Summary
+
+Added guarded dedicated-environment refresh across PostgreSQL, Supabase Auth and Storage; seeded stable CN/US/JP fixtures and scenario coverage; verified repeatable NAS digest, RLS, Chromium/WebKit flows, static checks and preserved unrelated parallel UI work.
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `070462c` | (see git log) |
+
+### Status
+
+[OK] **Completed**
