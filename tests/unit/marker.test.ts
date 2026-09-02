@@ -21,7 +21,7 @@ describe("signed session marker", () => {
     await expect(verifyMarkerJws(jws, await exportJWK(publicKey), "marker-key-v1")).resolves.toEqual(payload);
     expect(markerUri(jws)).toBe(`egocapture://marker/${jws}`);
     expect(markerShortCode(payload.session_public_id)).toBe("AB234567");
-    expect(JSON.stringify(payload)).not.toMatch(/email|name|study/i);
+    expect(JSON.stringify(payload)).not.toMatch(/email|name/i);
   });
 
   it("rejects tampering and an unexpected key id", async () => {

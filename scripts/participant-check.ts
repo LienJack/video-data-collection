@@ -81,8 +81,6 @@ async function main() {
   const adminEmail = `participant-check-${suffix}@demo.invalid`;
   const adminPassword = randomBytes(24).toString("base64url");
   const participantPassword = randomBytes(24).toString("base64url");
-  const studyId = randomUUID();
-  const studyPublicId = `ST-${suffix.replaceAll("-", "").slice(0, 8).toUpperCase().replace(/[01IO]/g, "2")}`;
   const adminJar = new CookieJar();
   const participantJar = new CookieJar();
   let adminUserId: string | undefined;
@@ -94,24 +92,9 @@ async function main() {
     });
     if (adminError || !adminUser.user) throw adminError || new Error("Admin test user creation failed");
     adminUserId = adminUser.user.id;
-    const [profile] = await db<{ id: string }[]>`
+    await db`
       insert into egocapture.profiles (auth_user_id, role, display_name)
-      values (${adminUserId}::uuid, 'admin', 'Participant Check Admin') returning id
-    `;
-    await db`
-      insert into egocapture.studies (id, public_id, slug, name, serial_hmac_salt, is_demo)
-      values (
-        ${studyId}::uuid,
-        ${studyPublicId},
-        ${`participant-check-${suffix}`},
-        'Participant Integration Fixture',
-        'participant-check-salt',
-        true
-      )
-    `;
-    await db`
-      insert into egocapture.study_memberships (study_id, profile_id, role)
-      values (${studyId}::uuid, ${profile.id}::uuid, 'owner')
+      values (${adminUserId}::uuid, 'admin', 'Participant Check Admin')
     `;
 
     const login = await api<{ data?: { redirectTo: string } }>(env.adminSiteUrl, "/api/auth/admin-login", {
@@ -122,7 +105,7 @@ async function main() {
     assert(adminJar.header(), "Admin login did not set SSR cookies");
 
     const participantBody = {
-      studyPublicId, displayAlias: "Participant Check", managementEmail: null,
+      displayAlias: "Participant Check", managementEmail: null,
       locale: "zh-CN", timezone: "Asia/Shanghai", countryRegion: "CN",
       consentVersion: "check-v1", notes: "Synthetic participant integration check",
     };
@@ -389,20 +372,11 @@ async function main() {
     );
   } finally {
     try {
-      const [evidence] = await db<{ auditCount: number; hasParticipant: boolean }[]>`
-        select
-          (select count(*)::integer from egocapture.audit_events where study_id = ${studyId}::uuid) as audit_count,
-          exists(select 1 from egocapture.participants where study_id = ${studyId}::uuid) as has_participant
-      `;
-      if (evidence.auditCount > 0 || evidence.hasParticipant) {
-        await db`update egocapture.studies set is_demo = true where id = ${studyId}::uuid`;
-        await db`update egocapture.participants set is_fixture = true where study_id = ${studyId}::uuid`;
-        await db`update egocapture.devices set is_fixture = true where study_id = ${studyId}::uuid`;
-      } else {
-        await db`delete from egocapture.study_memberships where study_id = ${studyId}::uuid`;
-        await db`delete from egocapture.studies where id = ${studyId}::uuid`;
-        if (adminUserId) await db`delete from egocapture.profiles where auth_user_id = ${adminUserId}::uuid`;
-        if (adminUserId) await supabase.auth.admin.deleteUser(adminUserId);
+      if (participantPublicId || revokedParticipantPublicId) {
+        await db`
+          update egocapture.participants set is_fixture = true
+          where public_id in (${participantPublicId ?? ""}, ${revokedParticipantPublicId ?? ""})
+        `;
       }
     } finally {
       await db.end({ timeout: 2 });

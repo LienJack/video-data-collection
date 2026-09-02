@@ -21,7 +21,7 @@ export default async function SessionMarkerPage({ params }: { params: Promise<{ 
       </header>
       <section className="surface-solid mt-8 p-4 sm:p-8">
         <div className="rounded-[20px] bg-white p-3 sm:p-5"><Image src={marker.qrDataUrl} alt={`Recording Session ${marker.sessionPublicId} 的签名二维码`} width={900} height={900} unoptimized className="mx-auto aspect-square w-full max-w-xl" /></div>
-        <div className="mt-6 border-t border-[var(--line)] pt-6 text-center"><p className="page-kicker text-[var(--muted)]">Short code</p><p className="display mt-2 text-5xl font-semibold tracking-[0.12em] sm:text-6xl">{marker.shortCode}</p><p className="mx-auto mt-4 max-w-xl text-xs leading-6 text-[var(--muted)]">二维码仅包含 Session、Assignment、Device Public ID、时间、nonce 和 Ed25519 签名，不含姓名、邮箱或 Study。</p></div>
+        <div className="mt-6 border-t border-[var(--line)] pt-6 text-center"><p className="page-kicker text-[var(--muted)]">Short code</p><p className="display mt-2 text-5xl font-semibold tracking-[0.12em] sm:text-6xl">{marker.shortCode}</p><p className="mx-auto mt-4 max-w-xl text-xs leading-6 text-[var(--muted)]">二维码仅包含 Session、Assignment、Device Public ID、时间、nonce 和 Ed25519 签名，不含姓名或邮箱。</p></div>
       </section>
       <MarkerControls sessionPublicId={marker.sessionPublicId} qrDataUrl={marker.qrDataUrl} markerAcknowledgedAt={marker.markerAcknowledgedAt} sessionStatus={marker.sessionStatus} />
     </main>

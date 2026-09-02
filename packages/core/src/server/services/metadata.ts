@@ -23,8 +23,6 @@ const RETRY_COOLDOWN_MS = 30_000;
 type MetadataAuthority = {
   uploadIntentId: string;
   uploadPublicId: string;
-  studyId: string;
-  studySerialHmacSalt: string;
   participantId: string;
   videoAssetId: string;
   videoAssetPublicId: string;
@@ -69,8 +67,6 @@ async function metadataAuthority(viewer: Viewer, uploadPublicId: string): Promis
     select
       intent.id as upload_intent_id,
       intent.public_id as upload_public_id,
-      intent.study_id,
-      study.serial_hmac_salt as study_serial_hmac_salt,
       intent.participant_id,
       intent.transfer_status,
       intent.metadata_status,
@@ -86,7 +82,6 @@ async function metadataAuthority(viewer: Viewer, uploadPublicId: string): Promis
       expected_device.serial_hmac as declared_serial_hmac
     from egocapture.upload_intents intent
     join egocapture.participants participant on participant.id = intent.participant_id
-    join egocapture.studies study on study.id = intent.study_id
     join egocapture.video_assets asset on asset.upload_intent_id = intent.id
     join egocapture.asset_files asset_file on asset_file.video_asset_id = asset.id and asset_file.file_role = 'source'
     join egocapture.stored_objects object on object.id = asset_file.stored_object_id
@@ -97,12 +92,7 @@ async function metadataAuthority(viewer: Viewer, uploadPublicId: string): Promis
       and (
         (${viewer.role} = 'participant' and participant.auth_user_id = ${viewer.authUserId}::uuid)
         or
-        (${viewer.role} = 'admin' and exists (
-          select 1 from egocapture.study_memberships membership
-          where membership.study_id = intent.study_id
-            and membership.profile_id = ${viewer.profileId}::uuid
-            and membership.status = 'active'
-        ))
+        ${viewer.role} = 'admin'
       )
     limit 1
   `;
@@ -309,10 +299,10 @@ async function finishSuccess(input: {
     if (mismatch) {
       await transaction`
         insert into egocapture.review_cases (
-          public_id, study_id, video_asset_id, case_type, reason, is_fixture
+          public_id, video_asset_id, case_type, reason, is_fixture
         ) select
-          ${createPublicId("RV")}, ${input.authority.studyId}::uuid,
-          ${input.authority.videoAssetId}::uuid, 'device_mismatch', ${consistency},
+          ${createPublicId("RV")}, ${input.authority.videoAssetId}::uuid,
+          'device_mismatch', ${consistency},
           ${input.authority.assetIsFixture}
         where not exists (
           select 1 from egocapture.review_cases
@@ -335,7 +325,6 @@ async function finishSuccess(input: {
         and case_type = 'metadata_failed' and status in ('open', 'in_review')
     `;
     await writeAudit(transaction, {
-      studyId: input.authority.studyId,
       actorProfileId: input.viewer.profileId,
       actorAuthUserId: input.viewer.authUserId,
       action: "metadata.extracted",
@@ -395,10 +384,10 @@ async function finishFailure(input: {
     if (failure.status === "failed") {
       await transaction`
         insert into egocapture.review_cases (
-          public_id, study_id, video_asset_id, case_type, reason, is_fixture
+          public_id, video_asset_id, case_type, reason, is_fixture
         ) select
-          ${createPublicId("RV")}, ${input.authority.studyId}::uuid,
-          ${input.authority.videoAssetId}::uuid, 'metadata_failed', ${failure.code},
+          ${createPublicId("RV")}, ${input.authority.videoAssetId}::uuid,
+          'metadata_failed', ${failure.code},
           ${input.authority.assetIsFixture}
         where not exists (
           select 1 from egocapture.review_cases
@@ -408,7 +397,6 @@ async function finishFailure(input: {
       `;
     }
     await writeAudit(transaction, {
-      studyId: input.authority.studyId,
       actorProfileId: input.viewer.profileId,
       actorAuthUserId: input.viewer.authUserId,
       action: "metadata.extraction_failed",
@@ -455,7 +443,7 @@ export async function extractUploadMetadata(viewer: Viewer, uploadPublicId: stri
       reader,
       extension: authority.extension,
       localModifiedAt: authority.localModifiedAt?.toISOString() ?? null,
-      serialHmacKey: `${serverEnvironment().STUDY_SERIAL_HMAC_KEY}:${authority.studySerialHmacSalt}`,
+      serialHmacKey: serverEnvironment().DEVICE_SERIAL_HMAC_KEY,
     });
     return await finishSuccess({
       viewer,

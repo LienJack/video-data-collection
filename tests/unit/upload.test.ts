@@ -33,12 +33,11 @@ describe("upload domain", () => {
 
   it("creates an opaque object key without display identifiers", () => {
     const objectKey = createUploadObjectKey({
-      studyId: "11111111-1111-4111-8111-111111111111",
       participantId: "22222222-2222-4222-8222-222222222222",
       uploadId: "33333333-3333-4333-8333-333333333333",
       extension: "mp4",
     });
-    expect(objectKey).toMatch(/^study\/11111111-1111-4111-8111-111111111111\/participant\/22222222-2222-4222-8222-222222222222\/upload\/33333333-3333-4333-8333-333333333333\/[0-9a-f-]{36}\.mp4$/);
+    expect(objectKey).toMatch(/^participant\/22222222-2222-4222-8222-222222222222\/upload\/33333333-3333-4333-8333-333333333333\/[0-9a-f-]{36}\.mp4$/);
     expect(objectKey).not.toMatch(/PT-|clip|alias/i);
   });
 
@@ -49,9 +48,9 @@ describe("upload domain", () => {
   });
 
   it("uses only allowlisted TUS metadata", () => {
-    expect(uploadMetadata("study/a/video.mp4", "video/mp4")).toEqual({
+    expect(uploadMetadata("participant/a/video.mp4", "video/mp4")).toEqual({
       bucketName: "egocapture-raw",
-      objectName: "study/a/video.mp4",
+      objectName: "participant/a/video.mp4",
       contentType: "video/mp4",
       cacheControl: "3600",
     });

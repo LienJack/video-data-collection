@@ -21,35 +21,32 @@ async function main() {
   try {
     await db.begin(async (transaction) => {
       await transaction`
-        insert into egocapture.upload_batches (id, public_id, study_id, participant_id)
+        insert into egocapture.upload_batches (id, public_id, participant_id)
         values (
           ${batchId}::uuid, ${batchPublicId},
-          '10000000-0000-4000-8000-000000000001'::uuid,
           '30000000-0000-4000-8000-000000000001'::uuid
         )
       `;
       await transaction`
         insert into egocapture.upload_intents (
-          id, public_id, batch_id, study_id, participant_id, original_filename,
+          id, public_id, batch_id, participant_id, original_filename,
           size_bytes, content_type, extension, object_key, unable_to_determine,
           fingerprint_v1, transfer_status, metadata_status, expected_expires_at,
           created_at, updated_at
         ) values
         (
           ${expiredId}::uuid, ${expiredPublicId}, ${batchId}::uuid,
-          '10000000-0000-4000-8000-000000000001'::uuid,
           '30000000-0000-4000-8000-000000000001'::uuid,
           'cron-expired.mp4', 1000, 'video/mp4', 'mp4',
-          ${`study/10000000-0000-4000-8000-000000000001/participant/30000000-0000-4000-8000-000000000001/upload/${expiredId}/${randomUUID()}.mp4`},
+          ${`participant/30000000-0000-4000-8000-000000000001/upload/${expiredId}/${randomUUID()}.mp4`},
           true, ${"c".repeat(64)}, 'created', 'pending', now() - interval '1 hour',
           now() - interval '2 hours', now() - interval '2 hours'
         ),
         (
           ${reconcilingId}::uuid, ${reconcilingPublicId}, ${batchId}::uuid,
-          '10000000-0000-4000-8000-000000000001'::uuid,
           '30000000-0000-4000-8000-000000000001'::uuid,
           'cron-reconciling.mp4', 1000, 'video/mp4', 'mp4',
-          ${`study/10000000-0000-4000-8000-000000000001/participant/30000000-0000-4000-8000-000000000001/upload/${reconcilingId}/${randomUUID()}.mp4`},
+          ${`participant/30000000-0000-4000-8000-000000000001/upload/${reconcilingId}/${randomUUID()}.mp4`},
           true, ${"d".repeat(64)}, 'reconciling', 'pending', now() + interval '1 day',
           now() - interval '2 hours', now() - interval '2 hours'
         )

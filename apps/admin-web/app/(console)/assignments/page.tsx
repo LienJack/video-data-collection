@@ -9,9 +9,9 @@ export const dynamic = "force-dynamic";
 export default async function AssignmentsPage({ searchParams }: { searchParams: Promise<Record<string, string | string[] | undefined>> }) {
   const viewer = await requireAdmin();
   const params = await searchParams;
-  const query = assignmentListSchema.parse({ search: typeof params.search === "string" && params.search ? params.search : undefined, studyPublicId: typeof params.studyPublicId === "string" && params.studyPublicId ? params.studyPublicId : undefined, status: typeof params.status === "string" && params.status ? params.status : undefined, cursor: typeof params.cursor === "string" && params.cursor ? params.cursor : undefined, limit: 25 });
+  const query = assignmentListSchema.parse({ search: typeof params.search === "string" && params.search ? params.search : undefined, status: typeof params.status === "string" && params.status ? params.status : undefined, cursor: typeof params.cursor === "string" && params.cursor ? params.cursor : undefined, limit: 25 });
   const result = await listAssignments(viewer, query);
-  const next = new URLSearchParams({ ...(query.search ? { search: query.search } : {}), ...(query.status ? { status: query.status } : {}), ...(query.studyPublicId ? { studyPublicId: query.studyPublicId } : {}), ...(result.nextCursor ? { cursor: result.nextCursor } : {}) });
+  const next = new URLSearchParams({ ...(query.search ? { search: query.search } : {}), ...(query.status ? { status: query.status } : {}), ...(result.nextCursor ? { cursor: result.nextCursor } : {}) });
   return (
     <main className="app-page">
       <header className="flex flex-wrap items-end justify-between gap-6 border-b border-[var(--line)] pb-7">
@@ -24,7 +24,7 @@ export default async function AssignmentsPage({ searchParams }: { searchParams: 
         <button className="primary-action">筛选</button>
       </form>
       <div className="grid gap-4 xl:grid-cols-2">
-        {result.items.map((assignment) => <article key={assignment.publicId} className="surface-solid p-6"><div className="flex flex-wrap justify-between gap-3"><p className="text-xs font-bold text-[var(--signal)]">{assignment.publicId}</p><div className="flex gap-2"><span className="status-pill">{assignment.status}</span>{assignment.isMissing ? <span className="status-pill">Missing</span> : null}</div></div><h2 className="display mt-4 text-2xl font-semibold">{assignment.taskTitle} · v{assignment.taskVersion}</h2><p className="mt-3 text-sm">{assignment.participantAlias} · {assignment.participantPublicId}</p><p className="mt-2 text-xs text-[var(--muted)]">Due {assignment.dueAt.toLocaleString("zh-CN")} · {assignment.studyPublicId}</p><AssignmentActions assignmentPublicId={assignment.publicId} status={assignment.status} /></article>)}
+        {result.items.map((assignment) => <article key={assignment.publicId} className="surface-solid p-6"><div className="flex flex-wrap justify-between gap-3"><p className="text-xs font-bold text-[var(--signal)]">{assignment.publicId}</p><div className="flex gap-2"><span className="status-pill">{assignment.status}</span>{assignment.isMissing ? <span className="status-pill">Missing</span> : null}</div></div><h2 className="display mt-4 text-2xl font-semibold">{assignment.taskTitle} · v{assignment.taskVersion}</h2><p className="mt-3 text-sm">{assignment.participantAlias} · {assignment.participantPublicId}</p><p className="mt-2 text-xs text-[var(--muted)]">Due {assignment.dueAt.toLocaleString("zh-CN")}</p><AssignmentActions assignmentPublicId={assignment.publicId} status={assignment.status} /></article>)}
       </div>
       {result.items.length === 0 ? <p className="empty-state">尚无 Assignment。</p> : null}
       {result.nextCursor ? <Link href={`?${next.toString()}`} className="secondary-action mt-8">下一页 →</Link> : null}

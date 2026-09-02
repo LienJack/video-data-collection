@@ -16,8 +16,6 @@ async function main() {
   const adminEmail = `task-check-${suffix}@demo.invalid`;
   const adminPassword = randomBytes(24).toString("base64url");
   const participantPassword = randomBytes(24).toString("base64url");
-  const studyId = randomUUID();
-  const studyPublicId = createPublicId("ST");
   const participantId = randomUUID();
   const participantPublicId = createPublicId("PT");
   const deviceId = randomUUID();
@@ -48,19 +46,11 @@ async function main() {
       values (${participantUserId}::uuid, 'participant', 'Task Integration Fixture Participant') returning id
     `;
     await db`
-      insert into egocapture.studies (id, public_id, slug, name, serial_hmac_salt, is_demo)
-      values (${studyId}::uuid, ${studyPublicId}, ${`task-check-${suffix}`}, 'Task Integration Fixture', 'task-check-salt', true)
-    `;
-    await db`
-      insert into egocapture.study_memberships (study_id, profile_id, role)
-      values (${studyId}::uuid, ${adminProfile.id}::uuid, 'owner')
-    `;
-    await db`
       insert into egocapture.participants (
-        id, public_id, study_id, auth_user_id, display_alias, status, consent_status,
+        id, public_id, auth_user_id, display_alias, status, consent_status,
         consent_version, is_fixture, created_by
       ) values (
-        ${participantId}::uuid, ${participantPublicId}, ${studyId}::uuid, ${participantUserId}::uuid,
+        ${participantId}::uuid, ${participantPublicId}, ${participantUserId}::uuid,
         'Task Integration Participant', 'active', 'valid', 'task-check-v1', true, ${adminProfile.id}::uuid
       )
     `;
@@ -70,9 +60,9 @@ async function main() {
     `;
     await db`
       insert into egocapture.devices (
-        id, public_id, study_id, manufacturer, model, device_type, serial_hmac, status, is_fixture
+        id, public_id, manufacturer, model, device_type, serial_hmac, status, is_fixture
       ) values (
-        ${deviceId}::uuid, ${devicePublicId}, ${studyId}::uuid, 'Synthetic', 'Task Check Cam',
+        ${deviceId}::uuid, ${devicePublicId}, 'Synthetic', 'Task Check Cam',
         'action_camera', ${createHash("sha256").update(suffix).digest("hex")}, 'active', true
       )
     `;
@@ -94,14 +84,14 @@ async function main() {
     const created = await api<{ data?: { taskPublicId: string; updatedAt: string } }>(env.adminSiteUrl, "/api/admin/tasks", {
       method: "POST", jar: adminJar,
       headers: { "content-type": "application/json", "idempotency-key": taskKey },
-      body: JSON.stringify({ studyPublicId, instructions: v1Instructions }),
+      body: JSON.stringify({ instructions: v1Instructions }),
     });
     assert(created.response.status === 201 && created.payload.data?.taskPublicId, "Task creation failed");
     taskPublicId = created.payload.data.taskPublicId;
     const replay = await api<{ data?: { taskPublicId: string } }>(env.adminSiteUrl, "/api/admin/tasks", {
       method: "POST", jar: adminJar,
       headers: { "content-type": "application/json", "idempotency-key": taskKey },
-      body: JSON.stringify({ studyPublicId, instructions: v1Instructions }),
+      body: JSON.stringify({ instructions: v1Instructions }),
     });
     assert(replay.payload.data?.taskPublicId === taskPublicId, "Task idempotency replay diverged");
     await db`update egocapture.tasks set is_fixture = true where public_id = ${taskPublicId}`;
@@ -200,7 +190,8 @@ async function main() {
       select
         (select count(*)::integer from egocapture.task_versions version where version.task_id = task.id) as version_count,
         assignment.acknowledged_content_hash as acknowledged_hash,
-        (select count(*)::integer from egocapture.audit_events audit where audit.study_id = ${studyId}::uuid) as audit_count
+        (select count(*)::integer from egocapture.audit_events audit
+          where audit.entity_public_id in (${taskPublicId}, ${assignmentPublicId})) as audit_count
       from egocapture.tasks task
       join egocapture.task_versions version on version.task_id = task.id and version.version = 1
       join egocapture.assignments assignment on assignment.task_version_id = version.id
@@ -215,20 +206,17 @@ async function main() {
   } finally {
     try {
       const [evidence] = await db<{ retainFixture: boolean }[]>`
-        select exists(select 1 from egocapture.participants where study_id = ${studyId}::uuid)
-          or exists(select 1 from egocapture.tasks where study_id = ${studyId}::uuid)
-          or exists(select 1 from egocapture.audit_events where study_id = ${studyId}::uuid)
-          or exists(select 1 from egocapture.studies where id = ${studyId}::uuid)
+        select exists(select 1 from egocapture.participants where public_id = ${participantPublicId})
+          or exists(select 1 from egocapture.tasks where public_id = ${taskPublicId ?? ""})
           or exists(
             select 1 from egocapture.profiles
             where auth_user_id in (${adminUserId ?? null}::uuid, ${participantUserId ?? null}::uuid)
           ) as retain_fixture
       `;
       if (evidence.retainFixture) {
-        await db`update egocapture.studies set is_demo = true where id = ${studyId}::uuid`;
-        await db`update egocapture.participants set is_fixture = true where study_id = ${studyId}::uuid`;
-        await db`update egocapture.devices set is_fixture = true where study_id = ${studyId}::uuid`;
-        await db`update egocapture.tasks set is_fixture = true where study_id = ${studyId}::uuid`;
+        await db`update egocapture.participants set is_fixture = true where public_id = ${participantPublicId}`;
+        await db`update egocapture.devices set is_fixture = true where public_id = ${devicePublicId}`;
+        await db`update egocapture.tasks set is_fixture = true where public_id = ${taskPublicId ?? ""}`;
       } else {
         if (participantUserId) await supabase.auth.admin.deleteUser(participantUserId);
         if (adminUserId) await supabase.auth.admin.deleteUser(adminUserId);

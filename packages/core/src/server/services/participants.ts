@@ -34,7 +34,6 @@ const countryRegionSchema = z.string().trim().length(2).refine(isSupportedCountr
 });
 
 export const createParticipantSchema = z.object({
-  studyPublicId: z.string().regex(/^ST-[23456789ABCDEFGHJKLMNPQRSTUVWXYZ]{6,16}$/),
   displayAlias: z.string().trim().min(1).max(120),
   managementEmail: z.string().trim().email().max(254).nullable().optional(),
   locale: localeSchema.default("zh-CN"),
@@ -48,7 +47,6 @@ export const participantListSchema = z.object({
   search: z.string().trim().max(120).optional(),
   status: z.enum(["draft", "invited", "expired", "active", "suspended", "withdrawn"]).optional(),
   consentStatus: z.enum(["pending", "valid", "expired", "withdrawn"]).optional(),
-  studyPublicId: z.string().regex(/^ST-[23456789ABCDEFGHJKLMNPQRSTUVWXYZ]{6,16}$/).optional(),
   locale: localeSchema.optional(),
   countryRegion: countryRegionSchema.optional(),
   missing: z.enum(["yes", "no"]).optional(),
@@ -90,11 +88,9 @@ export const updateDeviceSchema = z.object({
   message: "至少提交一个修改字段",
 });
 
-type StudyAccess = { id: string; publicId: string; serialHmacSalt: string };
 type ParticipantRow = {
   id: string;
   publicId: string;
-  studyId: string;
   status: ParticipantStatus;
   consentStatus: string;
   consentVersion: string;
@@ -102,23 +98,8 @@ type ParticipantRow = {
   isFixture: boolean;
 };
 
-async function studyAccess(viewer: Viewer, studyPublicId: string): Promise<StudyAccess> {
-  const db = database();
-  const [study] = await db<StudyAccess[]>`
-    select study.id, study.public_id, study.serial_hmac_salt
-    from egocapture.studies study
-    join egocapture.study_memberships membership on membership.study_id = study.id
-    where study.public_id = ${studyPublicId}
-      and membership.profile_id = ${viewer.profileId}::uuid
-      and membership.status = 'active'
-    limit 1
-  `;
-  if (!study) throw new DomainError("NOT_FOUND", "Study 或资源不存在", 404);
-  return study;
-}
-
 async function participantForAdmin(
-  viewer: Viewer,
+  _viewer: Viewer,
   participantPublicId: string,
   options: { forUpdate?: boolean } = {},
 ) {
@@ -127,17 +108,13 @@ async function participantForAdmin(
     select
       participant.id,
       participant.public_id,
-      participant.study_id,
       participant.status,
       participant.consent_status,
       participant.consent_version,
       participant.display_alias,
       participant.is_fixture
     from egocapture.participants participant
-    join egocapture.study_memberships membership on membership.study_id = participant.study_id
     where participant.public_id = ${participantPublicId}
-      and membership.profile_id = ${viewer.profileId}::uuid
-      and membership.status = 'active'
     limit 1
     ${options.forUpdate ? db`for update of participant` : db``}
   `;
@@ -152,13 +129,11 @@ function protectFixture(viewer: Viewer, participant: ParticipantRow) {
   }
 }
 
-export async function listParticipants(viewer: Viewer, input: z.infer<typeof participantListSchema>) {
+export async function listParticipants(_viewer: Viewer, input: z.infer<typeof participantListSchema>) {
   const db = database();
   const rows = await db<{
     publicId: string;
     displayAlias: string;
-    studyPublicId: string;
-    studyName: string;
     status: ParticipantStatus;
     consentStatus: string;
     locale: string;
@@ -170,8 +145,6 @@ export async function listParticipants(viewer: Viewer, input: z.infer<typeof par
     select distinct
       participant.public_id,
       participant.display_alias,
-      study.public_id as study_public_id,
-      study.name as study_name,
       participant.status,
       participant.consent_status,
       participant.locale,
@@ -190,14 +163,9 @@ export async function listParticipants(viewer: Viewer, input: z.infer<typeof par
           and coalesce(review_assignment.participant_id, review_asset.participant_id) = participant.id
       ) as needs_review
     from egocapture.participants participant
-    join egocapture.studies study on study.id = participant.study_id
-    join egocapture.study_memberships membership on membership.study_id = study.id
-    where membership.profile_id = ${viewer.profileId}::uuid
-      and membership.status = 'active'
-      and (${input.search ?? null}::text is null or participant.public_id ilike '%' || ${input.search ?? ""} || '%' or participant.display_alias ilike '%' || ${input.search ?? ""} || '%')
+    where (${input.search ?? null}::text is null or participant.public_id ilike '%' || ${input.search ?? ""} || '%' or participant.display_alias ilike '%' || ${input.search ?? ""} || '%')
       and (${input.status ?? null}::text is null or participant.status = ${input.status ?? ""})
       and (${input.consentStatus ?? null}::text is null or participant.consent_status = ${input.consentStatus ?? ""})
-      and (${input.studyPublicId ?? null}::text is null or study.public_id = ${input.studyPublicId ?? ""})
       and (${input.locale ?? null}::text is null or participant.locale = ${input.locale ?? ""})
       and (${input.countryRegion ?? null}::text is null or participant.country_region = ${input.countryRegion ?? ""})
       and (${input.missing ?? null}::text is null or exists (
@@ -235,8 +203,6 @@ export async function getParticipant(viewer: Viewer, participantPublicId: string
     timezone: string;
     countryRegion: string | null;
     notes: string | null;
-    studyPublicId: string;
-    studyName: string;
     isFixture: boolean;
     defaultDevicePublicId: string | null;
     invitationStatus: string | null;
@@ -254,15 +220,12 @@ export async function getParticipant(viewer: Viewer, participantPublicId: string
       participant.timezone,
       participant.country_region,
       participant.notes,
-      study.public_id as study_public_id,
-      study.name as study_name,
       participant.is_fixture,
       device.public_id as default_device_public_id,
       invitation.status as invitation_status,
       invitation.expires_at as invitation_expires_at,
       participant.updated_at
     from egocapture.participants participant
-    join egocapture.studies study on study.id = participant.study_id
     left join egocapture.devices device on device.id = participant.default_device_id
     left join lateral (
       select participant_invitation.status, participant_invitation.expires_at
@@ -293,15 +256,12 @@ export async function updateParticipant(
       notes: string | null;
     })[]>`
       select
-        participant.id, participant.public_id, participant.study_id, participant.status,
+        participant.id, participant.public_id, participant.status,
         participant.consent_status, participant.consent_version, participant.display_alias,
         participant.is_fixture, participant.updated_at, participant.management_email,
         participant.locale, participant.timezone, participant.country_region, participant.notes
       from egocapture.participants participant
-      join egocapture.study_memberships membership on membership.study_id = participant.study_id
       where participant.public_id = ${participantPublicId}
-        and membership.profile_id = ${viewer.profileId}::uuid
-        and membership.status = 'active'
       for update of participant
     `;
     if (!participant) throw new DomainError("NOT_FOUND", "Participant 或资源不存在", 404);
@@ -329,7 +289,6 @@ export async function updateParticipant(
       returning updated_at
     `;
     await writeAudit(transaction, {
-      studyId: participant.studyId,
       actorProfileId: viewer.profileId,
       actorAuthUserId: viewer.authUserId,
       action: "participant.updated",
@@ -362,7 +321,6 @@ export async function createParticipant(
   idempotencyKey: string,
   requestId: string,
 ) {
-  const study = await studyAccess(viewer, input.studyPublicId);
   const db = database();
   return await db.begin(async (transaction) => await withIdempotency(transaction, {
     actorAuthUserId: viewer.authUserId,
@@ -374,23 +332,22 @@ export async function createParticipant(
         const [usage] = await transaction<{ count: number }[]>`
           select count(*)::integer as count
           from egocapture.participants
-          where study_id = ${study.id}::uuid and not is_fixture
+          where not is_fixture
         `;
         if (usage.count >= 25) throw new DomainError("DEMO_PARTICIPANT_LIMIT", "公开 Demo 最多创建 25 个临时 Participant", 429);
       }
       const publicId = createPublicId("PT");
       const [participant] = await transaction<{ id: string; publicId: string }[]>`
         insert into egocapture.participants (
-          public_id, study_id, display_alias, management_email, locale, timezone,
+          public_id, display_alias, management_email, locale, timezone,
           country_region, consent_version, notes, created_by
         ) values (
-          ${publicId}, ${study.id}::uuid, ${input.displayAlias}, ${input.managementEmail ?? null},
+          ${publicId}, ${input.displayAlias}, ${input.managementEmail ?? null},
           ${input.locale}, ${input.timezone}, ${input.countryRegion ?? null}, ${input.consentVersion},
           ${input.notes ?? null}, ${viewer.profileId}::uuid
         ) returning id, public_id
       `;
       await writeAudit(transaction, {
-        studyId: study.id,
         actorProfileId: viewer.profileId,
         actorAuthUserId: viewer.authUserId,
         action: "participant.created",
@@ -427,14 +384,11 @@ export async function generateInvitation(
     execute: async () => {
       const [participant] = await transaction<ParticipantRow[]>`
         select
-          participant.id, participant.public_id, participant.study_id, participant.status,
+          participant.id, participant.public_id, participant.status,
           participant.consent_status, participant.consent_version, participant.display_alias,
           participant.is_fixture
         from egocapture.participants participant
-        join egocapture.study_memberships membership on membership.study_id = participant.study_id
         where participant.public_id = ${participantPublicId}
-          and membership.profile_id = ${viewer.profileId}::uuid
-          and membership.status = 'active'
         for update of participant
       `;
       if (!participant) throw new DomainError("NOT_FOUND", "Participant 或资源不存在", 404);
@@ -462,7 +416,6 @@ export async function generateInvitation(
         `;
       }
       await writeAudit(transaction, {
-        studyId: participant.studyId,
         actorProfileId: viewer.profileId,
         actorAuthUserId: viewer.authUserId,
         action: "participant.invitation_generated",
@@ -490,7 +443,6 @@ export async function openInvitation(token: string) {
       participantId: string;
       participantPublicId: string;
       participantStatus: ParticipantStatus;
-      studyId: string;
       status: string;
       expiresAt: Date;
     }[]>`
@@ -499,7 +451,6 @@ export async function openInvitation(token: string) {
         invitation.participant_id,
         participant.public_id as participant_public_id,
         participant.status as participant_status,
-        participant.study_id,
         invitation.status,
         invitation.expires_at
       from egocapture.participant_invitations invitation
@@ -521,7 +472,6 @@ export async function openInvitation(token: string) {
         `;
       }
       await writeAudit(transaction, {
-        studyId: invitation.studyId,
         actorProfileId: null,
         actorAuthUserId: null,
         action: "participant.invitation_expired",
@@ -553,14 +503,11 @@ export async function revokeInvitation(
   return await db.begin(async (transaction) => {
     const [participant] = await transaction<ParticipantRow[]>`
       select
-        participant.id, participant.public_id, participant.study_id, participant.status,
+        participant.id, participant.public_id, participant.status,
         participant.consent_status, participant.consent_version, participant.display_alias,
         participant.is_fixture
       from egocapture.participants participant
-      join egocapture.study_memberships membership on membership.study_id = participant.study_id
       where participant.public_id = ${participantPublicId}
-        and membership.profile_id = ${viewer.profileId}::uuid
-        and membership.status = 'active'
       for update of participant
     `;
     if (!participant) throw new DomainError("NOT_FOUND", "Participant 或资源不存在", 404);
@@ -582,7 +529,6 @@ export async function revokeInvitation(
       `;
     }
     await writeAudit(transaction, {
-      studyId: participant.studyId,
       actorProfileId: viewer.profileId,
       actorAuthUserId: viewer.authUserId,
       action: "participant.invitation_revoked",
@@ -608,7 +554,7 @@ export async function acceptInvitation(token: string, password: string, requestI
     return await db.begin(async (transaction) => {
       const [invitation] = await transaction<ParticipantRow[]>`
         select
-          participant.id, participant.public_id, participant.study_id, participant.status,
+          participant.id, participant.public_id, participant.status,
           participant.consent_status, participant.consent_version, participant.display_alias,
           participant.is_fixture
         from egocapture.participant_invitations invitation
@@ -654,7 +600,6 @@ export async function acceptInvitation(token: string, password: string, requestI
         )
       `;
       await writeAudit(transaction, {
-        studyId: invitation.studyId,
         actorProfileId: profile.id,
         actorAuthUserId: createdAuthUserId,
         action: "participant.invitation_accepted",
@@ -683,14 +628,11 @@ export async function changeParticipantStatus(
   return await db.begin(async (transaction) => {
     const [participant] = await transaction<ParticipantRow[]>`
       select
-        participant.id, participant.public_id, participant.study_id, participant.status,
+        participant.id, participant.public_id, participant.status,
         participant.consent_status, participant.consent_version, participant.display_alias,
         participant.is_fixture
       from egocapture.participants participant
-      join egocapture.study_memberships membership on membership.study_id = participant.study_id
       where participant.public_id = ${participantPublicId}
-        and membership.profile_id = ${viewer.profileId}::uuid
-        and membership.status = 'active'
       for update of participant
     `;
     if (!participant) throw new DomainError("NOT_FOUND", "Participant 或资源不存在", 404);
@@ -717,7 +659,6 @@ export async function changeParticipantStatus(
       `;
     }
     await writeAudit(transaction, {
-      studyId: participant.studyId,
       actorProfileId: viewer.profileId,
       actorAuthUserId: viewer.authUserId,
       action: `participant.${targetStatus}`,
@@ -781,11 +722,8 @@ export async function createDevice(
     throw new DomainError("INVALID_PARTICIPANT_STATE", "Withdrawn Participant 不能登记新设备", 409);
   }
   const db = database();
-  const [study] = await db<{ serialHmacSalt: string }[]>`
-    select serial_hmac_salt from egocapture.studies where id = ${participant.studyId}::uuid
-  `;
   const serialHmac = input.serial
-    ? createHmac("sha256", `${serverEnvironment().STUDY_SERIAL_HMAC_KEY}:${study.serialHmacSalt}`)
+    ? createHmac("sha256", serverEnvironment().DEVICE_SERIAL_HMAC_KEY)
         .update(input.serial.trim().toUpperCase())
         .digest("hex")
     : null;
@@ -798,9 +736,9 @@ export async function createDevice(
       const publicId = createPublicId("DEV");
       const [device] = await transaction<{ id: string; publicId: string }[]>`
         insert into egocapture.devices (
-          public_id, study_id, manufacturer, model, device_type, serial_hmac, firmware_version, status
+          public_id, manufacturer, model, device_type, serial_hmac, firmware_version, status
         ) values (
-          ${publicId}, ${participant.studyId}::uuid, ${input.manufacturer}, ${input.model},
+          ${publicId}, ${input.manufacturer}, ${input.model},
           ${input.deviceType}, ${serialHmac}, ${input.firmwareVersion ?? null}, ${input.status}
         ) returning id, public_id
       `;
@@ -815,7 +753,6 @@ export async function createDevice(
         `;
       }
       await writeAudit(transaction, {
-        studyId: participant.studyId,
         actorProfileId: viewer.profileId,
         actorAuthUserId: viewer.authUserId,
         action: "participant.device_created",
@@ -846,20 +783,16 @@ export async function updateDevice(
     const [device] = await transaction<{
       id: string;
       publicId: string;
-      studyId: string;
       firmwareVersion: string | null;
       status: "active" | "lost" | "retired" | "shared";
       isFixture: boolean;
       updatedAt: Date;
     }[]>`
       select
-        device.id, device.public_id, device.study_id, device.firmware_version,
+        device.id, device.public_id, device.firmware_version,
         device.status, device.is_fixture, device.updated_at
       from egocapture.devices device
-      join egocapture.study_memberships membership on membership.study_id = device.study_id
       where device.public_id = ${devicePublicId}
-        and membership.profile_id = ${viewer.profileId}::uuid
-        and membership.status = 'active'
       for update of device
     `;
     if (!device) throw new DomainError("NOT_FOUND", "Device 或资源不存在", 404);
@@ -883,7 +816,6 @@ export async function updateDevice(
       returning updated_at
     `;
     await writeAudit(transaction, {
-      studyId: device.studyId,
       actorProfileId: viewer.profileId,
       actorAuthUserId: viewer.authUserId,
       action: "device.updated",

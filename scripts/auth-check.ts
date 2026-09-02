@@ -52,7 +52,6 @@ async function main() {
   const suffix = randomUUID();
   const email = `auth-smoke-${suffix}@demo.invalid`;
   const password = randomBytes(24).toString("base64url");
-  const studyId = randomUUID();
   let userId: string | undefined;
   try {
     const { data: created, error: createError } = await admin.auth.admin.createUser({
@@ -62,41 +61,32 @@ async function main() {
     });
     if (createError || !created.user) throw createError || new Error("Auth User 未创建");
     userId = created.user.id;
-    const [profile] = await db<{ id: string }[]>`
+    await db`
       insert into egocapture.profiles (auth_user_id, role, display_name)
       values (${userId}::uuid, 'admin', 'Auth Smoke Admin')
-      returning id
-    `;
-    await db`
-      insert into egocapture.studies (id, public_id, slug, name, serial_hmac_salt)
-      values (${studyId}::uuid, ${`ST-${suffix.replaceAll("-", "").slice(0, 8).toUpperCase().replace(/[01IO]/g, "2")}`}, ${`auth-smoke-${suffix}`}, 'Auth Smoke Study', 'auth-smoke-salt')
-    `;
-    await db`
-      insert into egocapture.study_memberships (study_id, profile_id, role)
-      values (${studyId}::uuid, ${profile.id}::uuid, 'owner')
     `;
 
     const { data: session, error: loginError } = await browser.auth.signInWithPassword({ email, password });
     if (loginError || !session.session) throw loginError || new Error("登录未返回 Session");
-    const { data: studies, error: rlsError } = await browser
+    const { data: profiles, error: rlsError } = await browser
       .schema("egocapture")
-      .from("studies")
-      .select("id,slug")
-      .eq("id", studyId);
+      .from("profiles")
+      .select("auth_user_id,role")
+      .eq("auth_user_id", userId);
     if (rlsError) throw rlsError;
-    if (studies?.length !== 1) throw new Error(`JWT 经 PostgREST 后未通过预期 RLS：${studies?.length ?? 0}`);
+    if (profiles?.length !== 1 || profiles[0]?.role !== "admin") {
+      throw new Error(`JWT 经 PostgREST 后未通过预期 Profile RLS：${profiles?.length ?? 0}`);
+    }
     await browser.auth.signOut();
   } finally {
     try {
-      await db`delete from egocapture.study_memberships where study_id = ${studyId}::uuid`;
-      await db`delete from egocapture.studies where id = ${studyId}::uuid`;
       if (userId) await db`delete from egocapture.profiles where auth_user_id = ${userId}::uuid`;
       if (userId) await admin.auth.admin.deleteUser(userId);
     } finally {
       await db.end({ timeout: 2 });
     }
   }
-  console.log("GoTrue login, JWT propagation, PostgREST and Study RLS checks passed");
+  console.log("GoTrue login, JWT propagation, PostgREST and Profile RLS checks passed");
 }
 
 main().catch((error) => {

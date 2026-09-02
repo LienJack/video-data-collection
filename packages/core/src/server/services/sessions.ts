@@ -69,7 +69,7 @@ export async function listParticipantDevices(viewer: Viewer) {
       device.status,
       participant.default_device_id = device.id as is_default
     from egocapture.participants participant
-    join egocapture.devices device on device.study_id = participant.study_id
+    join egocapture.devices device on true
     left join egocapture.device_assignments assignment on assignment.device_id = device.id
       and assignment.participant_id = participant.id and assignment.ended_at is null
     where participant.auth_user_id = ${viewer.authUserId}::uuid
@@ -99,7 +99,6 @@ export async function createSession(
         participantId: string;
         participantStatus: string;
         consentStatus: string;
-        studyId: string;
         taskVersionId: string;
         timezone: string;
       }[]>`
@@ -110,7 +109,6 @@ export async function createSession(
           participant.id as participant_id,
           participant.status as participant_status,
           participant.consent_status,
-          participant.study_id,
           assignment.task_version_id,
           participant.timezone
         from egocapture.assignments assignment
@@ -130,7 +128,6 @@ export async function createSession(
         select device.id, device.public_id
         from egocapture.devices device
         where device.public_id = ${input.devicePublicId}
-          and device.study_id = ${authority.studyId}::uuid
           and device.status in ('active', 'shared')
           and (
             device.status = 'shared'
@@ -146,12 +143,11 @@ export async function createSession(
       const sessionPublicId = createPublicId("RS");
       const [session] = await transaction<{ id: string; publicId: string }[]>`
         insert into egocapture.recording_sessions (
-          public_id, assignment_id, participant_id, study_id, task_version_id,
+          public_id, assignment_id, participant_id, task_version_id,
           declared_device_id, timezone
         ) values (
           ${sessionPublicId}, ${authority.assignmentId}::uuid, ${authority.participantId}::uuid,
-          ${authority.studyId}::uuid, ${authority.taskVersionId}::uuid,
-          ${device.id}::uuid, ${authority.timezone}
+          ${authority.taskVersionId}::uuid, ${device.id}::uuid, ${authority.timezone}
         ) returning id, public_id
       `;
       const marker = await createSignedMarker({
@@ -174,7 +170,6 @@ export async function createSession(
         `;
       }
       await writeAudit(transaction, {
-        studyId: authority.studyId,
         actorProfileId: viewer.profileId,
         actorAuthUserId: viewer.authUserId,
         action: "session.created",
@@ -207,7 +202,6 @@ async function participantSession(
   const rows = await db<{
     id: string;
     publicId: string;
-    studyId: string;
     status: "open" | "closed";
     assignmentId: string;
     assignmentPublicId: string;
@@ -220,7 +214,6 @@ async function participantSession(
     select
       session.id,
       session.public_id,
-      session.study_id,
       session.status,
       session.assignment_id,
       assignment.public_id as assignment_public_id,
@@ -347,7 +340,6 @@ export async function regenerateMarker(
         )
       `;
       await writeAudit(transaction, {
-        studyId: current.studyId,
         actorProfileId: viewer.profileId,
         actorAuthUserId: viewer.authUserId,
         action: "session.marker_regenerated",
@@ -379,7 +371,6 @@ export async function acknowledgeMarker(viewer: Viewer, sessionPublicId: string,
       returning marker_acknowledged_at
     `;
     await writeAudit(transaction, {
-      studyId: session.studyId,
       actorProfileId: viewer.profileId,
       actorAuthUserId: viewer.authUserId,
       action: "session.marker_acknowledged",
@@ -426,9 +417,7 @@ export async function listAdminSessions(
     join egocapture.participants participant on participant.id = session.participant_id
     join egocapture.task_versions version on version.id = session.task_version_id
     join egocapture.devices device on device.id = session.declared_device_id
-    join egocapture.study_memberships membership on membership.study_id = session.study_id
-    where membership.profile_id = ${viewer.profileId}::uuid and membership.status = 'active'
-      and (${input.search ?? null}::text is null
+    where (${input.search ?? null}::text is null
         or session.public_id ilike '%' || ${input.search ?? ""} || '%'
         or assignment.public_id ilike '%' || ${input.search ?? ""} || '%'
         or participant.public_id ilike '%' || ${input.search ?? ""} || '%'
@@ -462,15 +451,11 @@ export async function closeSession(
     const [session] = await transaction<{
       id: string;
       publicId: string;
-      studyId: string;
       status: "open" | "closed";
     }[]>`
-      select session.id, session.public_id, session.study_id, session.status
+      select session.id, session.public_id, session.status
       from egocapture.recording_sessions session
-      join egocapture.study_memberships membership on membership.study_id = session.study_id
       where session.public_id = ${sessionPublicId}
-        and membership.profile_id = ${viewer.profileId}::uuid
-        and membership.status = 'active'
       for update of session
     `;
     if (!session) throw new DomainError("NOT_FOUND", "Recording Session 或资源不存在", 404);
@@ -481,7 +466,6 @@ export async function closeSession(
       where id = ${session.id}::uuid
     `;
     await writeAudit(transaction, {
-      studyId: session.studyId,
       actorProfileId: viewer.profileId,
       actorAuthUserId: viewer.authUserId,
       action: "session.closed",

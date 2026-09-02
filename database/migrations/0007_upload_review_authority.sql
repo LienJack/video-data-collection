@@ -17,8 +17,7 @@ returns trigger
 language plpgsql
 as $$
 begin
-  if new.study_id is distinct from old.study_id
-    or new.participant_id is distinct from old.participant_id
+  if new.participant_id is distinct from old.participant_id
     or new.batch_id is distinct from old.batch_id
     or new.object_key is distinct from old.object_key
     or new.size_bytes is distinct from old.size_bytes

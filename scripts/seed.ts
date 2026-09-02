@@ -7,10 +7,8 @@ import { defaultTaskInstructions } from "@egocapture/core/domain/task-template";
 import { taskContentHash, taskInstructionsSchema, type TaskInstructions } from "@egocapture/core/domain/task-instructions";
 
 const ids = {
-  study: "10000000-0000-4000-8000-000000000001",
   adminProfile: "20000000-0000-4000-8000-000000000001",
   participantProfile: "20000000-0000-4000-8000-000000000002",
-  membership: "21000000-0000-4000-8000-000000000001",
   participant: "30000000-0000-4000-8000-000000000001",
   consent: "31000000-0000-4000-8000-000000000001",
   device: "40000000-0000-4000-8000-000000000001",
@@ -48,7 +46,6 @@ const ids = {
 } as const;
 
 const publicIds = {
-  study: "ST-23456789",
   participant: "PT-23456789",
   device: "DEV-23456789",
   tasks: ["TSK-23456782", "TSK-23456783", "TSK-23456784", "TSK-23456785"],
@@ -134,15 +131,6 @@ async function main() {
     ]);
 
     await db.begin(async (transaction) => {
-      const existingStudies = await transaction<{ id: string; isDemo: boolean }[]>`
-        select id, is_demo from egocapture.studies
-        where id = ${ids.study}::uuid or public_id = ${publicIds.study} or slug = 'egocapture-demo'
-      `;
-      if (existingStudies.length > 1) throw new Error("HOLD: Demo Study 固定标识分别命中了多个对象");
-      const [existingStudy] = existingStudies;
-      if (existingStudy && (existingStudy.id !== ids.study || !existingStudy.isDemo)) {
-        throw new Error("HOLD: Demo Study 标识已被非本 Fixture 对象占用");
-      }
       const protectedRows = await transaction<{ kind: string; idMatches: boolean; isFixture: boolean }[]>`
         select 'participant' as kind, id = ${ids.participant}::uuid as id_matches, is_fixture
         from egocapture.participants
@@ -160,11 +148,6 @@ async function main() {
         throw new Error("HOLD: Participant、Device 或 Review Public ID 已被非本 Demo Fixture 使用");
       }
       await transaction`
-        insert into egocapture.studies (id, public_id, slug, name, serial_hmac_salt, is_demo)
-        values (${ids.study}::uuid, ${publicIds.study}, 'egocapture-demo', 'EgoCapture Public Demo', 'egocapture-demo-v1', true)
-        on conflict (id) do update set name = excluded.name, is_demo = true
-      `;
-      await transaction`
         insert into egocapture.profiles (id, auth_user_id, role, display_name, is_demo_admin)
         values (${ids.adminProfile}::uuid, ${adminUser.id}::uuid, 'admin', 'Admin Demo', true)
         on conflict (id) do update set auth_user_id = excluded.auth_user_id, role = 'admin', display_name = excluded.display_name, is_demo_admin = true
@@ -175,16 +158,11 @@ async function main() {
         on conflict (id) do update set auth_user_id = excluded.auth_user_id, role = 'participant', display_name = excluded.display_name
       `;
       await transaction`
-        insert into egocapture.study_memberships (id, study_id, profile_id, role, status)
-        values (${ids.membership}::uuid, ${ids.study}::uuid, ${ids.adminProfile}::uuid, 'owner', 'active')
-        on conflict (id) do update set role = 'owner', status = 'active'
-      `;
-      await transaction`
         insert into egocapture.participants (
-          id, public_id, study_id, auth_user_id, display_alias, locale, timezone,
+          id, public_id, auth_user_id, display_alias, locale, timezone,
           country_region, status, consent_status, notes, is_fixture, created_by, consent_version
         ) values (
-          ${ids.participant}::uuid, ${publicIds.participant}, ${ids.study}::uuid,
+          ${ids.participant}::uuid, ${publicIds.participant},
           ${participantUser.id}::uuid, 'Participant Demo', 'zh-CN', 'Asia/Shanghai',
           'Demo Region', 'active', 'valid', 'Synthetic fixture. Do not enter PII.', true,
           ${ids.adminProfile}::uuid, 'demo-consent-v1'
@@ -204,10 +182,10 @@ async function main() {
       `;
       await transaction`
         insert into egocapture.devices (
-          id, public_id, study_id, manufacturer, model, device_type, status, is_fixture
+          id, public_id, manufacturer, model, device_type, status, is_fixture
         ) values (
-          ${ids.device}::uuid, ${publicIds.device}, ${ids.study}::uuid,
-          'Synthetic', 'Demo Phone', 'phone', 'active', true
+          ${ids.device}::uuid, ${publicIds.device}, 'Synthetic', 'Demo Phone',
+          'phone', 'active', true
         ) on conflict (id) do update set manufacturer = excluded.manufacturer,
           model = excluded.model, status = 'active', retired_at = null, is_fixture = true
       `;
@@ -227,19 +205,19 @@ async function main() {
         const contentHash = taskContentHash(fixture);
         await transaction`
           insert into egocapture.tasks (
-            id, public_id, study_id, title, lifecycle, draft_instructions, is_fixture, created_by
+            id, public_id, title, lifecycle, draft_instructions, is_fixture, created_by
           ) values (
-            ${ids.tasks[index]}::uuid, ${publicIds.tasks[index]}, ${ids.study}::uuid,
-            ${fixture.title}, 'active', ${transaction.json(fixture)}, true, ${ids.adminProfile}::uuid
+            ${ids.tasks[index]}::uuid, ${publicIds.tasks[index]}, ${fixture.title},
+            'active', ${transaction.json(fixture)}, true, ${ids.adminProfile}::uuid
           ) on conflict (id) do update set title = excluded.title, lifecycle = 'active',
             draft_instructions = excluded.draft_instructions, is_fixture = true
         `;
         await transaction`
           insert into egocapture.task_versions (
-            id, task_id, study_id, version, instructions, content_hash, published_by
+            id, task_id, version, instructions, content_hash, published_by
           ) values (
-            ${ids.versions[index]}::uuid, ${ids.tasks[index]}::uuid, ${ids.study}::uuid,
-            1, ${transaction.json(fixture)}, ${contentHash}, ${ids.adminProfile}::uuid
+            ${ids.versions[index]}::uuid, ${ids.tasks[index]}::uuid, 1,
+            ${transaction.json(fixture)}, ${contentHash}, ${ids.adminProfile}::uuid
           ) on conflict (id) do nothing
         `;
         const [version] = await transaction<{ contentHash: string }[]>`
@@ -257,10 +235,10 @@ async function main() {
       for (const [index, state] of assignmentStates.entries()) {
         await transaction`
           insert into egocapture.assignments (
-            id, public_id, study_id, participant_id, task_version_id, preferred_device_id,
+            id, public_id, participant_id, task_version_id, preferred_device_id,
             due_at, locale, status, created_by, created_at
           ) values (
-            ${ids.assignments[index]}::uuid, ${publicIds.assignments[index]}, ${ids.study}::uuid,
+            ${ids.assignments[index]}::uuid, ${publicIds.assignments[index]},
             ${ids.participant}::uuid, ${ids.versions[index]}::uuid, ${ids.device}::uuid,
             ${state.due}, 'zh-CN', ${state.status}, ${ids.adminProfile}::uuid,
             now() - interval '60 days'
@@ -270,29 +248,29 @@ async function main() {
       }
       await transaction`
         insert into egocapture.recording_sessions (
-          id, public_id, assignment_id, participant_id, study_id, task_version_id,
+          id, public_id, assignment_id, participant_id, task_version_id,
           declared_device_id, timezone, status
         ) values (
           ${ids.session}::uuid, ${publicIds.session}, ${ids.assignments[2]}::uuid,
-          ${ids.participant}::uuid, ${ids.study}::uuid, ${ids.versions[2]}::uuid,
+          ${ids.participant}::uuid, ${ids.versions[2]}::uuid,
           ${ids.device}::uuid, 'Asia/Shanghai', 'open'
         ) on conflict (id) do update set status = 'open', closed_at = null, close_reason = null
       `;
 
-      const objectKey = `study/${ids.study}/participant/${ids.participant}/upload/${ids.upload}/70000000-0000-4000-8000-000000000099.mp4`;
+      const objectKey = `participant/${ids.participant}/upload/${ids.upload}/70000000-0000-4000-8000-000000000099.mp4`;
       await transaction`
-        insert into egocapture.upload_batches (id, public_id, study_id, participant_id, status, completed_at)
-        values (${ids.uploadBatch}::uuid, ${publicIds.uploadBatch}, ${ids.study}::uuid, ${ids.participant}::uuid, 'completed', now())
+        insert into egocapture.upload_batches (id, public_id, participant_id, status, completed_at)
+        values (${ids.uploadBatch}::uuid, ${publicIds.uploadBatch}, ${ids.participant}::uuid, 'completed', now())
         on conflict (id) do update set status = 'completed', completed_at = now()
       `;
       await transaction`
         insert into egocapture.upload_intents (
-          id, public_id, batch_id, study_id, participant_id, original_filename,
+          id, public_id, batch_id, participant_id, original_filename,
           size_bytes, content_type, extension, object_key, unable_to_determine,
           fingerprint_v1, transfer_status, metadata_status, expected_expires_at,
           verified_at
         ) values (
-          ${ids.upload}::uuid, ${publicIds.upload}, ${ids.uploadBatch}::uuid, ${ids.study}::uuid,
+          ${ids.upload}::uuid, ${publicIds.upload}, ${ids.uploadBatch}::uuid,
           ${ids.participant}::uuid, 'demo-fixture.mp4', 1000, 'video/mp4', 'mp4',
           ${objectKey}, true, ${"a".repeat(64)}, 'verified', 'failed', now() + interval '365 days', now()
         ) on conflict (id) do update set transfer_status = 'verified', metadata_status = 'failed',
@@ -318,9 +296,9 @@ async function main() {
       `;
       await transaction`
         insert into egocapture.video_assets (
-          id, public_id, upload_intent_id, study_id, participant_id, status, is_fixture
+          id, public_id, upload_intent_id, participant_id, status, is_fixture
         ) values (
-          ${ids.asset}::uuid, ${publicIds.asset}, ${ids.upload}::uuid, ${ids.study}::uuid,
+          ${ids.asset}::uuid, ${publicIds.asset}, ${ids.upload}::uuid,
           ${ids.participant}::uuid, 'active', true
         ) on conflict (id) do update set status = 'active', is_fixture = true
       `;
@@ -371,21 +349,21 @@ async function main() {
       }
 
       await transaction`
-        insert into egocapture.upload_batches (id, public_id, study_id, participant_id, status, completed_at)
-        values (${ids.failedBatch}::uuid, ${publicIds.failedBatch}, ${ids.study}::uuid, ${ids.participant}::uuid, 'completed', now())
+        insert into egocapture.upload_batches (id, public_id, participant_id, status, completed_at)
+        values (${ids.failedBatch}::uuid, ${publicIds.failedBatch}, ${ids.participant}::uuid, 'completed', now())
         on conflict (id) do update set status = 'completed', completed_at = now()
       `;
       await transaction`
         insert into egocapture.upload_intents (
-          id, public_id, batch_id, study_id, participant_id, original_filename,
+          id, public_id, batch_id, participant_id, original_filename,
           size_bytes, content_type, extension, object_key, claimed_session_id,
           unable_to_determine, fingerprint_v1, transfer_status, metadata_status,
           expected_expires_at, failure_code
         ) values (
           ${ids.failedUpload}::uuid, ${publicIds.failedUpload}, ${ids.failedBatch}::uuid,
-          ${ids.study}::uuid, ${ids.participant}::uuid, 'demo-upload-failed.mp4', 1000,
+          ${ids.participant}::uuid, 'demo-upload-failed.mp4', 1000,
           'video/mp4', 'mp4',
-          ${`study/${ids.study}/participant/${ids.participant}/upload/${ids.failedUpload}/70000000-0000-4000-8000-000000000098.mp4`},
+          ${`participant/${ids.participant}/upload/${ids.failedUpload}/70000000-0000-4000-8000-000000000098.mp4`},
           ${ids.session}::uuid, false, ${"b".repeat(64)}, 'failed', 'pending',
           now() + interval '365 days', 'storage_missing'
         ) on conflict (id) do update set transfer_status = 'failed', metadata_status = 'pending',
@@ -414,11 +392,11 @@ async function main() {
       for (const fixture of reviewFixtures) {
         await transaction`
           insert into egocapture.review_cases (
-            public_id, study_id, video_asset_id, assignment_id, upload_intent_id,
+            public_id, video_asset_id, assignment_id, upload_intent_id,
             case_type, status, reason, is_fixture
           ) values (
-            ${fixture.publicId}, ${ids.study}::uuid, ${fixture.assetId}::uuid,
-            ${fixture.assignmentId}::uuid, ${fixture.uploadId}::uuid,
+            ${fixture.publicId}, ${fixture.assetId}::uuid, ${fixture.assignmentId}::uuid,
+            ${fixture.uploadId}::uuid,
             ${fixture.type}, 'open', ${fixture.reason}, true
           ) on conflict (public_id) do update set
             video_asset_id = excluded.video_asset_id, assignment_id = excluded.assignment_id,

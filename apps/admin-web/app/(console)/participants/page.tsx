@@ -1,7 +1,6 @@
 import Link from "next/link";
 import { MagnifyingGlass, Plus } from "@phosphor-icons/react/dist/ssr";
 import { requireAdmin } from "@/lib/auth";
-import { database } from "@egocapture/core/server/database";
 import { listParticipants, participantListSchema } from "@egocapture/core/server/services/participants";
 import { CountrySelect, LocaleSelect } from "@/app/_components/regional-preferences-fields";
 
@@ -19,7 +18,6 @@ export default async function ParticipantsPage({ searchParams }: { searchParams:
     search: typeof params.search === "string" && params.search ? params.search : undefined,
     status: typeof params.status === "string" && params.status ? params.status : undefined,
     consentStatus: typeof params.consentStatus === "string" && params.consentStatus ? params.consentStatus : undefined,
-    studyPublicId: typeof params.studyPublicId === "string" && params.studyPublicId ? params.studyPublicId : undefined,
     locale: typeof params.locale === "string" && params.locale ? params.locale : undefined,
     countryRegion: typeof params.countryRegion === "string" && params.countryRegion ? params.countryRegion : undefined,
     missing: typeof params.missing === "string" && params.missing ? params.missing : undefined,
@@ -27,17 +25,7 @@ export default async function ParticipantsPage({ searchParams }: { searchParams:
     cursor: typeof params.cursor === "string" && params.cursor ? params.cursor : undefined,
     limit: 25,
   });
-  const db = database();
-  const [result, studies] = await Promise.all([
-    listParticipants(viewer, query),
-    db<{ publicId: string; name: string }[]>`
-      select study.public_id, study.name
-      from egocapture.studies study
-      join egocapture.study_memberships membership on membership.study_id = study.id
-      where membership.profile_id = ${viewer.profileId}::uuid and membership.status = 'active'
-      order by study.name
-    `,
-  ]);
+  const result = await listParticipants(viewer, query);
   const nextParams = new URLSearchParams();
   for (const [key, value] of Object.entries(query)) {
     if (key !== "cursor" && key !== "limit" && value !== undefined) nextParams.set(key, String(value));
@@ -59,7 +47,6 @@ export default async function ParticipantsPage({ searchParams }: { searchParams:
           {Object.entries(statusLabels).map(([value, label]) => <option key={value} value={value}>{label}</option>)}
         </select>
         <select name="consentStatus" aria-label="Consent" defaultValue={query.consentStatus ?? ""} className="border border-[var(--line)] bg-[var(--paper)] px-3"><option value="">全部 Consent</option>{["pending", "valid", "expired", "withdrawn"].map((value) => <option key={value} value={value}>{value}</option>)}</select>
-        <select name="studyPublicId" aria-label="Study" defaultValue={query.studyPublicId ?? ""} className="border border-[var(--line)] bg-[var(--paper)] px-3"><option value="">全部 Study</option>{studies.map((study) => <option key={study.publicId} value={study.publicId}>{study.name} · {study.publicId}</option>)}</select>
         <LocaleSelect name="locale" defaultValue={query.locale} blankLabel="全部 Locale" aria-label="Locale" className="border border-[var(--line)] bg-[var(--paper)] px-3 py-3" />
         <CountrySelect name="countryRegion" defaultValue={query.countryRegion} blankLabel="全部 Country / Region" aria-label="Country / Region" className="border border-[var(--line)] bg-[var(--paper)] px-3 py-3" />
         <select name="missing" aria-label="Missing" defaultValue={query.missing ?? ""} className="border border-[var(--line)] bg-[var(--paper)] px-3"><option value="">全部 Missing 状态</option><option value="yes">仅 Missing</option><option value="no">排除 Missing</option></select>
@@ -68,12 +55,11 @@ export default async function ParticipantsPage({ searchParams }: { searchParams:
       </form>
       <div className="data-table overflow-x-auto">
         <table className="w-full min-w-[820px] border-collapse text-sm">
-          <thead className="text-left text-xs uppercase tracking-[0.12em]"><tr><th className="p-4">Participant</th><th className="p-4">Study</th><th className="p-4">Status</th><th className="p-4">Consent</th><th className="p-4">Locale / Region</th><th className="p-4">Signals</th></tr></thead>
+          <thead className="text-left text-xs uppercase tracking-[0.12em]"><tr><th className="p-4">Participant</th><th className="p-4">Status</th><th className="p-4">Consent</th><th className="p-4">Locale / Region</th><th className="p-4">Signals</th></tr></thead>
           <tbody>
             {result.items.map((participant) => (
               <tr key={participant.publicId} className="border-t border-[var(--line)] hover:bg-white/35">
                 <td className="p-4"><Link className="font-bold underline decoration-[var(--signal)] decoration-2 underline-offset-4" href={`/participants/${participant.publicId}`}>{participant.publicId}</Link><p className="mt-1 text-[var(--muted)]">{participant.displayAlias}{participant.isFixture ? " · Demo Fixture" : ""}</p></td>
-                <td className="p-4"><p>{participant.studyName}</p><p className="text-xs text-[var(--muted)]">{participant.studyPublicId}</p></td>
                 <td className="p-4"><span className="status-pill">{statusLabels[participant.status]}</span></td>
                 <td className="p-4">{participant.consentStatus}</td>
                 <td className="p-4">{participant.locale}<span className="text-[var(--muted)]"> · {participant.countryRegion || "—"}</span></td>

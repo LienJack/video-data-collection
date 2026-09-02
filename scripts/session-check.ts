@@ -19,8 +19,6 @@ async function main() {
   const adminPassword = randomBytes(24).toString("base64url");
   const participantPassword = randomBytes(24).toString("base64url");
   const adminEmail = `session-check-${suffix}@demo.invalid`;
-  const studyId = randomUUID();
-  const studyPublicId = createPublicId("ST");
   const participantId = randomUUID();
   const participantPublicId = createPublicId("PT");
   const deviceId = randomUUID();
@@ -58,16 +56,11 @@ async function main() {
       values (${participantUserId}::uuid, 'participant', 'Session Integration Fixture Participant') returning id
     `;
     await db`
-      insert into egocapture.studies (id, public_id, slug, name, serial_hmac_salt, is_demo)
-      values (${studyId}::uuid, ${studyPublicId}, ${`session-check-${suffix}`}, 'Session Integration Fixture', 'session-check-salt', true)
-    `;
-    await db`insert into egocapture.study_memberships (study_id, profile_id, role) values (${studyId}::uuid, ${adminProfile.id}::uuid, 'owner')`;
-    await db`
       insert into egocapture.participants (
-        id, public_id, study_id, auth_user_id, display_alias, status, consent_status,
+        id, public_id, auth_user_id, display_alias, status, consent_status,
         consent_version, is_fixture, created_by
       ) values (
-        ${participantId}::uuid, ${participantPublicId}, ${studyId}::uuid, ${participantUserId}::uuid,
+        ${participantId}::uuid, ${participantPublicId}, ${participantUserId}::uuid,
         'Session Integration Participant', 'active', 'valid', 'session-check-v1', true, ${adminProfile.id}::uuid
       )
     `;
@@ -77,9 +70,9 @@ async function main() {
     `;
     await db`
       insert into egocapture.devices (
-        id, public_id, study_id, manufacturer, model, device_type, serial_hmac, status, is_fixture
+        id, public_id, manufacturer, model, device_type, serial_hmac, status, is_fixture
       ) values (
-        ${deviceId}::uuid, ${devicePublicId}, ${studyId}::uuid, 'Synthetic', 'Marker Check Cam',
+        ${deviceId}::uuid, ${devicePublicId}, 'Synthetic', 'Marker Check Cam',
         'action_camera', ${createHash("sha256").update(suffix).digest("hex")}, 'active', true
       )
     `;
@@ -87,26 +80,26 @@ async function main() {
     await db`update egocapture.participants set default_device_id = ${deviceId}::uuid where id = ${participantId}::uuid`;
     await db`
       insert into egocapture.tasks (
-        id, public_id, study_id, title, lifecycle, draft_instructions, is_fixture, created_by
+        id, public_id, title, lifecycle, draft_instructions, is_fixture, created_by
       ) values (
-        ${taskId}::uuid, ${taskPublicId}, ${studyId}::uuid, ${instructions.title}, 'active',
+        ${taskId}::uuid, ${taskPublicId}, ${instructions.title}, 'active',
         ${db.json(instructions)}, true, ${adminProfile.id}::uuid
       )
     `;
     await db`
       insert into egocapture.task_versions (
-        id, task_id, study_id, version, instructions, content_hash, published_by
+        id, task_id, version, instructions, content_hash, published_by
       ) values (
-        ${taskVersionId}::uuid, ${taskId}::uuid, ${studyId}::uuid, 1,
+        ${taskVersionId}::uuid, ${taskId}::uuid, 1,
         ${db.json(instructions)}, ${contentHash}, ${adminProfile.id}::uuid
       )
     `;
     await db`
       insert into egocapture.assignments (
-        id, public_id, study_id, participant_id, task_version_id, preferred_device_id,
+        id, public_id, participant_id, task_version_id, preferred_device_id,
         due_at, locale, status, acknowledged_at, acknowledged_content_hash, created_by
       ) values (
-        ${assignmentId}::uuid, ${assignmentPublicId}, ${studyId}::uuid, ${participantId}::uuid,
+        ${assignmentId}::uuid, ${assignmentPublicId}, ${participantId}::uuid,
         ${taskVersionId}::uuid, ${deviceId}::uuid, now() + interval '2 days', 'zh-CN',
         'acknowledged', now(), ${contentHash}, ${adminProfile.id}::uuid
       )
@@ -157,7 +150,7 @@ async function main() {
         firstPayload.device_public_id === devicePublicId,
       "Signed Marker payload authority mismatch",
     );
-    assert(!JSON.stringify(firstPayload).match(/email|display|study|name/i), "Marker payload contains PII-like fields");
+    assert(!JSON.stringify(firstPayload).match(/email|display|name/i), "Marker payload contains PII-like fields");
 
     let firstAcknowledgedAt = "";
     for (let attempt = 0; attempt < 2; attempt += 1) {
@@ -232,7 +225,8 @@ async function main() {
         session.marker_acknowledged_at,
         (select count(*)::integer from egocapture.recording_sessions related
           where related.assignment_id = assignment.id and related.status = 'closed') as closed_session_count,
-        (select count(*)::integer from egocapture.audit_events audit where audit.study_id = ${studyId}::uuid) as audit_count
+        (select count(*)::integer from egocapture.audit_events audit
+          where audit.entity_public_id in (${sessionPublicId}, ${assignmentPublicId})) as audit_count
       from egocapture.recording_sessions session
       join egocapture.assignments assignment on assignment.id = session.assignment_id
       where session.public_id = ${sessionPublicId}
@@ -240,15 +234,14 @@ async function main() {
     assert(
       evidence.assignmentStatus === "canceled" && evidence.sessionStatus === "closed" &&
         evidence.markerCount === 2 && evidence.markerAcknowledgedAt &&
-        evidence.closedSessionCount === 2 && evidence.auditCount >= 6,
+        evidence.closedSessionCount === 2 && evidence.auditCount >= 5,
       "Session/Marker database or audit evidence mismatch",
     );
   } finally {
     try {
-      await db`update egocapture.studies set is_demo = true where id = ${studyId}::uuid`;
-      await db`update egocapture.participants set is_fixture = true where study_id = ${studyId}::uuid`;
-      await db`update egocapture.devices set is_fixture = true where study_id = ${studyId}::uuid`;
-      await db`update egocapture.tasks set is_fixture = true where study_id = ${studyId}::uuid`;
+      await db`update egocapture.participants set is_fixture = true where id = ${participantId}::uuid`;
+      await db`update egocapture.devices set is_fixture = true where id = ${deviceId}::uuid`;
+      await db`update egocapture.tasks set is_fixture = true where id = ${taskId}::uuid`;
     } finally {
       await db.end({ timeout: 2 });
     }

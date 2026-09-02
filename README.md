@@ -59,7 +59,7 @@ Storage
 ```
 
 - Next.js/Vercel 不代理视频，请求体中的视频字节为 `0`。
-- Participant、Study、TaskVersion 与 object key 由服务端权限上下文推导。
+- Participant、TaskVersion 与 object key 由服务端根据当前账号和 Assignment 推导。
 - Session 创建时声明的 Device 是事实声明；metadata 只是后续一致性证据。
 - VideoAsset 的当前 Session/Device 关系来自 `current_match_decisions`，不是一个可覆盖的 `session_id`。
 - TaskVersion、ConsentRecord、MatchDecision 和 AuditEvent 按追加写模型保存；数据库 Trigger 阻止关键历史 UPDATE/DELETE。
@@ -188,7 +188,7 @@ Cloud/default 使用 Supabase 官方 signed upload token。当前自托管 Stora
 - `mediainfo.js` 提供通用字段，`mp4box` 补充 MP4/QuickTime progressive parsing。
 - 不抽帧、不解码、不调用 FFmpeg Worker、不生成代理视频。
 - 保存 allowlist 后的容器、轨道、时间、设备和 360 投影字段，不保存原始 metadata JSON。
-- 原始 serial 立即使用 Study Salt 做 HMAC-SHA256；GPS 只保存是否存在，不保存坐标。
+- 原始 serial 立即使用服务端密钥做 HMAC-SHA256；GPS 只保存是否存在，不保存坐标。
 - 缺失 metadata 显示 `metadata_unavailable`，不会被推断成 mismatch。
 
 时间优先级固定为：可靠时区 QuickTime creation date → container create time → track create time → 浏览器 `lastModified` → unknown。上传时间永远不是 capture time。
@@ -232,7 +232,7 @@ Playwright 的主流程真实上传一个有效 MP4，并验证视频请求目�
 - Demo 只能使用合成身份和无 PII 视频。
 - 原文件名仅用于人工定位：去路径/控制字符、最长 255 字符、不进入 object key 或 Audit diff。
 - Marker、object key、URL 与日志不包含姓名、邮箱、任务标题或序列号。
-- Participant 创建 Session/Upload 时服务端重新校验身份、状态、Consent 与 Study。
+- Participant 创建 Session/Upload 时服务端重新校验身份、状态、Consent 与资源归属。
 - 普通 authenticated 用户没有任意 Storage INSERT/SELECT 权限。
 - private bucket 下载只通过单对象、5 分钟 signed URL。
 - CSP、`frame-ancestors 'none'`、HTTP-only Cookie 与 Origin 检查已启用。
@@ -279,7 +279,7 @@ MVP 只真实验证到 50 MB，不声称具备数 GB、跨天、跨地区或 4K 
 |---|---|---|
 | NAS 仅五服务 Docker、Mac 本地 Next.js | 已验证 | 物理 NAS 容器、loopback binding、Tunnel 关闭检查 |
 | Migration / Seed 重跑 | 已验证 | 13 个 Migration checksum；Seed 幂等恢复与约束检查 |
-| Auth / RLS / Study 隔离 | 已验证 | Integration 与数据库测试 |
+| Auth / RLS / Participant 所有权隔离 | 已验证 | Integration 与数据库测试 |
 | Ed25519 Marker | 已验证 | 单测、Session Integration、浏览器二维码 |
 | TUS 多分片、Pause/Resume、Complete | 已验证 | 约 9.8 MB 合成 MP4 物理上传；浏览器短 MP4 |
 | Range metadata / 360 / 损坏文件 | 已验证 | 手机 MP4、合成 360 MP4、损坏 MP4；16 MiB budget |

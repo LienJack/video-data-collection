@@ -37,7 +37,6 @@ type UploadAuthority = {
   id: string;
   publicId: string;
   batchId: string;
-  studyId: string;
   participantId: string;
   participantStatus: string;
   participantIsFixture: boolean;
@@ -112,7 +111,6 @@ async function ownUploadAuthority(
       intent.id,
       intent.public_id,
       intent.batch_id,
-      intent.study_id,
       intent.participant_id,
       participant.status as participant_status,
       participant.is_fixture as participant_is_fixture,
@@ -151,11 +149,10 @@ export async function createUploadBatch(
     execute: async () => {
       const [participant] = await transaction<{
         id: string;
-        studyId: string;
         status: string;
         consentStatus: string;
       }[]>`
-        select id, study_id, status, consent_status
+        select id, status, consent_status
         from egocapture.participants
         where auth_user_id = ${viewer.authUserId}::uuid
         for update
@@ -166,11 +163,10 @@ export async function createUploadBatch(
       }
       const publicId = createPublicId("UB");
       await transaction`
-        insert into egocapture.upload_batches (public_id, study_id, participant_id)
-        values (${publicId}, ${participant.studyId}::uuid, ${participant.id}::uuid)
+        insert into egocapture.upload_batches (public_id, participant_id)
+        values (${publicId}, ${participant.id}::uuid)
       `;
       await writeAudit(transaction, {
-        studyId: participant.studyId,
         actorProfileId: viewer.profileId,
         actorAuthUserId: viewer.authUserId,
         action: "upload_batch.created",
@@ -199,7 +195,6 @@ export async function createUploadIntent(
     execute: async () => {
       const [batch] = await transaction<{
         id: string;
-        studyId: string;
         participantId: string;
         participantStatus: string;
         consentStatus: string;
@@ -207,7 +202,6 @@ export async function createUploadIntent(
       }[]>`
         select
           batch.id,
-          batch.study_id,
           batch.participant_id,
           participant.status as participant_status,
           participant.consent_status,
@@ -260,7 +254,6 @@ export async function createUploadIntent(
           join egocapture.assignments assignment on assignment.id = session.assignment_id
           where session.public_id = ${input.claimedSessionPublicId}
             and session.participant_id = ${batch.participantId}::uuid
-            and session.study_id = ${batch.studyId}::uuid
             and session.status = 'open'
           for update of session, assignment
         `;
@@ -275,19 +268,18 @@ export async function createUploadIntent(
       const attemptPublicId = createPublicId("UA");
       const attemptExpiresAt = new Date(Date.now() + TUS_RESOURCE_TTL_SECONDS * 1000);
       const objectKey = createUploadObjectKey({
-        studyId: batch.studyId,
         participantId: batch.participantId,
         uploadId,
         extension: input.extension,
       });
       await transaction`
         insert into egocapture.upload_intents (
-          id, public_id, batch_id, study_id, participant_id, original_filename,
+          id, public_id, batch_id, participant_id, original_filename,
           size_bytes, content_type, extension, local_modified_at, object_key,
           claimed_session_id, unable_to_determine, participant_note, fingerprint_v1,
           transfer_status, expected_expires_at
         ) values (
-          ${uploadId}::uuid, ${uploadPublicId}, ${batch.id}::uuid, ${batch.studyId}::uuid,
+          ${uploadId}::uuid, ${uploadPublicId}, ${batch.id}::uuid,
           ${batch.participantId}::uuid, ${sanitizeOriginalFilename(input.originalFilename)},
           ${input.sizeBytes}, ${input.contentType}, ${input.extension}, ${input.localModifiedAt},
           ${objectKey}, ${claimedSession?.id ?? null}::uuid, ${input.unableToDetermine},
@@ -309,14 +301,13 @@ export async function createUploadIntent(
       const [duplicate] = await transaction<{ exists: boolean }[]>`
         select exists (
           select 1 from egocapture.upload_intents existing
-          where existing.study_id = ${batch.studyId}::uuid
+          where existing.participant_id = ${batch.participantId}::uuid
             and existing.id <> ${uploadId}::uuid
             and existing.size_bytes = ${input.sizeBytes}
             and existing.fingerprint_v1 = ${input.fingerprintV1}
         ) as exists
       `;
       await writeAudit(transaction, {
-        studyId: batch.studyId,
         actorProfileId: viewer.profileId,
         actorAuthUserId: viewer.authUserId,
         action: "upload_intent.created",
@@ -365,14 +356,13 @@ export async function createOrResumeAttempt(
     const rows = await transaction<{
       id: string;
       publicId: string;
-      studyId: string;
       participantId: string;
       participantStatus: string;
       consentStatus: string;
       objectKey: string;
       transferStatus: string;
     }[]>`
-      select intent.id, intent.public_id, intent.study_id, intent.participant_id,
+      select intent.id, intent.public_id, intent.participant_id,
         participant.status as participant_status, participant.consent_status,
         intent.object_key, intent.transfer_status
       from egocapture.upload_intents intent
@@ -443,7 +433,6 @@ export async function createOrResumeAttempt(
       where id = ${upload.id}::uuid
     `;
     await writeAudit(transaction, {
-      studyId: upload.studyId,
       actorProfileId: viewer.profileId,
       actorAuthUserId: viewer.authUserId,
       action: "upload_attempt.created",
@@ -494,9 +483,9 @@ async function recordUploadFailure(
     `;
     await transaction`
       insert into egocapture.review_cases (
-        public_id, study_id, upload_intent_id, case_type, reason, is_fixture
+        public_id, upload_intent_id, case_type, reason, is_fixture
       )
-      select ${createPublicId("RV")}, ${upload.studyId}::uuid, ${upload.id}::uuid,
+      select ${createPublicId("RV")}, ${upload.id}::uuid,
         'upload_failed', ${failureCode}, ${upload.participantIsFixture}
       where not exists (
         select 1 from egocapture.review_cases
@@ -504,7 +493,6 @@ async function recordUploadFailure(
       )
     `;
     await writeAudit(transaction, {
-      studyId: upload.studyId,
       actorProfileId: viewer.profileId,
       actorAuthUserId: viewer.authUserId,
       action: "upload.reconciliation_failed",
@@ -575,9 +563,9 @@ export async function completeUpload(viewer: Viewer, uploadPublicId: string, req
     const assetPublicId = createPublicId("VA");
     const [asset] = await transaction<{ id: string }[]>`
       insert into egocapture.video_assets (
-        public_id, upload_intent_id, study_id, participant_id, is_fixture
+        public_id, upload_intent_id, participant_id, is_fixture
       ) values (
-        ${assetPublicId}, ${upload.id}::uuid, ${upload.studyId}::uuid, ${upload.participantId}::uuid,
+        ${assetPublicId}, ${upload.id}::uuid, ${upload.participantId}::uuid,
         ${upload.participantIsFixture}
       ) returning id
     `;
@@ -604,9 +592,9 @@ export async function completeUpload(viewer: Viewer, uploadPublicId: string, req
     if (upload.unableToDetermine) {
       await transaction`
         insert into egocapture.review_cases (
-          public_id, study_id, video_asset_id, case_type, reason, is_fixture
+          public_id, video_asset_id, case_type, reason, is_fixture
         ) values (
-          ${createPublicId("RV")}, ${upload.studyId}::uuid, ${asset.id}::uuid,
+          ${createPublicId("RV")}, ${asset.id}::uuid,
           'unmatched', 'participant_selected_unable_to_determine', ${upload.participantIsFixture}
         )
       `;
@@ -616,7 +604,7 @@ export async function completeUpload(viewer: Viewer, uploadPublicId: string, req
         select 1
         from egocapture.upload_intents other_intent
         join egocapture.video_assets other_asset on other_asset.upload_intent_id = other_intent.id
-        where other_intent.study_id = ${upload.studyId}::uuid
+        where other_intent.participant_id = ${upload.participantId}::uuid
           and other_intent.id <> ${upload.id}::uuid
           and other_intent.size_bytes = ${upload.sizeBytes}
           and other_intent.fingerprint_v1 = ${upload.fingerprintV1}
@@ -625,9 +613,9 @@ export async function completeUpload(viewer: Viewer, uploadPublicId: string, req
     if (duplicate.exists) {
       await transaction`
         insert into egocapture.review_cases (
-          public_id, study_id, video_asset_id, case_type, reason, is_fixture
+          public_id, video_asset_id, case_type, reason, is_fixture
         ) values (
-          ${createPublicId("RV")}, ${upload.studyId}::uuid, ${asset.id}::uuid,
+          ${createPublicId("RV")}, ${asset.id}::uuid,
           'duplicate_candidate', 'matching_size_and_fingerprint_v1', ${upload.participantIsFixture}
         )
       `;
@@ -661,7 +649,6 @@ export async function completeUpload(viewer: Viewer, uploadPublicId: string, req
         )
     `;
     await writeAudit(transaction, {
-      studyId: upload.studyId,
       actorProfileId: viewer.profileId,
       actorAuthUserId: viewer.authUserId,
       action: "upload.verified",
@@ -699,7 +686,6 @@ export async function abortUpload(viewer: Viewer, uploadPublicId: string, reques
       where upload_intent_id = ${upload.id}::uuid and status <> 'completed'
     `;
     await writeAudit(transaction, {
-      studyId: upload.studyId,
       actorProfileId: viewer.profileId,
       actorAuthUserId: viewer.authUserId,
       action: "upload.aborted",

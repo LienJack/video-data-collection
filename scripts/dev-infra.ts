@@ -154,7 +154,7 @@ async function createSecrets(profile: Profile) {
     `MARKER_PRIVATE_KEY_JWK=${markerPrivate}`,
     `MARKER_PUBLIC_KEY_JWK=${markerPublic}`,
     "MARKER_KEY_ID=marker-key-v1",
-    `STUDY_SERIAL_HMAC_KEY=${randomBytes(32).toString("base64url")}`,
+    `DEVICE_SERIAL_HMAC_KEY=${randomBytes(32).toString("base64url")}`,
     `CRON_SECRET=${randomBytes(32).toString("base64url")}`,
     "DEMO_ADMIN_USERNAME=admin",
     "DEMO_ADMIN_EMAIL=admin.demo@egocapture.invalid",
@@ -183,12 +183,15 @@ async function ensureRuntime(profile: Profile) {
   const composeEnv = parseEnv(await readFile(composePath, "utf8"));
   const existingApp = await readFile(appPath, "utf8");
   const appEnv = parseEnv(existingApp);
-  if (!appEnv.SUPABASE_JWT_SECRET || !appEnv.STORAGE_UPLOAD_AUTH_MODE || !appEnv.PARTICIPANT_SITE_URL || !appEnv.ADMIN_SITE_URL) {
+  if (!appEnv.SUPABASE_JWT_SECRET || !appEnv.STORAGE_UPLOAD_AUTH_MODE || !appEnv.PARTICIPANT_SITE_URL || !appEnv.ADMIN_SITE_URL || !appEnv.DEVICE_SERIAL_HMAC_KEY) {
     const additions = [
       !appEnv.SUPABASE_JWT_SECRET ? `SUPABASE_JWT_SECRET=${composeEnv.JWT_SECRET}` : "",
       !appEnv.STORAGE_UPLOAD_AUTH_MODE ? "STORAGE_UPLOAD_AUTH_MODE=nas_scoped_jwt" : "",
       !appEnv.PARTICIPANT_SITE_URL ? "PARTICIPANT_SITE_URL=http://localhost:3000" : "",
       !appEnv.ADMIN_SITE_URL ? "ADMIN_SITE_URL=http://localhost:3001" : "",
+      !appEnv.DEVICE_SERIAL_HMAC_KEY
+        ? `DEVICE_SERIAL_HMAC_KEY=${randomBytes(32).toString("base64url")}`
+        : "",
     ].filter(Boolean).join("\n");
     await writeFile(appPath, `${existingApp.trimEnd()}\n${additions}\n`, { mode: 0o600 });
   }

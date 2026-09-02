@@ -21,7 +21,6 @@ async function main() {
   let correctedSessionPublicId = "";
   try {
     const [fixture] = await db<{
-      studyId: string;
       participantId: string;
       participantPublicId: string;
       assignmentId: string;
@@ -35,7 +34,7 @@ async function main() {
       currentDecisionId: string;
       currentSessionPublicId: string;
     }[]>`
-      select intent.study_id, intent.participant_id, participant.public_id as participant_public_id,
+      select intent.participant_id, participant.public_id as participant_public_id,
         session.assignment_id, assignment.public_id as assignment_public_id,
         session.task_version_id, session.declared_device_id as device_id,
         device.public_id as device_public_id, asset.id as video_asset_id,
@@ -62,32 +61,28 @@ async function main() {
     const { data: admin, error } = await supabase.auth.admin.createUser({ email, password, email_confirm: true });
     if (error || !admin.user) throw error || new Error("Review Admin Auth creation failed");
     adminUserId = admin.user.id;
-    const [profile] = await db<{ id: string }[]>`
-      insert into egocapture.profiles (auth_user_id, role, display_name)
-      values (${adminUserId}::uuid, 'admin', 'Review Integration Admin') returning id
-    `;
     await db`
-      insert into egocapture.study_memberships (study_id, profile_id, role, status)
-      values (${fixture.studyId}::uuid, ${profile.id}::uuid, 'admin', 'active')
+      insert into egocapture.profiles (auth_user_id, role, display_name)
+      values (${adminUserId}::uuid, 'admin', 'Review Integration Admin')
     `;
     correctedSessionPublicId = createPublicId("RS");
     const correctedSessionId = randomUUID();
     await db`
       insert into egocapture.recording_sessions (
-        id, public_id, assignment_id, participant_id, study_id, task_version_id,
+        id, public_id, assignment_id, participant_id, task_version_id,
         declared_device_id, timezone, status, marker_acknowledged_at
       ) values (
         ${correctedSessionId}::uuid, ${correctedSessionPublicId}, ${fixture.assignmentId}::uuid,
-        ${fixture.participantId}::uuid, ${fixture.studyId}::uuid, ${fixture.taskVersionId}::uuid,
+        ${fixture.participantId}::uuid, ${fixture.taskVersionId}::uuid,
         ${fixture.deviceId}::uuid, 'Asia/Shanghai', 'open', now()
       )
     `;
     reviewPublicId = createPublicId("RV");
     await db`
       insert into egocapture.review_cases (
-        public_id, study_id, video_asset_id, assignment_id, case_type, reason, is_fixture
+        public_id, video_asset_id, assignment_id, case_type, reason, is_fixture
       ) values (
-        ${reviewPublicId}, ${fixture.studyId}::uuid, ${fixture.videoAssetId}::uuid,
+        ${reviewPublicId}, ${fixture.videoAssetId}::uuid,
         ${fixture.assignmentId}::uuid, 'needs_review', 'integration_fixture_requires_session_correction', true
       )
     `;

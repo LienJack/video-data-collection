@@ -18,7 +18,6 @@ export default async function ParticipantDetailPage({ params }: { params: Promis
       <header className="mt-8 border-b border-[var(--line)] pb-7">
         <div className="flex flex-wrap items-center gap-3"><p className="text-xs font-bold uppercase tracking-[0.2em] text-[var(--signal)]">{participant.publicId}</p>{participant.isFixture ? <span className="bg-[var(--yellow)] px-2 py-1 text-xs font-bold">Demo Fixture</span> : null}</div>
         <h1 className="page-title">{participant.displayAlias}</h1>
-        <p className="mt-3 text-sm text-[var(--muted)]">{participant.studyName} · {participant.studyPublicId}</p>
       </header>
       <div className="grid gap-8 py-8 xl:grid-cols-[0.8fr_1.2fr]">
         <section className="surface h-fit space-y-3 p-6">

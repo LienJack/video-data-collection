@@ -125,10 +125,7 @@ async function main() {
   const supabase = createClient(env.supabaseUrl, env.serviceRoleKey, {
     auth: { autoRefreshToken: false, detectSessionInUrl: false, persistSession: false },
   });
-  const suffix = randomUUID();
   const participantPassword = randomBytes(24).toString("base64url");
-  const studyId = randomUUID();
-  const studyPublicId = createPublicId("ST");
   const participantId = randomUUID();
   const participantPublicId = createPublicId("PT");
   const deviceId = randomUUID();
@@ -161,15 +158,11 @@ async function main() {
       values (${participantUserId}::uuid, 'participant', 'TUS Upload Fixture Participant') returning id
     `;
     await db`
-      insert into egocapture.studies (id, public_id, slug, name, serial_hmac_salt, is_demo)
-      values (${studyId}::uuid, ${studyPublicId}, ${`upload-check-${suffix}`}, 'TUS Upload Integration Fixture', 'upload-check-salt', true)
-    `;
-    await db`
       insert into egocapture.participants (
-        id, public_id, study_id, auth_user_id, display_alias, status, consent_status,
+        id, public_id, auth_user_id, display_alias, status, consent_status,
         consent_version, is_fixture
       ) values (
-        ${participantId}::uuid, ${participantPublicId}, ${studyId}::uuid, ${participantUserId}::uuid,
+        ${participantId}::uuid, ${participantPublicId}, ${participantUserId}::uuid,
         'TUS Upload Fixture', 'active', 'valid', 'upload-check-v1', true
       )
     `;
@@ -179,9 +172,9 @@ async function main() {
     `;
     await db`
       insert into egocapture.devices (
-        id, public_id, study_id, manufacturer, model, device_type, serial_hmac, status, is_fixture
+        id, public_id, manufacturer, model, device_type, serial_hmac, status, is_fixture
       ) values (
-        ${deviceId}::uuid, ${devicePublicId}, ${studyId}::uuid, 'Synthetic', 'TUS Check Cam',
+        ${deviceId}::uuid, ${devicePublicId}, 'Synthetic', 'TUS Check Cam',
         'phone', null, 'active', true
       )
     `;
@@ -191,26 +184,26 @@ async function main() {
     `;
     await db`
       insert into egocapture.tasks (
-        id, public_id, study_id, title, lifecycle, draft_instructions, is_fixture, created_by
+        id, public_id, title, lifecycle, draft_instructions, is_fixture, created_by
       ) values (
-        ${taskId}::uuid, ${taskPublicId}, ${studyId}::uuid, ${instructions.title}, 'active', ${db.json(instructions)}, true,
+        ${taskId}::uuid, ${taskPublicId}, ${instructions.title}, 'active', ${db.json(instructions)}, true,
         ${participantProfile.id}::uuid
       )
     `;
     await db`
       insert into egocapture.task_versions (
-        id, task_id, study_id, version, instructions, content_hash, published_by
+        id, task_id, version, instructions, content_hash, published_by
       ) values (
-        ${taskVersionId}::uuid, ${taskId}::uuid, ${studyId}::uuid, 1, ${db.json(instructions)}, ${contentHash},
+        ${taskVersionId}::uuid, ${taskId}::uuid, 1, ${db.json(instructions)}, ${contentHash},
         ${participantProfile.id}::uuid
       )
     `;
     await db`
       insert into egocapture.assignments (
-        id, public_id, study_id, participant_id, task_version_id, preferred_device_id,
+        id, public_id, participant_id, task_version_id, preferred_device_id,
         due_at, locale, status, acknowledged_at, acknowledged_content_hash, created_by
       ) values (
-        ${assignmentId}::uuid, ${assignmentPublicId}, ${studyId}::uuid, ${participantId}::uuid,
+        ${assignmentId}::uuid, ${assignmentPublicId}, ${participantId}::uuid,
         ${taskVersionId}::uuid, ${deviceId}::uuid, now() + interval '2 days', 'zh-CN',
         'acknowledged', now(), ${contentHash}, ${participantProfile.id}::uuid
       )
@@ -449,7 +442,8 @@ async function main() {
         (select count(*)::integer from egocapture.upload_attempts where upload_intent_id = intent.id and status = 'expired') as expired_attempt_count,
         decision.decision_type,
         assignment.status as assignment_status,
-        (select count(*)::integer from egocapture.audit_events where study_id = ${studyId}::uuid) as audit_count,
+        (select count(*)::integer from egocapture.audit_events
+          where actor_auth_user_id = ${participantUserId}::uuid) as audit_count,
         intent.metadata_status,
         (select status from egocapture.metadata_attempts where video_asset_id = asset.id order by attempt_number desc limit 1) as metadata_attempt_status,
         (select count(*)::integer from egocapture.metadata_evidence where video_asset_id = asset.id) as evidence_count,
@@ -553,7 +547,7 @@ async function main() {
             and review.case_type = 'duplicate_candidate' and review.status = 'open') as review_count,
         (select count(*)::integer from egocapture.video_assets asset
           join egocapture.upload_intents intent on intent.id = asset.upload_intent_id
-          where intent.study_id = ${studyId}::uuid and intent.size_bytes = ${fileSize}
+          where intent.participant_id = ${participantId}::uuid and intent.size_bytes = ${fileSize}
             and intent.fingerprint_v1 = ${fingerprint} and asset.status = 'active') as active_asset_count
     `;
     assert(duplicateEvidence.reviewCount === 1 && duplicateEvidence.activeAssetCount >= 2, "Duplicate candidate did not preserve both assets for review");
@@ -612,10 +606,11 @@ async function main() {
         count(*) filter (where intent.failure_code = 'storage_missing')::integer as missing_failures,
         count(*) filter (where intent.failure_code = 'size_mismatch')::integer as size_failures,
         (select count(*)::integer from egocapture.review_cases review
-          where review.study_id = ${studyId}::uuid and review.case_type = 'upload_failed'
+          join egocapture.upload_intents failed_intent on failed_intent.id = review.upload_intent_id
+          where failed_intent.participant_id = ${participantId}::uuid and review.case_type = 'upload_failed'
             and review.status = 'open') as review_count
       from egocapture.upload_intents intent
-      where intent.study_id = ${studyId}::uuid
+      where intent.participant_id = ${participantId}::uuid
     `;
     assert(reconciliationEvidence.missingFailures >= 1 && reconciliationEvidence.sizeFailures >= 1 && reconciliationEvidence.reviewCount >= 2, "Reconciliation failure evidence is incomplete");
 

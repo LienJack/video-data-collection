@@ -22,7 +22,6 @@ async function main() {
   });
   try {
     const [baseline] = await db<{
-      studyCount: number;
       participantCount: number;
       deviceCount: number;
       taskCount: number;
@@ -34,7 +33,6 @@ async function main() {
       currentUnmatchedCount: number;
     }[]>`
       select
-        (select count(*)::int from egocapture.studies where public_id = 'ST-23456789' and is_demo) as study_count,
         (select count(*)::int from egocapture.participants where public_id = 'PT-23456789' and is_fixture) as participant_count,
         (select count(*)::int from egocapture.devices where public_id = 'DEV-23456789' and is_fixture) as device_count,
         (select count(*)::int from egocapture.tasks where id::text like '50000000-0000-4000-8000-00000000000%' and is_fixture) as task_count,
@@ -45,7 +43,6 @@ async function main() {
         (select count(*)::int from egocapture.match_decisions where video_asset_id = '74000000-0000-4000-8000-000000000001'::uuid and superseded_by is null) as current_decision_count,
         (select count(*)::int from egocapture.match_decisions where video_asset_id = '74000000-0000-4000-8000-000000000001'::uuid and superseded_by is null and decision_type = 'unmatched' and resolved_session_id is null) as current_unmatched_count
     `;
-    assert(baseline.studyCount === 1, "Demo Study 基线不唯一");
     assert(baseline.participantCount === 1, "Demo Participant 基线不唯一");
     assert(baseline.deviceCount === 1, "Demo Device 基线不唯一");
     assert(baseline.taskCount === 4, "Demo Task 基线应为 4 个");
@@ -152,10 +149,10 @@ async function main() {
       await db.begin(async (transaction) => {
         await transaction`
           insert into egocapture.devices (
-            id, public_id, study_id, manufacturer, model, device_type, serial_hmac
+            id, public_id, manufacturer, model, device_type, serial_hmac
           ) values
-            (${randomUUID()}::uuid, 'DEV-TESTAB', '10000000-0000-4000-8000-000000000001'::uuid, 'Test', 'No Serial A', 'camera', null),
-            (${randomUUID()}::uuid, 'DEV-TESTAC', '10000000-0000-4000-8000-000000000001'::uuid, 'Test', 'No Serial B', 'camera', null)
+            (${randomUUID()}::uuid, 'DEV-TESTAB', 'Test', 'No Serial A', 'camera', null),
+            (${randomUUID()}::uuid, 'DEV-TESTAC', 'Test', 'No Serial B', 'camera', null)
         `;
         throw optionalSerialRollback;
       });
@@ -169,10 +166,10 @@ async function main() {
         const duplicateSerial = "a".repeat(64);
         await transaction`
           insert into egocapture.devices (
-            id, public_id, study_id, manufacturer, model, device_type, serial_hmac
+            id, public_id, manufacturer, model, device_type, serial_hmac
           ) values
-            (${randomUUID()}::uuid, 'DEV-TESTAD', '10000000-0000-4000-8000-000000000001'::uuid, 'Test', 'Duplicate Serial A', 'camera', ${duplicateSerial}),
-            (${randomUUID()}::uuid, 'DEV-TESTAE', '10000000-0000-4000-8000-000000000001'::uuid, 'Test', 'Duplicate Serial B', 'camera', ${duplicateSerial})
+            (${randomUUID()}::uuid, 'DEV-TESTAD', 'Test', 'Duplicate Serial A', 'camera', ${duplicateSerial}),
+            (${randomUUID()}::uuid, 'DEV-TESTAE', 'Test', 'Duplicate Serial B', 'camera', ${duplicateSerial})
         `;
       });
     } catch (error) {
@@ -180,7 +177,7 @@ async function main() {
         typeof error === "object" && error !== null && "code" in error && error.code === "23505";
       if (!duplicateSerialRejected) throw error;
     }
-    assert(duplicateSerialRejected, "相同 Study 的重复非空 serial_hmac 必须被拒绝");
+    assert(duplicateSerialRejected, "重复的非空 serial_hmac 必须被拒绝");
 
     const [multipartReservation] = await db<{
       reservedColumns: number;

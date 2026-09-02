@@ -32,7 +32,7 @@ const serverEnvironmentSchema = browserEnvironmentSchema.extend({
     }
   }),
   MARKER_KEY_ID: z.string().min(1).max(80),
-  STUDY_SERIAL_HMAC_KEY: z.string().min(32),
+  DEVICE_SERIAL_HMAC_KEY: z.string().min(32),
   CRON_SECRET: z.string().min(32),
   DEMO_ADMIN_USERNAME: z.string().trim().min(1).max(64),
   DEMO_ADMIN_EMAIL: z.string().trim().email().max(254),

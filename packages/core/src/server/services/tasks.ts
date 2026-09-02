@@ -21,7 +21,6 @@ import type { Viewer } from "@egocapture/core/server/auth";
 import { database } from "@egocapture/core/server/database";
 import { withIdempotency } from "@egocapture/core/server/idempotency";
 
-const studyPublicIdSchema = z.string().regex(/^ST-[23456789ABCDEFGHJKLMNPQRSTUVWXYZ]{6,16}$/);
 const taskPublicIdSchema = z.string().regex(/^TSK-[23456789ABCDEFGHJKLMNPQRSTUVWXYZ]{6,16}$/);
 const participantPublicIdSchema = z.string().regex(/^PT-[23456789ABCDEFGHJKLMNPQRSTUVWXYZ]{6,16}$/);
 const devicePublicIdSchema = z.string().regex(/^DEV-[23456789ABCDEFGHJKLMNPQRSTUVWXYZ]{6,16}$/);
@@ -31,7 +30,6 @@ const localeSchema = z.string().trim().min(2).max(20).refine(isCanonicalLocale, 
 });
 
 export const createTaskSchema = z.object({
-  studyPublicId: studyPublicIdSchema,
   instructions: taskInstructionsSchema,
 });
 
@@ -42,7 +40,6 @@ export const updateTaskSchema = z.object({
 
 export const taskListSchema = z.object({
   search: z.string().trim().max(160).optional(),
-  studyPublicId: studyPublicIdSchema.optional(),
   lifecycle: z.enum(["draft", "active", "archived"]).optional(),
   cursor: taskPublicIdSchema.optional(),
   limit: z.coerce.number().int().min(1).max(50).default(25),
@@ -60,7 +57,6 @@ export const createAssignmentSchema = z.object({
 
 export const assignmentListSchema = z.object({
   search: z.string().trim().max(160).optional(),
-  studyPublicId: studyPublicIdSchema.optional(),
   status: z.enum([
     "assigned", "acknowledged", "session_created", "uploading", "submitted",
     "needs_review", "rework_required", "accepted", "expired", "missing_upload", "canceled",
@@ -79,29 +75,12 @@ export const extendAssignmentSchema = assignmentReasonSchema.extend({
   dueAt: z.string().datetime({ offset: true }),
 });
 
-async function studyForAdmin(viewer: Viewer, studyPublicId: string) {
-  const db = database();
-  const [study] = await db<{ id: string; publicId: string }[]>`
-    select study.id, study.public_id
-    from egocapture.studies study
-    join egocapture.study_memberships membership on membership.study_id = study.id
-    where study.public_id = ${studyPublicId}
-      and membership.profile_id = ${viewer.profileId}::uuid
-      and membership.status = 'active'
-    limit 1
-  `;
-  if (!study) throw new DomainError("NOT_FOUND", "Study 或资源不存在", 404);
-  return study;
-}
-
-export async function listTasks(viewer: Viewer, input: z.infer<typeof taskListSchema>) {
+export async function listTasks(_viewer: Viewer, input: z.infer<typeof taskListSchema>) {
   const db = database();
   const rows = await db<{
     publicId: string;
     title: string;
     lifecycle: string;
-    studyPublicId: string;
-    studyName: string;
     latestVersion: number | null;
     latestContentHash: string | null;
     isFixture: boolean;
@@ -111,15 +90,11 @@ export async function listTasks(viewer: Viewer, input: z.infer<typeof taskListSc
       task.public_id,
       task.title,
       task.lifecycle,
-      study.public_id as study_public_id,
-      study.name as study_name,
       latest.version as latest_version,
       latest.content_hash as latest_content_hash,
       task.is_fixture,
       task.updated_at
     from egocapture.tasks task
-    join egocapture.studies study on study.id = task.study_id
-    join egocapture.study_memberships membership on membership.study_id = study.id
     left join lateral (
       select version.version, version.content_hash
       from egocapture.task_versions version
@@ -127,12 +102,9 @@ export async function listTasks(viewer: Viewer, input: z.infer<typeof taskListSc
       order by version.version desc
       limit 1
     ) latest on true
-    where membership.profile_id = ${viewer.profileId}::uuid
-      and membership.status = 'active'
-      and (${input.search ?? null}::text is null
+    where (${input.search ?? null}::text is null
         or task.public_id ilike '%' || ${input.search ?? ""} || '%'
         or task.title ilike '%' || ${input.search ?? ""} || '%')
-      and (${input.studyPublicId ?? null}::text is null or study.public_id = ${input.studyPublicId ?? ""})
       and (${input.lifecycle ?? null}::text is null or task.lifecycle = ${input.lifecycle ?? ""})
       and (${input.cursor ?? null}::text is null or task.public_id > ${input.cursor ?? ""})
     order by task.public_id
@@ -143,7 +115,7 @@ export async function listTasks(viewer: Viewer, input: z.infer<typeof taskListSc
   return { items, nextCursor: hasNext ? items.at(-1)?.publicId ?? null : null };
 }
 
-export async function getTask(viewer: Viewer, taskPublicId: string) {
+export async function getTask(_viewer: Viewer, taskPublicId: string) {
   const db = database();
   const [task] = await db<{
     id: string;
@@ -151,8 +123,6 @@ export async function getTask(viewer: Viewer, taskPublicId: string) {
     title: string;
     lifecycle: string;
     draftInstructions: TaskInstructions;
-    studyPublicId: string;
-    studyName: string;
     isFixture: boolean;
     updatedAt: Date;
   }[]>`
@@ -162,16 +132,10 @@ export async function getTask(viewer: Viewer, taskPublicId: string) {
       task.title,
       task.lifecycle,
       task.draft_instructions,
-      study.public_id as study_public_id,
-      study.name as study_name,
       task.is_fixture,
       task.updated_at
     from egocapture.tasks task
-    join egocapture.studies study on study.id = task.study_id
-    join egocapture.study_memberships membership on membership.study_id = study.id
     where task.public_id = ${taskPublicId}
-      and membership.profile_id = ${viewer.profileId}::uuid
-      and membership.status = 'active'
     limit 1
   `;
   if (!task) throw new DomainError("NOT_FOUND", "Task 或资源不存在", 404);
@@ -194,7 +158,6 @@ export async function createTask(
   idempotencyKey: string,
   requestId: string,
 ) {
-  const study = await studyForAdmin(viewer, input.studyPublicId);
   const db = database();
   return await db.begin(async (transaction) => await withIdempotency(transaction, {
     actorAuthUserId: viewer.authUserId,
@@ -205,14 +168,13 @@ export async function createTask(
       const publicId = createPublicId("TSK");
       const [task] = await transaction<{ id: string; publicId: string; updatedAt: Date }[]>`
         insert into egocapture.tasks (
-          public_id, study_id, title, draft_instructions, created_by
+          public_id, title, draft_instructions, created_by
         ) values (
-          ${publicId}, ${study.id}::uuid, ${input.instructions.title},
+          ${publicId}, ${input.instructions.title},
           ${transaction.json(input.instructions)}, ${viewer.profileId}::uuid
         ) returning id, public_id, updated_at
       `;
       await writeAudit(transaction, {
-        studyId: study.id,
         actorProfileId: viewer.profileId,
         actorAuthUserId: viewer.authUserId,
         action: "task.created",
@@ -237,19 +199,15 @@ export async function updateTask(
     const [task] = await transaction<{
       id: string;
       publicId: string;
-      studyId: string;
       title: string;
       lifecycle: "draft" | "active" | "archived";
       updatedAt: Date;
       isFixture: boolean;
     }[]>`
-      select task.id, task.public_id, task.study_id, task.title, task.lifecycle,
+      select task.id, task.public_id, task.title, task.lifecycle,
              task.updated_at, task.is_fixture
       from egocapture.tasks task
-      join egocapture.study_memberships membership on membership.study_id = task.study_id
       where task.public_id = ${taskPublicId}
-        and membership.profile_id = ${viewer.profileId}::uuid
-        and membership.status = 'active'
       for update of task
     `;
     if (!task) throw new DomainError("NOT_FOUND", "Task 或资源不存在", 404);
@@ -268,7 +226,6 @@ export async function updateTask(
       returning updated_at
     `;
     await writeAudit(transaction, {
-      studyId: task.studyId,
       actorProfileId: viewer.profileId,
       actorAuthUserId: viewer.authUserId,
       action: "task.draft_updated",
@@ -298,18 +255,14 @@ export async function publishTask(
       const [task] = await transaction<{
         id: string;
         publicId: string;
-        studyId: string;
         draftInstructions: TaskInstructions;
         lifecycle: string;
         isFixture: boolean;
       }[]>`
-        select task.id, task.public_id, task.study_id, task.draft_instructions,
+        select task.id, task.public_id, task.draft_instructions,
                task.lifecycle, task.is_fixture
         from egocapture.tasks task
-        join egocapture.study_memberships membership on membership.study_id = task.study_id
         where task.public_id = ${taskPublicId}
-          and membership.profile_id = ${viewer.profileId}::uuid
-          and membership.status = 'active'
         for update of task
       `;
       if (!task) throw new DomainError("NOT_FOUND", "Task 或资源不存在", 404);
@@ -326,9 +279,9 @@ export async function publishTask(
       `;
       await transaction`
         insert into egocapture.task_versions (
-          task_id, study_id, version, instructions, content_hash, published_by
+          task_id, version, instructions, content_hash, published_by
         ) values (
-          ${task.id}::uuid, ${task.studyId}::uuid, ${next.version},
+          ${task.id}::uuid, ${next.version},
           ${transaction.json(instructions)}, ${contentHash}, ${viewer.profileId}::uuid
         )
       `;
@@ -337,7 +290,6 @@ export async function publishTask(
         returning updated_at
       `;
       await writeAudit(transaction, {
-        studyId: task.studyId,
         actorProfileId: viewer.profileId,
         actorAuthUserId: viewer.authUserId,
         action: "task.published",
@@ -357,7 +309,7 @@ export async function publishTask(
 }
 
 export async function listAssignments(
-  viewer: Viewer,
+  _viewer: Viewer,
   input: z.infer<typeof assignmentListSchema>,
 ) {
   const db = database();
@@ -370,7 +322,6 @@ export async function listAssignments(
     taskPublicId: string;
     taskTitle: string;
     taskVersion: number;
-    studyPublicId: string;
     isMissing: boolean;
   }[]>`
     select distinct
@@ -382,23 +333,17 @@ export async function listAssignments(
       task.public_id as task_public_id,
       version.instructions ->> 'title' as task_title,
       version.version as task_version,
-      study.public_id as study_public_id,
       progress.is_missing
     from egocapture.assignments assignment
     join egocapture.participants participant on participant.id = assignment.participant_id
     join egocapture.task_versions version on version.id = assignment.task_version_id
     join egocapture.tasks task on task.id = version.task_id
-    join egocapture.studies study on study.id = assignment.study_id
-    join egocapture.study_memberships membership on membership.study_id = assignment.study_id
     join egocapture.assignment_progress progress on progress.id = assignment.id
-    where membership.profile_id = ${viewer.profileId}::uuid
-      and membership.status = 'active'
-      and (${input.search ?? null}::text is null
+    where (${input.search ?? null}::text is null
         or assignment.public_id ilike '%' || ${input.search ?? ""} || '%'
         or participant.public_id ilike '%' || ${input.search ?? ""} || '%'
         or participant.display_alias ilike '%' || ${input.search ?? ""} || '%'
         or task.title ilike '%' || ${input.search ?? ""} || '%')
-      and (${input.studyPublicId ?? null}::text is null or study.public_id = ${input.studyPublicId ?? ""})
       and (${input.status ?? null}::text is null or assignment.status = ${input.status ?? ""})
       and (${input.cursor ?? null}::text is null or assignment.public_id > ${input.cursor ?? ""})
     order by assignment.public_id
@@ -425,7 +370,6 @@ export async function createAssignment(
     input,
     execute: async () => {
       const [authority] = await transaction<{
-        studyId: string;
         participantId: string;
         participantStatus: string;
         consentStatus: string;
@@ -434,7 +378,6 @@ export async function createAssignment(
         taskTitle: string;
       }[]>`
         select
-          participant.study_id,
           participant.id as participant_id,
           participant.status as participant_status,
           participant.consent_status,
@@ -442,14 +385,10 @@ export async function createAssignment(
           version.id as task_version_id,
           task.title as task_title
         from egocapture.participants participant
-        join egocapture.study_memberships membership on membership.study_id = participant.study_id
         join egocapture.tasks task on task.public_id = ${input.taskPublicId}
-          and task.study_id = participant.study_id
         join egocapture.task_versions version on version.task_id = task.id
           and version.version = ${input.taskVersion}
         where participant.public_id = ${input.participantPublicId}
-          and membership.profile_id = ${viewer.profileId}::uuid
-          and membership.status = 'active'
         for update of participant
       `;
       if (!authority) throw new DomainError("NOT_FOUND", "Participant、TaskVersion 或资源不存在", 404);
@@ -462,7 +401,6 @@ export async function createAssignment(
           select device.id
           from egocapture.devices device
           where device.public_id = ${input.preferredDevicePublicId}
-            and device.study_id = ${authority.studyId}::uuid
             and device.status in ('active', 'shared')
             and (
               device.status = 'shared'
@@ -480,10 +418,10 @@ export async function createAssignment(
       const publicId = createPublicId("AS");
       const assignments = await transaction<{ publicId: string }[]>`
         insert into egocapture.assignments (
-          public_id, study_id, participant_id, task_version_id, preferred_device_id,
+          public_id, participant_id, task_version_id, preferred_device_id,
           due_at, locale, note, created_by
         ) values (
-          ${publicId}, ${authority.studyId}::uuid, ${authority.participantId}::uuid,
+          ${publicId}, ${authority.participantId}::uuid,
           ${authority.taskVersionId}::uuid, ${preferredDeviceId}::uuid,
           ${dueAt}, ${input.locale ?? authority.locale}, ${input.note ?? null}, ${viewer.profileId}::uuid
         )
@@ -497,7 +435,6 @@ export async function createAssignment(
         throw new DomainError("ACTIVE_ASSIGNMENT_EXISTS", "相同 Participant 和 TaskVersion 已有未终结 Assignment", 409);
       }
       await writeAudit(transaction, {
-        studyId: authority.studyId,
         actorProfileId: viewer.profileId,
         actorAuthUserId: viewer.authUserId,
         action: "assignment.created",
@@ -574,7 +511,6 @@ export async function acknowledgeAssignment(
     const [assignment] = await transaction<{
       id: string;
       publicId: string;
-      studyId: string;
       status: AssignmentStatus;
       contentHash: string;
       acknowledgedContentHash: string | null;
@@ -584,7 +520,6 @@ export async function acknowledgeAssignment(
       select
         assignment.id,
         assignment.public_id,
-        assignment.study_id,
         assignment.status,
         version.content_hash,
         assignment.acknowledged_content_hash,
@@ -616,7 +551,6 @@ export async function acknowledgeAssignment(
       where id = ${assignment.id}::uuid
     `;
     await writeAudit(transaction, {
-      studyId: assignment.studyId,
       actorProfileId: viewer.profileId,
       actorAuthUserId: viewer.authUserId,
       action: "assignment.acknowledged",
@@ -632,25 +566,21 @@ export async function acknowledgeAssignment(
 
 async function assignmentForAdmin(
   db: postgres.Sql | postgres.TransactionSql,
-  viewer: Viewer,
+  _viewer: Viewer,
   assignmentPublicId: string,
   forUpdate = false,
 ) {
   const [assignment] = await db<{
     id: string;
     publicId: string;
-    studyId: string;
     status: AssignmentStatus;
     dueAt: Date;
     acknowledgedAt: Date | null;
   }[]>`
-    select assignment.id, assignment.public_id, assignment.study_id, assignment.status,
+    select assignment.id, assignment.public_id, assignment.status,
            assignment.due_at, assignment.acknowledged_at
     from egocapture.assignments assignment
-    join egocapture.study_memberships membership on membership.study_id = assignment.study_id
     where assignment.public_id = ${assignmentPublicId}
-      and membership.profile_id = ${viewer.profileId}::uuid
-      and membership.status = 'active'
     limit 1
     ${forUpdate ? db`for update of assignment` : db``}
   `;
@@ -682,7 +612,6 @@ export async function cancelAssignment(
       returning id
     `;
     await writeAudit(transaction, {
-      studyId: assignment.studyId,
       actorProfileId: viewer.profileId,
       actorAuthUserId: viewer.authUserId,
       action: "assignment.canceled",
@@ -718,7 +647,6 @@ export async function extendAssignment(
       where id = ${assignment.id}::uuid
     `;
     await writeAudit(transaction, {
-      studyId: assignment.studyId,
       actorProfileId: viewer.profileId,
       actorAuthUserId: viewer.authUserId,
       action: "assignment.extended",

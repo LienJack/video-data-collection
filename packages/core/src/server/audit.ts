@@ -3,7 +3,6 @@ import "server-only";
 import type postgres from "postgres";
 
 type AuditInput = {
-  studyId: string | null;
   actorProfileId: string | null;
   actorAuthUserId: string | null;
   action: string;
@@ -19,7 +18,6 @@ type AuditInput = {
 export async function writeAudit(db: postgres.Sql | postgres.TransactionSql, input: AuditInput) {
   await db`
     insert into egocapture.audit_events (
-      study_id,
       actor_profile_id,
       actor_auth_user_id,
       action,
@@ -31,7 +29,6 @@ export async function writeAudit(db: postgres.Sql | postgres.TransactionSql, inp
       after_values,
       metadata
     ) values (
-      ${input.studyId}::uuid,
       ${input.actorProfileId}::uuid,
       ${input.actorAuthUserId}::uuid,
       ${input.action},

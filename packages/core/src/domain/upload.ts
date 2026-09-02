@@ -61,14 +61,11 @@ export function sanitizeOriginalFilename(value: string): string {
 }
 
 export function createUploadObjectKey(input: {
-  studyId: string;
   participantId: string;
   uploadId: string;
   extension: UploadExtension;
 }): string {
   return [
-    "study",
-    input.studyId,
     "participant",
     input.participantId,
     "upload",

@@ -32,10 +32,9 @@ async function expireUploadIntents(limit: number) {
     const uploads = await transaction<{
       id: string;
       publicId: string;
-      studyId: string;
       isFixture: boolean;
     }[]>`
-      select intent.id, intent.public_id, intent.study_id, participant.is_fixture
+      select intent.id, intent.public_id, participant.is_fixture
       from egocapture.upload_intents intent
       join egocapture.participants participant on participant.id = intent.participant_id
       where intent.transfer_status in ('created', 'uploading')
@@ -58,8 +57,8 @@ async function expireUploadIntents(limit: number) {
       `;
       await transaction`
         insert into egocapture.review_cases (
-          public_id, study_id, upload_intent_id, case_type, reason, is_fixture
-        ) select ${createPublicId("RV")}, ${upload.studyId}::uuid, ${upload.id}::uuid,
+          public_id, upload_intent_id, case_type, reason, is_fixture
+        ) select ${createPublicId("RV")}, ${upload.id}::uuid,
           'upload_failed', 'upload_intent_expired', ${upload.isFixture}
         where not exists (
           select 1 from egocapture.review_cases
@@ -68,7 +67,6 @@ async function expireUploadIntents(limit: number) {
         )
       `;
       await writeAudit(transaction, {
-        studyId: upload.studyId,
         actorProfileId: null,
         actorAuthUserId: null,
         action: "upload.expired",
@@ -147,20 +145,18 @@ async function cleanExpiredDemoObjects() {
   const objects = await db<{
     id: string;
     objectKey: string;
-    studyId: string;
     assetId: string;
     assetPublicId: string;
   }[]>`
-    select object.id, object.object_key, asset.study_id, asset.id as asset_id,
+    select object.id, object.object_key, asset.id as asset_id,
       asset.public_id as asset_public_id
     from egocapture.stored_objects object
     join egocapture.asset_files file on file.stored_object_id = object.id and file.file_role = 'source'
     join egocapture.video_assets asset on asset.id = file.video_asset_id
     join egocapture.participants participant on participant.id = asset.participant_id
-    join egocapture.studies study on study.id = asset.study_id
     where object.deleted_at is null
       and object.created_at < now() - interval '7 days'
-      and (participant.is_fixture or study.is_demo)
+      and (participant.is_fixture or asset.is_fixture)
       and object.id <> ${FIXTURE_STORED_OBJECT_ID}::uuid
     order by object.created_at, object.id
     limit ${MAX_CRON_ITEMS}
@@ -188,7 +184,6 @@ async function cleanExpiredDemoObjects() {
         where video_asset_id = ${object.assetId}::uuid and status in ('open', 'in_review')
       `;
       await writeAudit(transaction, {
-        studyId: object.studyId,
         actorProfileId: null,
         actorAuthUserId: null,
         action: "demo.retention_deleted",
@@ -209,13 +204,12 @@ async function cleanExpiredDemoObjects() {
 async function repairDemoBaseline() {
   const db = database();
   return await db.begin(async (transaction) => {
-    const [study] = await transaction<{ id: string }[]>`
-      select id from egocapture.studies
-      where id = '10000000-0000-4000-8000-000000000001'::uuid
-        and public_id = 'ST-23456789' and is_demo
+    const [participant] = await transaction<{ id: string }[]>`
+      select id from egocapture.participants
+      where id = '30000000-0000-4000-8000-000000000001'::uuid and is_fixture
       for update
     `;
-    if (!study) return false;
+    if (!participant) return false;
     await transaction`
       update egocapture.participants
       set status = 'active', consent_status = 'valid', withdrawn_at = null
@@ -276,12 +270,11 @@ async function repairDemoBaseline() {
       `;
     }
     await writeAudit(transaction, {
-      studyId: study.id,
       actorProfileId: null,
       actorAuthUserId: null,
       action: "demo.baseline_repaired",
-      entityType: "study",
-      entityPublicId: "ST-23456789",
+      entityType: "participant",
+      entityPublicId: "PT-23456789",
       requestId: randomUUID(),
       afterValues: { fixtureReviewCases: 7, currentDecision: "unmatched" },
       metadata: { source: "daily_cron" },

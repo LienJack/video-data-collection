@@ -83,8 +83,6 @@ export async function listReviewCases(viewer: Viewer, input: z.infer<typeof revi
       participant.display_alias as participant_alias,
       decision.decision_type
     from egocapture.review_cases review
-    join egocapture.study_memberships membership on membership.study_id = review.study_id
-      and membership.profile_id = ${viewer.profileId}::uuid and membership.status = 'active'
     left join egocapture.video_assets asset on asset.id = review.video_asset_id
     left join egocapture.upload_intents asset_upload on asset_upload.id = asset.upload_intent_id
     left join egocapture.upload_intents direct_upload on direct_upload.id = review.upload_intent_id
@@ -116,7 +114,6 @@ export async function getReviewCase(viewer: Viewer, reviewPublicId: string) {
   const [review] = await db<{
     id: string;
     publicId: string;
-    studyId: string;
     caseType: string;
     status: string;
     reason: string | null;
@@ -144,7 +141,6 @@ export async function getReviewCase(viewer: Viewer, reviewPublicId: string) {
     select
       review.id,
       review.public_id,
-      review.study_id,
       review.case_type,
       review.status,
       review.reason,
@@ -169,8 +165,6 @@ export async function getReviewCase(viewer: Viewer, reviewPublicId: string) {
       coalesce(asset_upload.transfer_status, direct_upload.transfer_status) as transfer_status,
       metadata.device_consistency
     from egocapture.review_cases review
-    join egocapture.study_memberships membership on membership.study_id = review.study_id
-      and membership.profile_id = ${viewer.profileId}::uuid and membership.status = 'active'
     left join egocapture.video_assets asset on asset.id = review.video_asset_id
     left join egocapture.upload_intents asset_upload on asset_upload.id = asset.upload_intent_id
     left join egocapture.upload_intents direct_upload on direct_upload.id = review.upload_intent_id
@@ -201,7 +195,6 @@ export async function getReviewCase(viewer: Viewer, reviewPublicId: string) {
         join egocapture.task_versions version on version.id = assignment.task_version_id
         join egocapture.devices device on device.id = session.declared_device_id
         where session.participant_id = ${review.participantId}::uuid
-          and session.study_id = ${review.studyId}::uuid
         order by (session.status = 'open') desc, session.created_at desc
       `
     : [];
@@ -215,8 +208,7 @@ export async function getReviewCase(viewer: Viewer, reviewPublicId: string) {
         select distinct device.public_id, device.manufacturer, device.model, device.status
         from egocapture.devices device
         left join egocapture.device_assignments assignment on assignment.device_id = device.id and assignment.ended_at is null
-        where device.study_id = ${review.studyId}::uuid
-          and (assignment.participant_id = ${review.participantId}::uuid or device.status = 'shared')
+        where assignment.participant_id = ${review.participantId}::uuid or device.status = 'shared'
         order by device.public_id
       `
     : [];
@@ -247,7 +239,6 @@ export async function getReviewCase(viewer: Viewer, reviewPublicId: string) {
 type LockedReview = {
   id: string;
   publicId: string;
-  studyId: string;
   status: string;
   caseType: string;
   videoAssetId: string | null;
@@ -277,7 +268,6 @@ async function lockReview(
     select
       review.id,
       review.public_id,
-      review.study_id,
       review.status,
       review.case_type,
       review.video_asset_id,
@@ -297,8 +287,6 @@ async function lockReview(
       decision.resolved_device_id as current_device_id,
       device.public_id as current_device_public_id
     from egocapture.review_cases review
-    join egocapture.study_memberships membership on membership.study_id = review.study_id
-      and membership.profile_id = ${viewer.profileId}::uuid and membership.status = 'active'
     left join egocapture.video_assets asset on asset.id = review.video_asset_id
     left join egocapture.current_match_decisions decision on decision.video_asset_id = asset.id
     left join egocapture.recording_sessions session on session.id = decision.resolved_session_id
@@ -337,11 +325,10 @@ async function resolveSession(
     join egocapture.assignments assignment on assignment.id = session.assignment_id
     join egocapture.devices device on device.id = session.declared_device_id
     where session.public_id = ${publicId}
-      and session.study_id = ${review.studyId}::uuid
       and session.participant_id = ${review.participantId}::uuid
     limit 1
   `;
-  if (!session) throw new DomainError("SESSION_NOT_AVAILABLE", "Recording Session 不属于该 Participant/Study", 422);
+  if (!session) throw new DomainError("SESSION_NOT_AVAILABLE", "Recording Session 不属于该 Participant", 422);
   return session;
 }
 
@@ -365,7 +352,6 @@ async function resolveDevice(
     from egocapture.devices device
     left join egocapture.device_assignments assignment on assignment.device_id = device.id and assignment.ended_at is null
     where device.public_id = ${publicId}
-      and device.study_id = ${review.studyId}::uuid
       and (
         assignment.participant_id = ${review.participantId}::uuid
         or device.status = 'shared'
@@ -373,7 +359,7 @@ async function resolveDevice(
       )
     limit 1
   `;
-  if (!device) throw new DomainError("DEVICE_NOT_AVAILABLE", "Device 不属于该 Participant/Study", 422);
+  if (!device) throw new DomainError("DEVICE_NOT_AVAILABLE", "Device 不属于该 Participant", 422);
   return device;
 }
 
@@ -558,7 +544,6 @@ export async function decideReviewCase(
         `;
       }
       await writeAudit(transaction, {
-        studyId: review.studyId,
         actorProfileId: viewer.profileId,
         actorAuthUserId: viewer.authUserId,
         action: `review_case.${input.action}`,
@@ -620,8 +605,6 @@ export async function listAdminUploads(
       intent.created_at
     from egocapture.upload_intents intent
     join egocapture.participants participant on participant.id = intent.participant_id
-    join egocapture.study_memberships membership on membership.study_id = intent.study_id
-      and membership.profile_id = ${viewer.profileId}::uuid and membership.status = 'active'
     left join egocapture.video_assets asset on asset.upload_intent_id = intent.id
     left join egocapture.current_match_decisions decision on decision.video_asset_id = asset.id
     left join egocapture.video_file_metadata metadata on metadata.video_asset_id = asset.id
@@ -687,8 +670,6 @@ export async function getAdminUpload(viewer: Viewer, uploadPublicId: string) {
       participant.display_alias as participant_alias, intent.created_at
     from egocapture.upload_intents intent
     join egocapture.participants participant on participant.id = intent.participant_id
-    join egocapture.study_memberships membership on membership.study_id = intent.study_id
-      and membership.profile_id = ${viewer.profileId}::uuid and membership.status = 'active'
     left join egocapture.video_assets asset on asset.upload_intent_id = intent.id
     left join egocapture.asset_files asset_file on asset_file.video_asset_id = asset.id and asset_file.file_role = 'source'
     left join egocapture.stored_objects object on object.id = asset_file.stored_object_id
@@ -827,8 +808,6 @@ export async function listAuditEvents(
       audit.reason, audit.request_id, profile.display_name as actor_display_name,
       audit.before_values, audit.after_values, audit.created_at
     from egocapture.audit_events audit
-    join egocapture.study_memberships membership on membership.study_id = audit.study_id
-      and membership.profile_id = ${viewer.profileId}::uuid and membership.status = 'active'
     left join egocapture.profiles profile on profile.id = audit.actor_profile_id
     where (
       ${cursor?.createdAt ?? null}::timestamptz is null
@@ -859,33 +838,24 @@ export async function dashboardSummary(viewer: Viewer) {
   }[]>`
     select
       (select count(*)::integer from egocapture.missing_assignments missing
-        join egocapture.study_memberships membership on membership.study_id = missing.study_id
-        where membership.profile_id = ${viewer.profileId}::uuid and membership.status = 'active') as missing,
+      ) as missing,
       count(*) filter (where review.case_type = 'upload_failed' and review.status in ('open', 'in_review'))::integer as upload_failed,
       count(*) filter (where review.case_type = 'metadata_failed' and review.status in ('open', 'in_review'))::integer as metadata_failed,
       count(*) filter (where review.case_type = 'unmatched' and review.status in ('open', 'in_review'))::integer as unmatched,
       count(*) filter (where review.case_type = 'device_mismatch' and review.status in ('open', 'in_review'))::integer as device_mismatch,
       count(*) filter (where review.status in ('open', 'in_review'))::integer as needs_review,
       (select coalesce(sum(intent.size_bytes), 0)::float8 from egocapture.upload_intents intent
-        join egocapture.study_memberships member on member.study_id = intent.study_id
-        where member.profile_id = ${viewer.profileId}::uuid and member.status = 'active'
-          and intent.created_at >= now() - interval '24 hours') as bytes_24h
+        where intent.created_at >= now() - interval '24 hours') as bytes_24h
     from egocapture.review_cases review
-    join egocapture.study_memberships membership on membership.study_id = review.study_id
-      and membership.profile_id = ${viewer.profileId}::uuid and membership.status = 'active'
   `;
   const assignmentFunnel = await db<{ status: string; count: number }[]>`
     select assignment.status, count(*)::integer
     from egocapture.assignments assignment
-    join egocapture.study_memberships membership on membership.study_id = assignment.study_id
-      and membership.profile_id = ${viewer.profileId}::uuid and membership.status = 'active'
     group by assignment.status order by assignment.status
   `;
   const uploadFunnel = await db<{ status: string; count: number }[]>`
     select intent.transfer_status as status, count(*)::integer
     from egocapture.upload_intents intent
-    join egocapture.study_memberships membership on membership.study_id = intent.study_id
-      and membership.profile_id = ${viewer.profileId}::uuid and membership.status = 'active'
     group by intent.transfer_status order by intent.transfer_status
   `;
   const audits = await listAuditEvents(viewer, { limit: 8 });
