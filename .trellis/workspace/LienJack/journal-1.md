@@ -5,3 +5,25 @@
 
 ---
 
+
+
+## Session 1: 完成两步式参与者选择弹窗
+
+**Date**: 2026-09-02
+**Task**: 完成两步式参与者选择弹窗
+**Package**: admin-web
+**Branch**: `codex/egocapture-mvp`
+
+### Summary
+
+居中桌面弹窗并保留移动端底部弹层；新增人员与设备设置两步切换、地区多选、独立滚动区域及覆盖布局、键盘、状态保留和提交行为的定向 E2E。
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `0154976` | (see git log) |
+
+### Status
+
+[OK] **Completed**
