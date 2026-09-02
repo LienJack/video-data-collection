@@ -34,17 +34,25 @@ describe("regional preferences", () => {
       />,
     );
 
-    const country = screen.getByLabelText("Country / Region") as HTMLSelectElement;
-    const locale = screen.getByLabelText("Locale") as HTMLSelectElement;
-    const timezone = screen.getByLabelText("Timezone") as HTMLSelectElement;
+    const country = screen.getByLabelText("Country / Region") as HTMLInputElement;
+    const locale = screen.getByLabelText("Locale") as HTMLInputElement;
+    const timezone = screen.getByLabelText("Timezone") as HTMLInputElement;
+    const countryValue = document.querySelector<HTMLInputElement>('input[type="hidden"][name="countryRegion"]');
+    const localeValue = document.querySelector<HTMLInputElement>('input[type="hidden"][name="locale"]');
+    const timezoneValue = document.querySelector<HTMLInputElement>('input[type="hidden"][name="timezone"]');
 
-    expect(country.value).toBe("CN");
-    expect(locale.value).toBe("zh-CN");
-    expect(timezone.value).toBe("Asia/Shanghai");
+    expect(country).toHaveAttribute("list");
+    expect(locale).toHaveAttribute("list");
+    expect(timezone).toHaveAttribute("list");
+    expect(countryValue?.value).toBe("CN");
+    expect(localeValue?.value).toBe("zh-CN");
+    expect(timezoneValue?.value).toBe("Asia/Shanghai");
 
     fireEvent.change(country, { target: { value: "JP" } });
 
-    expect(locale.value).toBe("ja-JP");
-    expect(timezone.value).toBe("Asia/Tokyo");
+    expect((screen.getByLabelText("Country / Region") as HTMLInputElement).value).toContain("Japan");
+    expect(document.querySelector<HTMLInputElement>('input[type="hidden"][name="countryRegion"]')?.value).toBe("JP");
+    expect(document.querySelector<HTMLInputElement>('input[type="hidden"][name="locale"]')?.value).toBe("ja-JP");
+    expect(document.querySelector<HTMLInputElement>('input[type="hidden"][name="timezone"]')?.value).toBe("Asia/Tokyo");
   });
 });

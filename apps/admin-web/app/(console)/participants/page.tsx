@@ -1,6 +1,5 @@
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@egocapture/ui/components/table";
 import { Badge } from "@egocapture/ui/components/badge";
-import { Label } from "@egocapture/ui/components/label";
 import { NativeSelect, NativeSelectOption } from "@egocapture/ui/components/native-select";
 import { Input } from "@egocapture/ui/components/input";
 import { Button, buttonVariants } from "@egocapture/ui/components/button";
@@ -17,6 +16,8 @@ const statusLabels: Record<string, string> = {
   draft: "Draft", invited: "Invited", expired: "Expired", active: "Active",
   suspended: "Suspended", withdrawn: "Withdrawn",
 };
+
+const filterFieldClass = "w-full border border-[var(--line)] bg-[var(--paper)] px-3 py-3";
 
 export default async function ParticipantsPage({ searchParams }: { searchParams: Promise<Record<string, string | string[] | undefined>> }) {
   const viewer = await requireAdmin();
@@ -45,20 +46,29 @@ export default async function ParticipantsPage({ searchParams }: { searchParams:
           <p className="page-kicker">Participant registry</p>
           <h1 className="page-title">参与者</h1>
         </div>
-        <Link href="/participants/new" className={buttonVariants({ className: "" })}><Plus className="size-4" weight="bold" />创建 Participant</Link>
+        <Link
+          href="/participants/new"
+          className={buttonVariants({ className: "" })}
+          style={{ color: "var(--primary-foreground)" }}
+        >
+          <Plus className="size-4" weight="bold" />创建 Participant
+        </Link>
       </header>
-      <form className="rounded-xl border bg-card/80 text-card-foreground shadow-sm backdrop-blur-xl my-7 grid gap-3 p-3 sm:grid-cols-2 xl:grid-cols-4">
-        <Label className="flex items-center gap-2 border border-[var(--line)] bg-[var(--paper)] px-3"><MagnifyingGlass className="size-4 text-[var(--muted)]" /><Input name="search" defaultValue={query.search} placeholder="Public ID 或 Alias" className="w-full bg-transparent py-3 outline-none" /></Label>
-        <NativeSelect name="status" defaultValue={query.status ?? ""} className="border border-[var(--line)] bg-[var(--paper)] px-3">
+      <form className="my-7 grid items-stretch gap-2 rounded-xl border bg-card/80 p-3 text-card-foreground shadow-sm backdrop-blur-xl sm:grid-cols-2 sm:gap-3 xl:grid-cols-4">
+        <div className="relative">
+          <MagnifyingGlass aria-hidden="true" className="pointer-events-none absolute top-1/2 left-3.5 z-10 size-4 -translate-y-1/2 text-[var(--muted)]" />
+          <Input name="search" aria-label="Public ID 或 Alias" defaultValue={query.search} placeholder="Public ID 或 Alias" className={`${filterFieldClass} pl-10`} />
+        </div>
+        <NativeSelect name="status" defaultValue={query.status ?? ""} className={filterFieldClass}>
           <NativeSelectOption value="">全部状态</NativeSelectOption>
           {Object.entries(statusLabels).map(([value, label]) => <NativeSelectOption key={value} value={value}>{label}</NativeSelectOption>)}
         </NativeSelect>
-        <NativeSelect name="consentStatus" aria-label="Consent" defaultValue={query.consentStatus ?? ""} className="border border-[var(--line)] bg-[var(--paper)] px-3"><NativeSelectOption value="">全部 Consent</NativeSelectOption>{["pending", "valid", "expired", "withdrawn"].map((value) => <NativeSelectOption key={value} value={value}>{value}</NativeSelectOption>)}</NativeSelect>
-        <LocaleSelect name="locale" defaultValue={query.locale} blankLabel="全部 Locale" aria-label="Locale" className="border border-[var(--line)] bg-[var(--paper)] px-3 py-3" />
-        <CountrySelect name="countryRegion" defaultValue={query.countryRegion} blankLabel="全部 Country / Region" aria-label="Country / Region" className="border border-[var(--line)] bg-[var(--paper)] px-3 py-3" />
-        <NativeSelect name="missing" aria-label="Missing" defaultValue={query.missing ?? ""} className="border border-[var(--line)] bg-[var(--paper)] px-3"><NativeSelectOption value="">全部 Missing 状态</NativeSelectOption><NativeSelectOption value="yes">仅 Missing</NativeSelectOption><NativeSelectOption value="no">排除 Missing</NativeSelectOption></NativeSelect>
-        <NativeSelect name="needsReview" aria-label="Needs Review" defaultValue={query.needsReview ?? ""} className="border border-[var(--line)] bg-[var(--paper)] px-3"><NativeSelectOption value="">全部 Review 状态</NativeSelectOption><NativeSelectOption value="yes">仅 Needs Review</NativeSelectOption><NativeSelectOption value="no">排除 Needs Review</NativeSelectOption></NativeSelect>
-        <Button>筛选</Button>
+        <NativeSelect name="consentStatus" aria-label="Consent" defaultValue={query.consentStatus ?? ""} className={filterFieldClass}><NativeSelectOption value="">全部 Consent</NativeSelectOption>{["pending", "valid", "expired", "withdrawn"].map((value) => <NativeSelectOption key={value} value={value}>{value}</NativeSelectOption>)}</NativeSelect>
+        <LocaleSelect name="locale" defaultValue={query.locale} blankLabel="全部 Locale" aria-label="Locale" className={filterFieldClass} />
+        <CountrySelect name="countryRegion" defaultValue={query.countryRegion} blankLabel="全部国家 / 地区" aria-label="Country / Region" className={filterFieldClass} />
+        <NativeSelect name="missing" aria-label="Missing" defaultValue={query.missing ?? ""} className={filterFieldClass}><NativeSelectOption value="">全部 Missing 状态</NativeSelectOption><NativeSelectOption value="yes">仅 Missing</NativeSelectOption><NativeSelectOption value="no">排除 Missing</NativeSelectOption></NativeSelect>
+        <NativeSelect name="needsReview" aria-label="Needs Review" defaultValue={query.needsReview ?? ""} className={filterFieldClass}><NativeSelectOption value="">全部 Review 状态</NativeSelectOption><NativeSelectOption value="yes">仅 Needs Review</NativeSelectOption><NativeSelectOption value="no">排除 Needs Review</NativeSelectOption></NativeSelect>
+        <Button className="w-full">筛选</Button>
       </form>
       <div className="rounded-xl border bg-card shadow-sm overflow-x-auto">
         <Table className="w-full min-w-[820px] border-collapse text-sm">

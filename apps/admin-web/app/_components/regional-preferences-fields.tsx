@@ -1,8 +1,9 @@
 "use client";
 
+import { Input } from "@egocapture/ui/components/input";
 import { Label } from "@egocapture/ui/components/label";
-import { NativeSelect, NativeSelectOption } from "@egocapture/ui/components/native-select";
-import { useMemo, useState, useSyncExternalStore, type ChangeEvent } from "react";
+import { MagnifyingGlass } from "@phosphor-icons/react";
+import { useId, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import {
   allLocales,
   canonicalLocale,
@@ -22,7 +23,7 @@ const getServerHydrationState = () => false;
 
 const countryOptions = COUNTRY_PREFERENCES.map((country) => ({
   value: country.code,
-  label: `${regionNames.of(country.code) ?? country.englishName} · ${country.code}`,
+  label: `${regionNames.of(country.code) ?? country.englishName} / ${country.englishName} · ${country.code}`,
 })).sort((left, right) => collator.compare(left.label, right.label));
 
 const localeOptions = allLocales().map((locale) => {
@@ -47,6 +48,12 @@ type SelectProps = {
   required?: boolean;
   blankLabel?: string;
   "aria-label"?: string;
+  disabled?: boolean;
+  onValueChange?: (value: string) => void;
+};
+
+type SearchableSelectProps = SelectProps & {
+  options: readonly { value: string; label: string }[];
 };
 
 function withCurrentValue(
@@ -57,6 +64,79 @@ function withCurrentValue(
   return [{ value: currentValue, label: `${currentValue}（现有值）` }, ...options];
 }
 
+function normalizeSearchValue(value: string) {
+  return value.trim().toLocaleLowerCase(displayLocale);
+}
+
+function SearchableSelect({
+  name,
+  defaultValue,
+  className,
+  required,
+  blankLabel,
+  "aria-label": ariaLabel,
+  disabled,
+  onValueChange,
+  options,
+}: SearchableSelectProps) {
+  const listId = useId();
+  const inputRef = useRef<HTMLInputElement>(null);
+  const availableOptions = useMemo(
+    () => withCurrentValue(options, defaultValue),
+    [defaultValue, options],
+  );
+  const initialOption = availableOptions.find((option) => option.value === defaultValue);
+  const [selectedValue, setSelectedValue] = useState(defaultValue ?? "");
+  const [searchValue, setSearchValue] = useState(initialOption?.label ?? "");
+  const fieldLabel = ariaLabel ?? name;
+
+  function changeSearchValue(nextSearchValue: string) {
+    const normalized = normalizeSearchValue(nextSearchValue);
+    const match = availableOptions.find((option) => (
+      normalizeSearchValue(option.label) === normalized
+      || normalizeSearchValue(option.value) === normalized
+    ));
+    const nextValue = match?.value ?? "";
+
+    setSearchValue(match?.label ?? nextSearchValue);
+    setSelectedValue(nextValue);
+    inputRef.current?.setCustomValidity(
+      normalized && !match ? `请从 ${fieldLabel} 建议中选择一个值` : "",
+    );
+    if (match || !normalized) onValueChange?.(nextValue);
+  }
+
+  return (
+    <span className="relative block w-full">
+      <MagnifyingGlass
+        aria-hidden="true"
+        className="pointer-events-none absolute top-1/2 left-3.5 z-10 size-4 -translate-y-1/2 text-muted-foreground"
+      />
+      <Input
+        ref={inputRef}
+        type="search"
+        list={listId}
+        value={searchValue}
+        onChange={(event) => changeSearchValue(event.target.value)}
+        aria-label={ariaLabel}
+        aria-autocomplete="list"
+        autoComplete="off"
+        spellCheck={false}
+        placeholder={blankLabel ?? `输入搜索 ${fieldLabel}`}
+        className={`${className} pl-10 pr-3`}
+        required={required}
+        disabled={disabled}
+      />
+      <input type="hidden" name={name} value={selectedValue} disabled={disabled} />
+      <datalist id={listId}>
+        {availableOptions.map((option) => (
+          <option key={option.value} value={option.label} />
+        ))}
+      </datalist>
+    </span>
+  );
+}
+
 export function CountrySelect({
   name,
   defaultValue,
@@ -64,20 +144,21 @@ export function CountrySelect({
   required,
   blankLabel,
   "aria-label": ariaLabel,
+  disabled,
+  onValueChange,
 }: SelectProps) {
   return (
-    <NativeSelect
+    <SearchableSelect
       name={name}
-      defaultValue={defaultValue ?? ""}
+      defaultValue={defaultValue}
       className={className}
       required={required}
       aria-label={ariaLabel}
-    >
-      {blankLabel ? <NativeSelectOption value="">{blankLabel}</NativeSelectOption> : null}
-      {withCurrentValue(countryOptions, defaultValue).map((option) => (
-        <NativeSelectOption key={option.value} value={option.value}>{option.label}</NativeSelectOption>
-      ))}
-    </NativeSelect>
+      blankLabel={blankLabel}
+      disabled={disabled}
+      onValueChange={onValueChange}
+      options={countryOptions}
+    />
   );
 }
 
@@ -88,21 +169,22 @@ export function LocaleSelect({
   required,
   blankLabel,
   "aria-label": ariaLabel,
+  disabled,
+  onValueChange,
 }: SelectProps) {
   const normalizedDefault = defaultValue ? canonicalLocale(defaultValue) ?? defaultValue : "";
   return (
-    <NativeSelect
+    <SearchableSelect
       name={name}
       defaultValue={normalizedDefault}
       className={className}
       required={required}
       aria-label={ariaLabel}
-    >
-      {blankLabel ? <NativeSelectOption value="">{blankLabel}</NativeSelectOption> : null}
-      {withCurrentValue(localeOptions, normalizedDefault).map((option) => (
-        <NativeSelectOption key={option.value} value={option.value}>{option.label}</NativeSelectOption>
-      ))}
-    </NativeSelect>
+      blankLabel={blankLabel}
+      disabled={disabled}
+      onValueChange={onValueChange}
+      options={localeOptions}
+    />
   );
 }
 
@@ -113,20 +195,21 @@ export function TimezoneSelect({
   required,
   blankLabel,
   "aria-label": ariaLabel,
+  disabled,
+  onValueChange,
 }: SelectProps) {
   return (
-    <NativeSelect
+    <SearchableSelect
       name={name}
-      defaultValue={defaultValue ?? ""}
+      defaultValue={defaultValue}
       className={className}
       required={required}
       aria-label={ariaLabel}
-    >
-      {blankLabel ? <NativeSelectOption value="">{blankLabel}</NativeSelectOption> : null}
-      {withCurrentValue(timezoneOptions, defaultValue).map((option) => (
-        <NativeSelectOption key={option.value} value={option.value}>{option.label}</NativeSelectOption>
-      ))}
-    </NativeSelect>
+      blankLabel={blankLabel}
+      disabled={disabled}
+      onValueChange={onValueChange}
+      options={timezoneOptions}
+    />
   );
 }
 
@@ -168,8 +251,7 @@ export function RegionalPreferencesFields({
     ];
   }, [preferredTimezones]);
 
-  function changeCountry(event: ChangeEvent<HTMLSelectElement>) {
-    const nextCountry = event.target.value;
+  function changeCountry(nextCountry: string) {
     const nextLocales = localesForCountry(nextCountry);
     const nextTimezones = timezonesForCountry(nextCountry);
     setCountry(nextCountry);
@@ -181,28 +263,44 @@ export function RegionalPreferencesFields({
     <>
       <Label className={labelClassName}>
         Country / Region
-        <NativeSelect name="countryRegion" required disabled={!ready} value={country} onChange={changeCountry} className={fieldClassName}>
-          <NativeSelectOption value="" disabled>请选择国家或地区</NativeSelectOption>
-          {withCurrentValue(countryOptions, country).map((option) => (
-            <NativeSelectOption key={option.value} value={option.value}>{option.label}</NativeSelectOption>
-          ))}
-        </NativeSelect>
+        <CountrySelect
+          key={`country-${country}`}
+          name="countryRegion"
+          required
+          disabled={!ready}
+          defaultValue={country}
+          onValueChange={changeCountry}
+          className={fieldClassName}
+          aria-label="Country / Region"
+        />
       </Label>
       <Label className={labelClassName}>
         Locale
-        <NativeSelect name="locale" required disabled={!ready} value={locale} onChange={(event) => setLocale(event.target.value)} className={fieldClassName}>
-          {withCurrentValue(visibleLocales, locale).map((option) => (
-            <NativeSelectOption key={option.value} value={option.value}>{option.label}</NativeSelectOption>
-          ))}
-        </NativeSelect>
+        <SearchableSelect
+          key={`locale-${country}-${locale}`}
+          name="locale"
+          required
+          disabled={!ready}
+          defaultValue={locale}
+          onValueChange={setLocale}
+          className={fieldClassName}
+          aria-label="Locale"
+          options={visibleLocales}
+        />
       </Label>
       <Label className={labelClassName}>
         Timezone
-        <NativeSelect name="timezone" required disabled={!ready} value={timezone} onChange={(event) => setTimezone(event.target.value)} className={fieldClassName}>
-          {withCurrentValue(visibleTimezones, timezone).map((option) => (
-            <NativeSelectOption key={option.value} value={option.value}>{option.label}</NativeSelectOption>
-          ))}
-        </NativeSelect>
+        <SearchableSelect
+          key={`timezone-${country}-${timezone}`}
+          name="timezone"
+          required
+          disabled={!ready}
+          defaultValue={timezone}
+          onValueChange={setTimezone}
+          className={fieldClassName}
+          aria-label="Timezone"
+          options={visibleTimezones}
+        />
       </Label>
     </>
   );

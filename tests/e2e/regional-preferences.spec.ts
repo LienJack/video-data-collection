@@ -16,12 +16,20 @@ test("admin regional fields use linked standard values", async ({ page }) => {
   const locale = page.getByLabel("Locale");
   const timezone = page.getByLabel("Timezone");
 
-  await expect(country).toHaveValue("CN");
-  await expect(locale).toHaveValue("zh-CN");
-  await expect(timezone).toHaveValue("Asia/Shanghai");
-  expect(await country.locator("option").count()).toBeGreaterThan(240);
+  await expect(page.locator('input[type="hidden"][name="countryRegion"]')).toHaveValue("CN");
+  await expect(page.locator('input[type="hidden"][name="locale"]')).toHaveValue("zh-CN");
+  await expect(page.locator('input[type="hidden"][name="timezone"]')).toHaveValue("Asia/Shanghai");
+  const countryListId = await country.getAttribute("list");
+  const localeListId = await locale.getAttribute("list");
+  const timezoneListId = await timezone.getAttribute("list");
+  expect(countryListId).toBeTruthy();
+  expect(localeListId).toBeTruthy();
+  expect(timezoneListId).toBeTruthy();
+  expect(await page.locator(`datalist[id="${countryListId}"] option`).count()).toBeGreaterThan(240);
 
-  await country.selectOption("JP");
-  await expect(locale).toHaveValue("ja-JP");
-  await expect(timezone).toHaveValue("Asia/Tokyo");
+  await country.fill("JP");
+  await expect(country).toHaveValue(/Japan/);
+  await expect(page.locator('input[type="hidden"][name="countryRegion"]')).toHaveValue("JP");
+  await expect(page.locator('input[type="hidden"][name="locale"]')).toHaveValue("ja-JP");
+  await expect(page.locator('input[type="hidden"][name="timezone"]')).toHaveValue("Asia/Tokyo");
 });
