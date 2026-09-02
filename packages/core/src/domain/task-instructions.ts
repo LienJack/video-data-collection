@@ -2,46 +2,61 @@ import { createHash } from "node:crypto";
 import { z } from "zod";
 
 const taskInstructionsBaseSchema = z.object({
-  schemaVersion: z.literal("ego-task/1"),
-  title: z.string().min(1).max(120),
-  description: z.string().min(1).max(2_000),
-  estimatedDurationSec: z.number().int().positive().max(8 * 60 * 60),
-  environmentSetup: z.array(z.string().min(1).max(300)).max(30),
+  schemaVersion: z.literal("ego-task/2"),
+  title: z.string().trim().min(2).max(120),
+  description: z.string().trim().min(1).max(2_000),
+  recordingSpec: z.object({
+    targetDurationSec: z.number().int().positive().max(8 * 60 * 60),
+    durationToleranceSec: z.number().int().min(0).max(4 * 60 * 60),
+    targetResolution: z.string().trim().min(1).max(40),
+    targetFps: z.number().int().positive().max(240),
+    perspective: z.literal("egocentric"),
+    mountType: z.literal("head_mounted"),
+  }),
+  environmentSetup: z.array(z.string().trim().min(1).max(300)).max(30),
+  areaConstraints: z.array(z.string().trim().min(1).max(300)).max(30),
   requiredObjects: z.array(z.object({
-    code: z.string().min(1).max(40),
-    label: z.string().min(1).max(120),
+    code: z.string().trim().min(1).max(40),
+    label: z.string().trim().min(1).max(120),
     mustBeVisible: z.boolean(),
   })).max(30),
   recordingGuide: z.object({
     steps: z.array(z.object({
       order: z.number().int().positive(),
-      instruction: z.string().min(1).max(500),
-      expectedVisualEvidence: z.array(z.string().min(1).max(300)).max(20),
-    })).min(1).max(50),
-    mustShow: z.array(z.string().min(1).max(300)).max(30),
-    mustAvoid: z.array(z.string().min(1).max(300)).max(30),
-    targetResolution: z.string().min(1).max(40),
-    targetFps: z.number().int().positive().max(240),
+      instruction: z.string().trim().min(1).max(500),
+      expectedVisualEvidence: z.array(z.string().trim().min(1).max(300)).max(20),
+    })).max(50),
+    mustShow: z.array(z.string().trim().min(1).max(300)).max(30),
+    mustAvoid: z.array(z.string().trim().min(1).max(300)).max(30),
+    otherConstraints: z.array(z.string().trim().min(1).max(300)).max(30),
     sessionMarker: z.object({
-      required: z.boolean(),
-      holdSeconds: z.number().int().min(0).max(120),
-      instruction: z.string().min(1).max(500),
+      required: z.literal(true),
+      holdSeconds: z.number().int().min(1).max(120),
+      instruction: z.string().trim().min(1).max(500),
     }),
   }),
   uploadGuide: z.object({
-    allowedSources: z.array(z.enum(["camera", "ssd", "mobile", "desktop"])).min(1),
-    instructions: z.array(z.string().min(1).max(500)).max(30),
-    recoveryInstructions: z.array(z.string().min(1).max(500)).max(30),
+    allowedSources: z.array(z.enum(["camera", "ssd", "mobile", "desktop", "other"])).min(1),
+    instructions: z.array(z.string().trim().min(1).max(500)).max(30),
+    recoveryInstructions: z.array(z.string().trim().min(1).max(500)).max(30),
+    matchingInstructions: z.array(z.string().trim().min(1).max(500)).min(1).max(10),
   }),
   completionCriteria: z.array(z.object({
-    code: z.string().min(1).max(40),
-    description: z.string().min(1).max(500),
-    validator: z.enum(["metadata", "manual", "future_cv"]),
+    code: z.string().trim().min(1).max(40),
+    description: z.string().trim().min(1).max(500),
+    validator: z.enum(["metadata", "manual"]),
   })).max(40),
-  privacyChecklist: z.array(z.string().min(1).max(500)).max(30),
+  privacyChecklist: z.array(z.string().trim().min(1).max(500)).max(30),
 });
 
 export const taskInstructionsSchema = taskInstructionsBaseSchema.superRefine((value, context) => {
+  if (value.recordingSpec.durationToleranceSec >= value.recordingSpec.targetDurationSec) {
+    context.addIssue({
+      code: "custom",
+      path: ["recordingSpec", "durationToleranceSec"],
+      message: "允许误差必须小于目标录制时长",
+    });
+  }
   const expectedOrders = value.recordingGuide.steps.map((_, index) => index + 1);
   const actualOrders = value.recordingGuide.steps.map((step) => step.order);
   if (actualOrders.some((order, index) => order !== expectedOrders[index])) {
@@ -59,13 +74,21 @@ export const taskInstructionsSchema = taskInstructionsBaseSchema.superRefine((va
       context.addIssue({ code: "custom", path: [...path], message: "code 必须唯一" });
     }
   }
+  const mustShow = new Set(value.recordingGuide.mustShow.map((item) => item.toLocaleLowerCase()));
+  const overlap = value.recordingGuide.mustAvoid.find((item) => mustShow.has(item.toLocaleLowerCase()));
+  if (overlap) {
+    context.addIssue({
+      code: "custom",
+      path: ["recordingGuide", "mustAvoid"],
+      message: `“${overlap}”不能同时属于必须展示和必须避开`,
+    });
+  }
 });
 
 export const criterionDisplayStatusSchema = z.enum([
   "checked",
   "not_checked",
   "manual_review",
-  "future_capability",
 ]);
 
 export type CriterionDisplayStatus = z.infer<typeof criterionDisplayStatusSchema>;
@@ -73,7 +96,6 @@ export type CriterionDisplayStatus = z.infer<typeof criterionDisplayStatusSchema
 export function criterionDisplayStatus(
   validator: TaskInstructions["completionCriteria"][number]["validator"],
 ): CriterionDisplayStatus {
-  if (validator === "future_cv") return "future_capability";
   if (validator === "manual") return "manual_review";
   return "not_checked";
 }

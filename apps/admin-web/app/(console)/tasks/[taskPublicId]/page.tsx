@@ -21,7 +21,7 @@ export default async function TaskDetailPage({ params }: { params: Promise<{ tas
         <p className="mt-3 text-sm text-[var(--muted)]">已发布 {task.versions.length} 个不可变版本</p>
       </header>
       <div className="grid gap-8 xl:grid-cols-[minmax(0,1fr)_320px]">
-        <TaskEditor mode="edit" taskPublicId={task.publicId} initialInstructions={JSON.stringify(task.draftInstructions, null, 2)} initialUpdatedAt={task.updatedAt.toISOString()} />
+        <TaskEditor mode="edit" taskPublicId={task.publicId} initialInstructions={task.draftInstructions} initialUpdatedAt={task.updatedAt.toISOString()} />
         <aside className="rounded-xl border bg-card/80 text-card-foreground shadow-sm backdrop-blur-xl mt-8 h-fit p-6"><h2 className="display text-2xl font-semibold">Published</h2><div className="mt-5 space-y-4">{task.versions.map((version) => <Card as="article" key={version.version} className="border-t border-[var(--line)] pt-4"><div className="flex items-center justify-between"><p className="font-bold">Version {version.version}</p><Badge>Frozen</Badge></div><p className="mt-2 break-all font-mono text-[10px] text-[var(--muted)]">{version.contentHash}</p><p className="mt-2 text-xs text-[var(--muted)]">{version.publishedAt.toLocaleString("zh-CN")}</p></Card>)}{task.versions.length === 0 ? <p className="text-sm text-[var(--muted)]">尚未发布。</p> : null}</div></aside>
       </div>
     </main>

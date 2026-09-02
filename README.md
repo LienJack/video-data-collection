@@ -25,7 +25,7 @@ EgoCapture 是一套第一人称视频数据采集与人工复核系统。它把
 
 ```text
 Participant Demo 登录
-→ 打开 Demo Only 短视频任务
+→ 打开一个第一人称日常活动任务
 → 确认冻结的 TaskVersion content_hash
 → 创建 Recording Session
 → 展示并确认 Ed25519 签名二维码
@@ -39,6 +39,12 @@ Participant Demo 登录
 ```
 
 二维码当前只负责生成、展示和保存签名载荷；MVP 不从视频画面读取二维码，也不自动判断任务是否完成。
+
+## 任务表单与版本
+
+Admin 在 `/tasks/new` 使用结构化表单创建任务，不直接编辑 JSON。标题、描述和录制规格是固定字段；环境、活动范围、执行步骤、必需物品、必须展示、必须避开、其他约束、完成标准、上传指导和隐私检查可按需添加或移除。必须展示/避开支持预设与自定义选项，分辨率支持 `360p`、`1080p`、`2K`、`4K` 和自定义值。
+
+草稿使用 `ego-task/2` 结构存储；发布后生成不可变 `TaskVersion` 和 `content_hash`。头戴式第一人称视角、开头展示 Session Marker、上传时手动选择 Recording Session 是系统规则，不交由任务创建者关闭，也不依赖摄像机默认文件名。
 
 ## 架构与数据权威
 
@@ -226,8 +232,8 @@ pnpm test:e2e          # Chromium 主流程 + WebKit smoke
 
 Playwright 的主流程真实上传一个有效 MP4，并验证视频请求目标是 Storage/NAS Gateway，而不是 Next.js。本轮 [本地验收记录](docs/acceptance/2026-09-02-local-mvp.md) 包含：
 
-- quality：lint、type、30 个单元测试、两套独立 production build。
-- browser-acceptance：在 NAS 五服务 Docker + Mac 本地 Next.js 上依次通过 13 个 Migration/checksum、RLS、Chromium 主流程与 WebKit 实际 TUS smoke（4 passed，1 个按项目条件 intentional skip）。
+- quality：lint、type、47 个单元/组件测试、两套独立 production build。
+- browser-acceptance：在 NAS 五服务 Docker + Mac 本地 Next.js 上依次通过 14 个 Migration/checksum、RLS、Chromium 主流程与 WebKit 实际 TUS smoke（7 passed，1 个按项目条件 intentional skip）。
 - repository-safety：明显秘密和大媒体检查。
 
 ## 隐私与安全边界

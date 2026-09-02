@@ -6,5 +6,16 @@ import { requireAdmin } from "@/lib/auth";
 
 export default async function NewTaskPage() {
   await requireAdmin();
-  return <main className="content-page"><Link href="/tasks" className={buttonVariants({ variant: "outline", className: "" })}>← Tasks</Link><p className="page-kicker mt-10">Mutable workspace</p><h1 className="page-title">创建 Task Draft</h1><TaskEditor mode="create" initialInstructions={JSON.stringify(defaultTaskInstructions, null, 2)} /></main>;
+  const initialInstructions = structuredClone(defaultTaskInstructions);
+  initialInstructions.title = "";
+  initialInstructions.description = "";
+
+  return (
+    <main className="content-page">
+      <Link href="/tasks" className={buttonVariants({ variant: "outline", className: "" })}>← 任务列表</Link>
+      <p className="page-kicker mt-10">任务模板</p>
+      <h1 className="page-title">创建录制任务</h1>
+      <TaskEditor mode="create" initialInstructions={initialInstructions} />
+    </main>
+  );
 }

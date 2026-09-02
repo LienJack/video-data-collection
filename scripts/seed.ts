@@ -61,18 +61,62 @@ const publicIds = {
   reviews: ["RV-23456782", "RV-23456783", "RV-23456784", "RV-23456785", "RV-23456786", "RV-23456787", "RV-23456788"],
 } as const;
 
-function instructions(title: string, description: string): TaskInstructions {
+function instructions(
+  title: string,
+  description: string,
+  configure: (value: TaskInstructions) => void,
+): TaskInstructions {
   const value = structuredClone(defaultTaskInstructions);
   value.title = title;
   value.description = description;
+  configure(value);
   return taskInstructionsSchema.parse(value);
 }
 
 const taskFixtures = [
-  instructions("Demo Only：上传 5～20 秒测试视频", "录制一段不含个人信息的短视频，用于走通真实上传和人工匹配流程。"),
-  instructions("制作一杯咖啡", "以第一人称视角展示准备杯子、冲泡与完成后的桌面。"),
-  instructions("整理桌面", "以第一人称视角整理普通桌面物品，不拍摄屏幕通知或个人文件。"),
-  instructions("将衣服放入洗衣机", "以第一人称视角展示将无识别信息的衣物放入洗衣机。"),
+  instructions("清洁厨房台面", "清理并擦拭一小块厨房台面，展示清洁前后的状态。", (value) => {
+    value.environmentSetup = ["保持厨房光线充足，将无关私人物品移出画面"];
+    value.areaConstraints = ["活动范围限制在厨房台面附近"];
+    value.requiredObjects = [{ code: "cleaning-cloth", label: "清洁布", mustBeVisible: true }];
+    value.recordingGuide.steps = [
+      { order: 1, instruction: "展示清洁前的台面", expectedVisualEvidence: ["任务开始状态"] },
+      { order: 2, instruction: "清理杂物并擦拭台面", expectedVisualEvidence: ["参与者双手", "使用中的工具"] },
+      { order: 3, instruction: "展示完成后的干净台面", expectedVisualEvidence: ["任务完成结果"] },
+    ];
+  }),
+  instructions("制作一杯咖啡", "以第一人称视角展示准备杯子、冲泡与完成后的桌面。", (value) => {
+    value.environmentSetup = ["清理冲泡区域并确保光线充足"];
+    value.areaConstraints = ["全程在厨房或饮品准备区域内完成"];
+    value.requiredObjects = [
+      { code: "coffee-cup", label: "咖啡杯", mustBeVisible: true },
+      { code: "coffee-maker", label: "咖啡冲泡设备", mustBeVisible: true },
+    ];
+    value.recordingGuide.steps = [
+      { order: 1, instruction: "准备杯子和咖啡材料", expectedVisualEvidence: ["操作对象"] },
+      { order: 2, instruction: "完成冲泡", expectedVisualEvidence: ["参与者双手", "完整操作过程"] },
+      { order: 3, instruction: "将成品咖啡放在桌面并展示结果", expectedVisualEvidence: ["任务完成结果"] },
+    ];
+  }),
+  instructions("整理桌面", "以第一人称视角整理普通桌面物品，不拍摄屏幕通知或个人文件。", (value) => {
+    value.environmentSetup = ["锁屏所有显示设备，移走证件和私人信件"];
+    value.areaConstraints = ["仅整理指定书桌，不移动到其他房间"];
+    value.requiredObjects = [{ code: "storage-box", label: "收纳盒", mustBeVisible: true }];
+    value.recordingGuide.steps = [
+      { order: 1, instruction: "展示整理前的桌面", expectedVisualEvidence: ["任务开始状态"] },
+      { order: 2, instruction: "将桌面物品分类并收纳", expectedVisualEvidence: ["参与者双手", "操作对象"] },
+      { order: 3, instruction: "展示整理后的桌面", expectedVisualEvidence: ["任务完成结果"] },
+    ];
+  }),
+  instructions("将衣服放入洗衣机", "以第一人称视角展示将无识别信息的衣物放入洗衣机。", (value) => {
+    value.environmentSetup = ["将衣物口袋中的证件、单据和私人物品取出"];
+    value.areaConstraints = ["活动范围限制在洗衣区"];
+    value.requiredObjects = [{ code: "washing-machine", label: "洗衣机", mustBeVisible: true }];
+    value.recordingGuide.steps = [
+      { order: 1, instruction: "展示待洗衣物和洗衣机", expectedVisualEvidence: ["操作对象"] },
+      { order: 2, instruction: "打开洗衣机并放入衣物", expectedVisualEvidence: ["参与者双手", "完整操作过程"] },
+      { order: 3, instruction: "关闭洗衣机门并展示完成状态", expectedVisualEvidence: ["任务完成结果"] },
+    ];
+  }),
 ];
 
 async function allUsers(supabase: SupabaseClient): Promise<User[]> {

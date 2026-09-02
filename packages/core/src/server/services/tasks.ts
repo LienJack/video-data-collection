@@ -181,7 +181,7 @@ export async function createTask(
         entityType: "task",
         entityPublicId: task.publicId,
         requestId,
-        afterValues: { title: input.instructions.title, lifecycle: "draft", schemaVersion: "ego-task/1" },
+        afterValues: { title: input.instructions.title, lifecycle: "draft", schemaVersion: input.instructions.schemaVersion },
       });
       return { taskPublicId: task.publicId, updatedAt: task.updatedAt.toISOString() };
     },
@@ -233,7 +233,7 @@ export async function updateTask(
       entityPublicId: task.publicId,
       requestId,
       beforeValues: { title: task.title },
-      afterValues: { title: input.instructions.title, schemaVersion: "ego-task/1" },
+      afterValues: { title: input.instructions.title, schemaVersion: input.instructions.schemaVersion },
     });
     return { taskPublicId, updatedAt: updated.updatedAt.toISOString() };
   });
@@ -296,7 +296,7 @@ export async function publishTask(
         entityType: "task",
         entityPublicId: task.publicId,
         requestId,
-        afterValues: { version: next.version, contentHash, schemaVersion: "ego-task/1" },
+        afterValues: { version: next.version, contentHash, schemaVersion: instructions.schemaVersion },
       });
       return {
         taskPublicId,
