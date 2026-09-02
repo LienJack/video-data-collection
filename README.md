@@ -172,8 +172,11 @@ Seed 是幂等 Fixture 恢复，不是生产证明。它提供：
 - 支持 `.mp4`、`.mov`、`.insv`。
 - 固定 `6 MiB` 分片。
 - 单文件最多 `50,000,000 bytes`。
-- 浏览器通过 `findPreviousUploads()` 与本地 fingerprint 恢复同一 TUS 资源。
-- `fingerprint_v1 = SHA-256(file_size || first_1MiB || last_1MiB)`。
+- 浏览器保存 v2 恢复清单，刷新后直接列出待恢复文件、已确认字节和 Attempt 到期状态；用户重新选择原文件后才读取内容。
+- Web Worker 计算完整文件 `source_sha256`；恢复前必须同时匹配文件名、大小和完整 SHA-256。旧版 v1 恢复记录会在用户重选原文件后自动迁移。
+- 浏览器通过 `findPreviousUploads()` 恢复同一 TUS 资源；已保存资源丢失或返回 `404/410` 时不会静默从 0 重建，而是显式追加新 Attempt。
+- 每个 TUS 分片被 Storage 接收后，控制面按顺序保存当前 Attempt 的单调 `bytes_uploaded`；Pause/Resume 同步 `paused/uploading` 状态，旧 Attempt 与倒退 offset 会被拒绝。
+- `fingerprint_v1 = SHA-256(file_size || first_1MiB || last_1MiB)` 继续只用于 Duplicate Candidate 提示，不作为恢复身份。
 - Complete API 只查询对象存在与大小，不完整读取视频，并保持幂等。
 - Duplicate Candidate 只进入 Review，不自动删除或拒绝。
 
@@ -261,9 +264,9 @@ Playwright 的主流程真实上传一个有效 MP4，并验证视频请求目�
 
 ## 生产演进
 
-### 数 GB / 4K 上传
+### 50 GB / 4K 上传
 
-MVP 只真实验证到 50 MB，不声称具备数 GB、跨天、跨地区或 4K 长视频能力。生产演进使用 S3 Multipart、IndexedDB 恢复、服务端 ListParts 权威、part checksum/ETag、幂等 Complete 与过期 Abort；Vercel 仍不代理视频。
+MVP 只真实验证到 50 MB，不声称具备 50 GB、跨天、跨地区或 4K 长视频能力。当前完整 SHA-256 会在 Worker 中读取整文件，受 50 MB 上限保护；扩到 50 GB 前必须改为流式/分块 hash。生产演进使用 S3 Multipart、IndexedDB 恢复、服务端 ListParts 权威、part checksum/ETag、幂等 Complete 与过期 Abort；Vercel 仍不代理视频。
 
 ### 视频内 QR 自动匹配
 

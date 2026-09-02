@@ -13,9 +13,11 @@ import {
 import { DomainError } from "@egocapture/core/domain/errors";
 import { createPublicId } from "@egocapture/core/domain/public-id";
 import {
+  advanceUploadAttemptProgress,
   createUploadIntentInputSchema,
   createUploadObjectKey,
   sanitizeOriginalFilename,
+  updateUploadAttemptProgressInputSchema,
 } from "@egocapture/core/domain/upload";
 import { writeAudit } from "@egocapture/core/server/audit";
 import type { Viewer } from "@egocapture/core/server/auth";
@@ -25,8 +27,9 @@ import { withIdempotency } from "@egocapture/core/server/idempotency";
 import { createSupabaseAdminClient } from "@egocapture/core/server/supabase/admin";
 
 const uploadPublicIdSchema = z.string().regex(/^UP-[23456789ABCDEFGHJKLMNPQRSTUVWXYZ]{6,16}$/);
+const attemptPublicIdSchema = z.string().regex(/^UA-[23456789ABCDEFGHJKLMNPQRSTUVWXYZ]{6,16}$/);
 
-export { createUploadIntentInputSchema };
+export { createUploadIntentInputSchema, updateUploadAttemptProgressInputSchema };
 
 export const createAttemptSchema = z.object({
   forceNew: z.boolean().default(false),
@@ -459,6 +462,90 @@ export async function createOrResumeAttempt(
     }),
     resumedExistingAttempt: authority.resumedExistingAttempt,
   };
+}
+
+export async function updateUploadAttemptProgress(
+  viewer: Viewer,
+  uploadPublicId: string,
+  attemptPublicId: string,
+  input: z.infer<typeof updateUploadAttemptProgressInputSchema>,
+) {
+  uploadPublicIdSchema.parse(uploadPublicId);
+  attemptPublicIdSchema.parse(attemptPublicId);
+  const db = database();
+  return await db.begin(async (transaction) => {
+    const [authority] = await transaction<{
+      uploadId: string;
+      participantStatus: string;
+      consentStatus: string;
+      transferStatus: string;
+      sizeBytes: string;
+      attemptId: string;
+      attemptStatus: string;
+      bytesUploaded: string;
+      expiresAt: Date | null;
+    }[]>`
+      select
+        intent.id as upload_id,
+        participant.status as participant_status,
+        participant.consent_status,
+        intent.transfer_status,
+        intent.size_bytes::text,
+        attempt.id as attempt_id,
+        attempt.status as attempt_status,
+        attempt.bytes_uploaded::text,
+        attempt.expires_at
+      from egocapture.upload_intents intent
+      join egocapture.participants participant on participant.id = intent.participant_id
+      join egocapture.upload_attempts attempt on attempt.upload_intent_id = intent.id
+      where intent.public_id = ${uploadPublicId}
+        and attempt.public_id = ${attemptPublicId}
+        and participant.auth_user_id = ${viewer.authUserId}::uuid
+        and attempt.attempt_number = (
+          select max(candidate.attempt_number)
+          from egocapture.upload_attempts candidate
+          where candidate.upload_intent_id = intent.id
+        )
+      for update of intent, participant, attempt
+    `;
+    if (!authority) throw new DomainError("NOT_FOUND", "Upload Attempt 或资源不存在", 404);
+    if (authority.participantStatus !== "active" || authority.consentStatus !== "valid") {
+      throw new DomainError("PARTICIPANT_NOT_ELIGIBLE", "当前账号不能更新上传进度", 403);
+    }
+    if (authority.transferStatus !== "uploading") {
+      throw new DomainError("UPLOAD_TERMINAL", "该 Upload 当前不能继续上传", 409);
+    }
+    if (!["created", "uploading", "paused"].includes(authority.attemptStatus)) {
+      throw new DomainError("UPLOAD_ATTEMPT_TERMINAL", "该 Upload Attempt 已终结", 409);
+    }
+    if (!authority.expiresAt || authority.expiresAt.getTime() <= Date.now()) {
+      throw new DomainError("UPLOAD_ATTEMPT_EXPIRED", "上传资源已过期，请创建新的 Attempt", 409);
+    }
+    const sizeBytes = Number(authority.sizeBytes);
+    const currentBytes = Number(authority.bytesUploaded);
+    if (!Number.isSafeInteger(sizeBytes) || !Number.isSafeInteger(currentBytes)) {
+      throw new DomainError("UPLOAD_PROGRESS_INVALID", "服务端上传进度无效", 500);
+    }
+    const bytesUploaded = advanceUploadAttemptProgress(currentBytes, input.bytesUploaded, sizeBytes);
+    const [updated] = await transaction<{
+      status: string;
+      bytesUploaded: string;
+      updatedAt: Date;
+    }[]>`
+      update egocapture.upload_attempts
+      set status = ${input.status}, bytes_uploaded = ${bytesUploaded},
+        started_at = coalesce(started_at, now())
+      where id = ${authority.attemptId}::uuid
+      returning status, bytes_uploaded::text, updated_at
+    `;
+    return {
+      uploadPublicId,
+      attemptPublicId,
+      status: updated.status,
+      bytesUploaded: Number(updated.bytesUploaded),
+      updatedAt: updated.updatedAt.toISOString(),
+    };
+  });
 }
 
 async function recordUploadFailure(

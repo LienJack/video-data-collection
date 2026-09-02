@@ -1,9 +1,11 @@
 import { describe, expect, it } from "vitest";
 import {
+  advanceUploadAttemptProgress,
   createUploadIntentInputSchema,
   createUploadObjectKey,
   fingerprintV1,
   sanitizeOriginalFilename,
+  updateUploadAttemptProgressInputSchema,
   uploadMetadata,
 } from "@egocapture/core/domain/upload";
 
@@ -54,5 +56,26 @@ describe("upload domain", () => {
       contentType: "video/mp4",
       cacheControl: "3600",
     });
+  });
+
+  it("accepts only bounded active-attempt progress updates", () => {
+    expect(updateUploadAttemptProgressInputSchema.safeParse({
+      bytesUploaded: 6,
+      status: "paused",
+    }).success).toBe(true);
+    expect(updateUploadAttemptProgressInputSchema.safeParse({
+      bytesUploaded: -1,
+      status: "uploading",
+    }).success).toBe(false);
+    expect(updateUploadAttemptProgressInputSchema.safeParse({
+      bytesUploaded: 6,
+      status: "completed",
+    }).success).toBe(false);
+  });
+
+  it("advances an Attempt offset monotonically within the declared file size", () => {
+    expect(advanceUploadAttemptProgress(6, 12, 12)).toBe(12);
+    expect(() => advanceUploadAttemptProgress(6, 3, 12)).toThrow("不能小于服务端已记录进度");
+    expect(() => advanceUploadAttemptProgress(6, 13, 12)).toThrow("不能超过文件大小");
   });
 });

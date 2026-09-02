@@ -16,6 +16,7 @@ export type TusCredential = {
 
 export type TusCallbacks = {
   onProgress: (bytesUploaded: number, bytesTotal: number) => void;
+  onChunkComplete: (chunkSize: number, bytesAccepted: number, bytesTotal: number) => void;
   onSuccess: () => void;
   onError: (error: Error, resourceExpired: boolean) => void;
 };
@@ -47,6 +48,7 @@ export function createTusUpload(
     },
     fingerprint: async () => `egocapture:${credential.uploadPublicId}:${fingerprintV1}`,
     onProgress: callbacks.onProgress,
+    onChunkComplete: callbacks.onChunkComplete,
     onSuccess: callbacks.onSuccess,
     onError: (error) => {
       const detailed = error instanceof DetailedError ? error : null;
@@ -56,9 +58,27 @@ export function createTusUpload(
   });
 }
 
-export async function startOrResumeTus(upload: Upload) {
+export async function startOrResumeTus(
+  upload: Upload,
+  options: { requirePrevious?: boolean; discardPrevious?: boolean } = {},
+) {
   const previousUploads = await upload.findPreviousUploads();
-  if (previousUploads.length > 0) upload.resumeFromPreviousUpload(previousUploads[0]);
+  if (options.discardPrevious && previousUploads.length > 0) {
+    const storage = upload.options.urlStorage;
+    if (!storage) throw new Error("TUS_URL_STORAGE_UNAVAILABLE");
+    await Promise.all(previousUploads.map((previous) => storage.removeUpload(previous.urlStorageKey)));
+    upload.start();
+    return false;
+  }
+  if (options.requirePrevious && previousUploads.length === 0) {
+    throw new Error("TUS_SAVED_RESOURCE_MISSING");
+  }
+  if (previousUploads.length > 0) {
+    upload.resumeFromPreviousUpload(previousUploads[0]);
+    // A failed resume must surface to the control plane. Otherwise tus-js-client
+    // may silently POST a replacement resource under the old UploadAttempt.
+    upload.options.endpoint = null;
+  }
   upload.start();
   return previousUploads.length > 0;
 }

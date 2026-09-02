@@ -1,5 +1,7 @@
 /// <reference lib="webworker" />
 
+import { sha256Hex } from "@egocapture/core/upload/fingerprint-digest";
+
 const ONE_MIB = 1024 * 1024;
 
 self.onmessage = async (event: MessageEvent<{ id: string; file: File }>) => {
@@ -11,9 +13,11 @@ self.onmessage = async (event: MessageEvent<{ id: string; file: File }>) => {
     new DataView(payload.buffer).setBigUint64(0, BigInt(file.size), false);
     payload.set(first, 8);
     payload.set(last, 8 + first.byteLength);
-    const digest = new Uint8Array(await crypto.subtle.digest("SHA-256", payload));
-    const fingerprint = [...digest].map((byte) => byte.toString(16).padStart(2, "0")).join("");
-    self.postMessage({ id, fingerprint });
+    const [fingerprintV1, sourceSha256] = await Promise.all([
+      sha256Hex(payload),
+      file.arrayBuffer().then((buffer) => sha256Hex(new Uint8Array(buffer))),
+    ]);
+    self.postMessage({ id, fingerprintV1, sourceSha256 });
   } catch {
     self.postMessage({ id, error: "FINGERPRINT_FAILED" });
   }

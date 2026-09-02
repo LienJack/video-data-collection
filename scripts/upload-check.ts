@@ -279,6 +279,7 @@ async function main() {
       },
     );
     assert(resumedAttempt.response.ok && resumedAttempt.payload.data?.attemptPublicId === credential.attemptPublicId, "Resume did not retain the same UploadAttempt");
+    const expiredAttemptPublicId = credential.attemptPublicId;
     const replacementAttempt = await api<{ data?: typeof credential & { resumedExistingAttempt: boolean } }>(
       env.participantSiteUrl,
       `/api/uploads/${uploadPublicId}/attempts`,
@@ -293,6 +294,59 @@ async function main() {
       "Expired TUS replacement did not append a new UploadAttempt",
     );
     credential = replacementAttempt.payload.data;
+
+    const progressPath = `/api/uploads/${uploadPublicId}/attempts/${credential.attemptPublicId}/progress`;
+    const pausedProgress = await api<{ data?: { status: string; bytesUploaded: number } }>(
+      env.participantSiteUrl,
+      progressPath,
+      {
+        method: "PATCH", jar, headers: { "content-type": "application/json" },
+        body: JSON.stringify({ status: "paused", bytesUploaded: 1 }),
+      },
+    );
+    assert(
+      pausedProgress.response.ok
+        && pausedProgress.payload.data?.status === "paused"
+        && pausedProgress.payload.data.bytesUploaded === 1,
+      "UploadAttempt pause progress was not persisted",
+    );
+    const regressedProgress = await api<{ error?: { code: string } }>(
+      env.participantSiteUrl,
+      progressPath,
+      {
+        method: "PATCH", jar, headers: { "content-type": "application/json" },
+        body: JSON.stringify({ status: "uploading", bytesUploaded: 0 }),
+      },
+    );
+    assert(
+      regressedProgress.response.status === 409
+        && regressedProgress.payload.error?.code === "UPLOAD_PROGRESS_REGRESSION",
+      "UploadAttempt accepted a regressing byte offset",
+    );
+    const staleProgress = await api<{ error?: { code: string } }>(
+      env.participantSiteUrl,
+      `/api/uploads/${uploadPublicId}/attempts/${expiredAttemptPublicId}/progress`,
+      {
+        method: "PATCH", jar, headers: { "content-type": "application/json" },
+        body: JSON.stringify({ status: "uploading", bytesUploaded: 1 }),
+      },
+    );
+    assert(
+      staleProgress.response.status === 404 && staleProgress.payload.error?.code === "NOT_FOUND",
+      "A stale UploadAttempt accepted progress",
+    );
+    const resumedProgress = await api<{ data?: { status: string; bytesUploaded: number } }>(
+      env.participantSiteUrl,
+      progressPath,
+      {
+        method: "PATCH", jar, headers: { "content-type": "application/json" },
+        body: JSON.stringify({ status: "uploading", bytesUploaded: 1 }),
+      },
+    );
+    assert(
+      resumedProgress.response.ok && resumedProgress.payload.data?.status === "uploading",
+      "UploadAttempt resume progress was not persisted",
+    );
 
     const deniedStatus = await new Promise<number>((resolve, reject) => {
       const denied = new Upload(Buffer.from("must-not-be-stored"), {
@@ -363,6 +417,29 @@ async function main() {
       firstUpload.start();
     });
     assert(pausedAt > 0 && pausedAt < fileSize, "TUS pause did not retain a partial offset");
+    const pausedOffset = await api<{ data?: { status: string; bytesUploaded: number } }>(
+      env.participantSiteUrl,
+      progressPath,
+      {
+        method: "PATCH", jar, headers: { "content-type": "application/json" },
+        body: JSON.stringify({ status: "paused", bytesUploaded: pausedAt }),
+      },
+    );
+    assert(
+      pausedOffset.response.ok
+        && pausedOffset.payload.data?.status === "paused"
+        && pausedOffset.payload.data.bytesUploaded === pausedAt,
+      "Paused TUS offset was not persisted on the active UploadAttempt",
+    );
+    const resumedOffset = await api<{ data?: { status: string; bytesUploaded: number } }>(
+      env.participantSiteUrl,
+      progressPath,
+      {
+        method: "PATCH", jar, headers: { "content-type": "application/json" },
+        body: JSON.stringify({ status: "uploading", bytesUploaded: pausedAt }),
+      },
+    );
+    assert(resumedOffset.response.ok, "Paused UploadAttempt could not return to uploading");
     const resumedUpload = new Upload(bytes, {
       ...options,
       onError: (error) => { throw new Error(`Resumed TUS failed (${errorStatus(error)}): ${error.message}`); },

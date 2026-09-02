@@ -4,6 +4,7 @@ import {
   MAX_FILE_SIZE_BYTES,
   STORAGE_BUCKET,
 } from "@egocapture/core/domain/constants";
+import { DomainError } from "@egocapture/core/domain/errors";
 
 export const uploadExtensionSchema = z.enum(["mp4", "mov", "insv"]);
 export type UploadExtension = z.infer<typeof uploadExtensionSchema>;
@@ -49,6 +50,25 @@ export const createUploadIntentInputSchema = z.object({
     });
   }
 });
+
+export const updateUploadAttemptProgressInputSchema = z.object({
+  bytesUploaded: z.number().int().min(0).max(MAX_FILE_SIZE_BYTES),
+  status: z.enum(["uploading", "paused"]),
+});
+
+export function advanceUploadAttemptProgress(
+  currentBytes: number,
+  requestedBytes: number,
+  sizeBytes: number,
+) {
+  if (requestedBytes < currentBytes) {
+    throw new DomainError("UPLOAD_PROGRESS_REGRESSION", "上传进度不能小于服务端已记录进度", 409);
+  }
+  if (requestedBytes > sizeBytes) {
+    throw new DomainError("UPLOAD_PROGRESS_OVERFLOW", "上传进度不能超过文件大小", 422);
+  }
+  return requestedBytes;
+}
 
 export function sanitizeOriginalFilename(value: string): string {
   const leaf = value.replaceAll("\\", "/").split("/").at(-1) ?? "";
