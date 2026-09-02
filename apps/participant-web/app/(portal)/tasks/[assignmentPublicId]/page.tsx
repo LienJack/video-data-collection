@@ -1,11 +1,13 @@
+import { buttonVariants } from "@egocapture/ui/components/button";
 import { Card } from "@egocapture/ui/components/card";
+import Image from "next/image";
 import Link from "next/link";
 import { AcknowledgeButton } from "@/app/(portal)/tasks/[assignmentPublicId]/acknowledge-button";
 import { SessionCreate } from "@/app/(portal)/tasks/[assignmentPublicId]/session-create";
 import { criterionDisplayStatus } from "@egocapture/core/domain/task-instructions";
 import { requireParticipant } from "@/lib/auth";
 import { getParticipantAssignment } from "@egocapture/core/server/services/tasks";
-import { listParticipantDevices, listParticipantSessions } from "@egocapture/core/server/services/sessions";
+import { getMarker, listParticipantDevices, listParticipantSessions } from "@egocapture/core/server/services/sessions";
 
 export const dynamic = "force-dynamic";
 
@@ -31,6 +33,7 @@ export default async function ParticipantAssignmentPage({ params }: { params: Pr
     listParticipantDevices(viewer),
     listParticipantSessions(viewer, assignmentPublicId),
   ]);
+  const markers = await Promise.all(sessions.map((session) => getMarker(viewer, session.publicId)));
   const instructions = assignment.instructions;
   return (
     <main className="content-page max-w-3xl">
@@ -86,7 +89,7 @@ export default async function ParticipantAssignmentPage({ params }: { params: Pr
         {instructions.privacyChecklist.length ? <><h2 className="display text-2xl font-semibold">隐私检查</h2><ul className="mt-4 list-disc space-y-2 pl-5 text-sm">{instructions.privacyChecklist.map((item) => <li key={item}>{item}</li>)}</ul></> : null}
         {assignment.status === "assigned" ? <AcknowledgeButton assignmentPublicId={assignment.publicId} contentHash={assignment.contentHash} /> : <p className="mt-8 border-l-4 border-[var(--teal)] px-4 py-3 text-sm">已确认版本：{assignment.acknowledgedAt?.toLocaleString("zh-CN") || assignment.status}</p>}
         {["acknowledged", "session_created", "rework_required"].includes(assignment.status) ? <SessionCreate assignmentPublicId={assignment.publicId} devices={devices} /> : null}
-        {sessions.length > 0 ? <div className="mt-8"><h2 className="display text-2xl font-semibold">Recording Sessions</h2><div className="mt-4 space-y-3">{sessions.map((session) => <Link key={session.publicId} href={`/sessions/${session.publicId}`} className="block border border-[var(--line)] bg-white/35 p-4"><p className="font-bold">{session.publicId} · {session.status}</p><p className="mt-2 text-xs text-[var(--muted)]">{session.deviceLabel} · Marker {session.markerAcknowledgedAt ? "已确认" : "待确认"}</p></Link>)}</div></div> : null}
+        {sessions.length > 0 ? <div className="mt-8"><h2 className="display text-2xl font-semibold">展示二维码</h2><div className="mt-4 grid gap-5 sm:grid-cols-2">{sessions.map((session, index) => <Card as="article" key={session.publicId} className="gap-4 p-4"><div><Link href={`/sessions/${session.publicId}`} className="font-bold text-[var(--teal)]">{session.publicId} · {session.status}</Link><p className="mt-2 text-xs text-[var(--muted)]">{session.deviceLabel} · Marker {session.markerAcknowledgedAt ? "已确认" : "待确认"}</p></div><div className="rounded-xl bg-white p-3"><Image src={markers[index].qrDataUrl} alt={`Recording Session ${session.publicId} 的签名二维码`} width={900} height={900} unoptimized className="mx-auto aspect-square w-full" /></div>{session.status === "open" ? <Link href={{ pathname: "/uploads", query: { session: session.publicId } }} className={buttonVariants({ className: "w-full" })}>上传视频</Link> : <span aria-disabled="true" className={buttonVariants({ className: "pointer-events-none w-full opacity-50" })}>上传视频</span>}</Card>)}</div></div> : null}
       </section>
     </main>
   );

@@ -97,8 +97,17 @@ function formatBytes(value: number) {
     : `${(value / 1024 / 1024).toFixed(1)} MiB`;
 }
 
-export function UploadQueue({ sessions }: { sessions: SessionOption[] }) {
+export function UploadQueue({
+  sessions,
+  lockedSessionPublicId,
+}: {
+  sessions: SessionOption[];
+  lockedSessionPublicId?: string;
+}) {
   const [items, setItems] = useState<QueueItem[]>([]);
+  const lockedSession = lockedSessionPublicId
+    ? sessions.find((session) => session.publicId === lockedSessionPublicId)
+    : undefined;
   const [selectionError, setSelectionError] = useState("");
   const [restorableUploads, setRestorableUploads] = useState<RestorableUpload[]>([]);
   const [legacyRestorableCount, setLegacyRestorableCount] = useState(0);
@@ -107,15 +116,34 @@ export function UploadQueue({ sessions }: { sessions: SessionOption[] }) {
   const batchPublicId = useRef<string | null>(null);
   const batchPromise = useRef<Promise<string> | null>(null);
 
-  useEffect(() => {
-    queueMicrotask(() => {
-      setRestorableUploads(persistedUploads().map((upload) => ({
+  useEffect(() => () => {
+    for (const upload of uploads.current.values()) {
+      void Promise.resolve(upload.abort(false)).catch(() => undefined);
+    }
+    uploads.current.clear();
+    progressReports.current.clear();
+  }, []);
+
+  function restorableUploadsForContext() {
+    return persistedUploads()
+      .filter((upload) => !lockedSessionPublicId || (
+        !upload.unableToDetermine && upload.claimedSessionPublicId === lockedSessionPublicId
+      ))
+      .map((upload) => ({
         ...upload,
         attemptExpired: new Date(upload.attemptExpiresAt).getTime() <= Date.now(),
-      })));
-      setLegacyRestorableCount(legacyPersistedUploadCount());
+      }));
+  }
+
+  useEffect(() => {
+    queueMicrotask(() => {
+      setRestorableUploads(restorableUploadsForContext());
+      setLegacyRestorableCount(lockedSessionPublicId ? 0 : legacyPersistedUploadCount());
     });
-  }, []);
+    // The persisted upload snapshot only needs to be refreshed when the route's
+    // locked Session context changes.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [lockedSessionPublicId]);
   useEffect(() => {
     const active = items.some((item) => item.status === "uploading" || item.status === "reconciling");
     if (!active) return;
@@ -129,10 +157,7 @@ export function UploadQueue({ sessions }: { sessions: SessionOption[] }) {
   }
 
   function refreshRestorableUploads() {
-    setRestorableUploads(persistedUploads().map((upload) => ({
-      ...upload,
-      attemptExpired: new Date(upload.attemptExpiresAt).getTime() <= Date.now(),
-    })));
+    setRestorableUploads(restorableUploadsForContext());
   }
 
   async function ensureBatch() {
@@ -169,7 +194,7 @@ export function UploadQueue({ sessions }: { sessions: SessionOption[] }) {
       contentType: expected,
       fingerprintV1: null,
       sourceSha256: null,
-      sessionChoice: "",
+      sessionChoice: lockedSessionPublicId ?? "",
       note: "",
       status: "hashing",
       progress: 0,
@@ -195,7 +220,7 @@ export function UploadQueue({ sessions }: { sessions: SessionOption[] }) {
           originalFilename: item.file.name,
           sizeBytes: item.file.size,
         }) ?? undefined;
-        if (discovered) setLegacyRestorableCount(legacyPersistedUploadCount());
+        if (discovered && !lockedSessionPublicId) setLegacyRestorableCount(legacyPersistedUploadCount());
       }
       const saved = discovered
         && discovered.sourceSha256 === fingerprints.sourceSha256
@@ -203,6 +228,17 @@ export function UploadQueue({ sessions }: { sessions: SessionOption[] }) {
         && discovered.originalFilename === item.file.name
         ? discovered
         : undefined;
+      if (saved && lockedSessionPublicId && (
+        saved.unableToDetermine || saved.claimedSessionPublicId !== lockedSessionPublicId
+      )) {
+        update(item.id, {
+          fingerprintV1: fingerprints.fingerprintV1,
+          sourceSha256: fingerprints.sourceSha256,
+          status: "failed",
+          error: "该文件已有绑定其他 Session 的待恢复上传，请从通用上传页恢复或选择其他文件",
+        });
+        return;
+      }
       if (expectedSaved && !saved) {
         update(item.id, {
           fingerprintV1: fingerprints.fingerprintV1,
@@ -222,7 +258,7 @@ export function UploadQueue({ sessions }: { sessions: SessionOption[] }) {
         acceptedBytes: saved?.acceptedBytes ?? 0,
         sessionChoice: saved
           ? (saved.unableToDetermine ? "unable" : saved.claimedSessionPublicId ?? "")
-          : "",
+          : lockedSessionPublicId ?? "",
         uploadPublicId: saved?.uploadPublicId ?? null,
         attemptPublicId: saved?.attemptPublicId ?? null,
       });
@@ -258,6 +294,11 @@ export function UploadQueue({ sessions }: { sessions: SessionOption[] }) {
   async function credentialFor(item: QueueItem, forceNew: boolean): Promise<TusCredential> {
     if (!item.fingerprintV1 || !item.sourceSha256) throw new Error("文件指纹尚未完成");
     const saved = persistedUpload(item.sourceSha256);
+    if (saved && lockedSessionPublicId && (
+      saved.unableToDetermine || saved.claimedSessionPublicId !== lockedSessionPublicId
+    )) {
+      throw new Error("该文件已有绑定其他 Session 的待恢复上传，请从通用上传页恢复或选择其他文件");
+    }
     if (saved && saved.sizeBytes === item.file.size && saved.originalFilename === item.file.name) {
       try {
         const status = await api<{ transferStatus: string }>(`/api/uploads/${saved.uploadPublicId}`);
@@ -291,7 +332,8 @@ export function UploadQueue({ sessions }: { sessions: SessionOption[] }) {
       }
     }
     const batch = await ensureBatch();
-    const unableToDetermine = item.sessionChoice === "unable";
+    const sessionChoice = lockedSessionPublicId ?? item.sessionChoice;
+    const unableToDetermine = !lockedSessionPublicId && sessionChoice === "unable";
     const credential = await api<TusCredential & { duplicateCandidate: boolean }>("/api/upload-intents", {
       method: "POST",
       headers: {
@@ -307,7 +349,7 @@ export function UploadQueue({ sessions }: { sessions: SessionOption[] }) {
         localModifiedAt: Number.isFinite(item.file.lastModified)
           ? new Date(item.file.lastModified).toISOString()
           : null,
-        claimedSessionPublicId: unableToDetermine ? null : item.sessionChoice,
+        claimedSessionPublicId: unableToDetermine ? null : sessionChoice,
         unableToDetermine,
         fingerprintV1: item.fingerprintV1,
         participantNote: item.note.trim() || null,
@@ -347,7 +389,8 @@ export function UploadQueue({ sessions }: { sessions: SessionOption[] }) {
   }
 
   async function start(item: QueueItem, forceNew = false) {
-    if (!item.sessionChoice) {
+    const sessionChoice = lockedSessionPublicId ?? item.sessionChoice;
+    if (!sessionChoice) {
       update(item.id, { error: "请为这个文件选择 Recording Session 或 Unable to Determine" });
       return;
     }
@@ -371,8 +414,8 @@ export function UploadQueue({ sessions }: { sessions: SessionOption[] }) {
         lastModified: item.file.lastModified,
         fingerprintV1: fingerprint,
         sourceSha256,
-        claimedSessionPublicId: item.sessionChoice === "unable" ? null : item.sessionChoice,
-        unableToDetermine: item.sessionChoice === "unable",
+        claimedSessionPublicId: sessionChoice === "unable" ? null : sessionChoice,
+        unableToDetermine: sessionChoice === "unable",
         acceptedBytes,
         status: "preparing",
         attemptExpiresAt: credential.attemptExpiresAt,
@@ -487,6 +530,13 @@ export function UploadQueue({ sessions }: { sessions: SessionOption[] }) {
 
   return (
     <section className="mt-8">
+      {lockedSession ? (
+        <div aria-label="已绑定 Recording Session" className="mb-5 border-l-4 border-[var(--teal)] px-4 py-3">
+          <p className="text-xs font-bold uppercase tracking-[0.12em] text-[var(--muted)]">已绑定 Session，上传时不可切换</p>
+          <p className="mt-2 font-bold">{lockedSession.publicId} · {lockedSession.taskTitle}</p>
+          <p className="mt-1 text-xs text-[var(--muted)]">{lockedSession.deviceLabel}</p>
+        </div>
+      ) : null}
       <Label className="rounded-xl border bg-card/80 text-card-foreground shadow-sm backdrop-blur-xl block cursor-pointer border-dashed p-8 text-center transition hover:border-[var(--signal)] hover:bg-white sm:p-12">
         <span className="mx-auto mb-5 flex size-12 items-center justify-center rounded-full bg-[var(--teal-soft)] text-xl text-[var(--signal)]">＋</span>
         <span className="display block text-2xl font-semibold">选择设备或 SSD 中的视频</span>
@@ -548,7 +598,7 @@ export function UploadQueue({ sessions }: { sessions: SessionOption[] }) {
               <Badge>{item.status}</Badge>
             </div>
             <div className="mt-5 grid gap-3 sm:grid-cols-2">
-              <Label className="text-sm font-bold">Recording Session
+              {lockedSession ? <div className="text-sm"><p className="font-bold">Recording Session</p><p className="mt-2 border border-[var(--line)] bg-[var(--paper)] px-3 py-3" aria-label="锁定的 Recording Session">{lockedSession.publicId} · 已锁定</p></div> : <Label className="text-sm font-bold">Recording Session
                 <NativeSelect
                   value={item.sessionChoice}
                   disabled={!(["ready", "failed"].includes(item.status)) || Boolean(item.uploadPublicId)}
@@ -559,7 +609,7 @@ export function UploadQueue({ sessions }: { sessions: SessionOption[] }) {
                   {sessions.map((session) => <NativeSelectOption key={session.publicId} value={session.publicId}>{session.publicId} · {session.taskTitle} · {session.deviceLabel}</NativeSelectOption>)}
                   <NativeSelectOption value="unable">Unable to Determine</NativeSelectOption>
                 </NativeSelect>
-              </Label>
+              </Label>}
               <Label className="text-sm font-bold">备注（可选）
                 <Input value={item.note} disabled={Boolean(item.uploadPublicId)} onChange={(event) => update(item.id, { note: event.target.value.slice(0, 500) })} className="mt-2 w-full border border-[var(--line)] bg-[var(--paper)] px-3 py-3 font-normal" placeholder="不要填写敏感信息" />
               </Label>

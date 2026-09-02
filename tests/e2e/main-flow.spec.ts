@@ -160,6 +160,16 @@ test("Admin 建档到 Participant 上传与不可变纠正的完整闭环", asyn
     await page.getByRole("button", { name: "我已拍摄二维码" }).click();
     await expect(page.getByText(/已确认：/)).toBeVisible();
 
+    await page.goto(`${participantOrigin}/tasks/${assignmentPublicId}`);
+    await expect(page.getByRole("heading", { name: "展示二维码" })).toBeVisible();
+    await expect(page.getByRole("img", { name: `Recording Session ${sessionPublicId} 的签名二维码` })).toBeVisible();
+    const sessionUploadLink = page.getByRole("link", { name: "上传视频" });
+    await expect(sessionUploadLink).toHaveAttribute("href", `/uploads?session=${sessionPublicId}`);
+    await sessionUploadLink.click();
+    await expect(page).toHaveURL(`/uploads?session=${sessionPublicId}`);
+    await expect(page.getByLabel("已绑定 Recording Session")).toContainText(sessionPublicId);
+
+    await page.goto(`${participantOrigin}/sessions/${sessionPublicId}`);
     await page.getByRole("link", { name: "上传文件 →" }).click();
     await page.locator('input[type="file"]').setInputFiles({ name: `e2e-${suffix}.mp4`, mimeType: "video/mp4", buffer: tinyMp4 });
     const uploadCard = page.getByRole("article").filter({ hasText: `e2e-${suffix}.mp4` });
