@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 import type { MediaInfoResult } from "mediainfo.js";
 import { compareDeviceConsistency, normalizeManufacturer } from "@egocapture/core/metadata/device-consistency";
+import { resolveMediaInfoWasmUrl } from "@egocapture/core/metadata/mediainfo-wasm";
 import { normalizeMediaInfo } from "@egocapture/core/metadata/normalize";
 import { BudgetedRangeReader, MAX_METADATA_BYTES, MetadataRangeError } from "@egocapture/core/metadata/range-reader";
 
@@ -68,6 +69,21 @@ describe("metadata normalization", () => {
       expect.objectContaining({ fieldName: "projectionType", normalizedValue: "equirectangular" }),
       expect.objectContaining({ fieldName: "is360", normalizedValue: true }),
     ]));
+  });
+});
+
+describe("MediaInfo WASM runtime location", () => {
+  it.each([
+    ["app-root", "/var/task/node_modules/mediainfo.js/dist/MediaInfoModule.wasm"],
+    ["participant-monorepo", "/var/task/apps/participant-web/node_modules/mediainfo.js/dist/MediaInfoModule.wasm"],
+    ["admin-monorepo", "/var/task/apps/admin-web/node_modules/mediainfo.js/dist/MediaInfoModule.wasm"],
+  ])("resolves the %s traced layout", (_layout, expectedPath) => {
+    const url = resolveMediaInfoWasmUrl("/var/task", (candidate) => candidate === expectedPath);
+    expect(url).toBe(`file://${expectedPath}`);
+  });
+
+  it("fails with a stable code when no traced asset exists", () => {
+    expect(() => resolveMediaInfoWasmUrl("/var/task", () => false)).toThrow("mediainfo_wasm_missing");
   });
 });
 

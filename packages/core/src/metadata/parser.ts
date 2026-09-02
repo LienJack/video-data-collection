@@ -1,10 +1,8 @@
 import "server-only";
 
-import { createRequire } from "node:module";
-import path from "node:path";
-import { pathToFileURL } from "node:url";
 import mediaInfoFactory, { type MediaInfoResult } from "mediainfo.js";
 import { createFile, type Movie, type MP4BoxBuffer } from "mp4box";
+import { resolveMediaInfoWasmUrl } from "@egocapture/core/metadata/mediainfo-wasm";
 import { normalizeMediaInfo } from "@egocapture/core/metadata/normalize";
 import { MetadataRangeError, type BudgetedRangeReader } from "@egocapture/core/metadata/range-reader";
 import type { MetadataEvidence, Mp4Supplement, NormalizedMetadata } from "@egocapture/core/metadata/types";
@@ -16,14 +14,6 @@ const MP4BOX_PACKAGE_VERSION = "2.4.1";
 // still seek instead of reading sequentially for containers with a trailing moov.
 const MEDIAINFO_CHUNK_SIZE = 1024 * 1024;
 const MP4BOX_CHUNK_SIZE = 512 * 1024;
-const requireFromParser = createRequire(import.meta.url);
-// Keep this as a real Node resolver. Turbopack rewrites direct `require.resolve(...)`
-// calls to numeric module ids, which are not filesystem paths at runtime.
-const resolveFromParser = Reflect.get(requireFromParser, "resolve") as (specifier: string) => string;
-const mediaInfoPackageRoot = path.dirname(resolveFromParser("mediainfo.js/package.json"));
-const mediaInfoWasmUrl = pathToFileURL(
-  path.join(mediaInfoPackageRoot, "dist", "MediaInfoModule.wasm"),
-).href;
 
 export type MetadataParseResult = {
   metadata: NormalizedMetadata;
@@ -83,7 +73,7 @@ export async function parseMetadata(input: {
     chunkSize: MEDIAINFO_CHUNK_SIZE,
     full: false,
     coverData: false,
-    locateFile: (filename) => filename === "MediaInfoModule.wasm" ? mediaInfoWasmUrl : filename,
+    locateFile: (filename) => filename === "MediaInfoModule.wasm" ? resolveMediaInfoWasmUrl() : filename,
   });
   let result: MediaInfoResult;
   try {
