@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { AcceptInvitationForm } from "@/app/invite/[token]/accept-form";
-import { openInvitation } from "@/src/server/services/participants";
+import { openInvitation } from "@egocapture/core/server/services/participants";
 
 export const dynamic = "force-dynamic";
 

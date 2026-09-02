@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { ParticipantControls } from "@/app/admin/participants/[participantPublicId]/participant-controls";
-import { requireAdmin } from "@/src/server/auth";
-import { getParticipant, listDevices } from "@/src/server/services/participants";
+import { requireAdmin } from "@egocapture/core/server/auth";
+import { getParticipant, listDevices } from "@egocapture/core/server/services/participants";
 
 export const dynamic = "force-dynamic";
 

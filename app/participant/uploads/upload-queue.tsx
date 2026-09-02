@@ -3,19 +3,19 @@
 import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
 import type { Upload } from "tus-js-client";
-import { MAX_FILE_SIZE_BYTES, MAX_FILES_PER_BATCH } from "@/src/domain/constants";
-import { fingerprintFile } from "@/src/upload/fingerprint";
+import { MAX_FILE_SIZE_BYTES, MAX_FILES_PER_BATCH } from "@egocapture/core/domain/constants";
+import { fingerprintFile } from "@egocapture/core/upload/fingerprint";
 import {
   persistUpload,
   persistedUpload,
   persistedUploadCount,
   removePersistedUpload,
-} from "@/src/upload/persistence";
+} from "@egocapture/core/upload/persistence";
 import {
   createTusUpload,
   startOrResumeTus,
   type TusCredential,
-} from "@/src/upload/tus";
+} from "@egocapture/core/upload/tus";
 
 type SessionOption = {
   publicId: string;

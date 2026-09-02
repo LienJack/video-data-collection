@@ -7,18 +7,18 @@ import {
   canCancelAssignment,
   statusAfterExtension,
   type AssignmentStatus,
-} from "@/src/domain/assignment";
-import { DomainError } from "@/src/domain/errors";
-import { createPublicId } from "@/src/domain/public-id";
+} from "@egocapture/core/domain/assignment";
+import { DomainError } from "@egocapture/core/domain/errors";
+import { createPublicId } from "@egocapture/core/domain/public-id";
 import {
   taskContentHash,
   taskInstructionsSchema,
   type TaskInstructions,
-} from "@/src/domain/task-instructions";
-import { writeAudit } from "@/src/server/audit";
-import type { Viewer } from "@/src/server/auth";
-import { database } from "@/src/server/database";
-import { withIdempotency } from "@/src/server/idempotency";
+} from "@egocapture/core/domain/task-instructions";
+import { writeAudit } from "@egocapture/core/server/audit";
+import type { Viewer } from "@egocapture/core/server/auth";
+import { database } from "@egocapture/core/server/database";
+import { withIdempotency } from "@egocapture/core/server/idempotency";
 
 const studyPublicIdSchema = z.string().regex(/^ST-[23456789ABCDEFGHJKLMNPQRSTUVWXYZ]{6,16}$/);
 const taskPublicIdSchema = z.string().regex(/^TSK-[23456789ABCDEFGHJKLMNPQRSTUVWXYZ]{6,16}$/);

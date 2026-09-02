@@ -1,18 +1,18 @@
 import "server-only";
 
 import { z } from "zod";
-import { STORAGE_BUCKET } from "@/src/domain/constants";
-import { DomainError } from "@/src/domain/errors";
-import { compareDeviceConsistency } from "@/src/metadata/device-consistency";
-import { parseMetadata } from "@/src/metadata/parser";
-import { BudgetedRangeReader, MetadataRangeError } from "@/src/metadata/range-reader";
-import type { MetadataEvidence, NormalizedMetadata } from "@/src/metadata/types";
-import { writeAudit } from "@/src/server/audit";
-import type { Viewer } from "@/src/server/auth";
-import { database } from "@/src/server/database";
-import { serverEnvironment } from "@/src/server/env";
-import { createPublicId } from "@/src/domain/public-id";
-import { createSupabaseAdminClient } from "@/src/server/supabase/admin";
+import { STORAGE_BUCKET } from "@egocapture/core/domain/constants";
+import { DomainError } from "@egocapture/core/domain/errors";
+import { compareDeviceConsistency } from "@egocapture/core/metadata/device-consistency";
+import { parseMetadata } from "@egocapture/core/metadata/parser";
+import { BudgetedRangeReader, MetadataRangeError } from "@egocapture/core/metadata/range-reader";
+import type { MetadataEvidence, NormalizedMetadata } from "@egocapture/core/metadata/types";
+import { writeAudit } from "@egocapture/core/server/audit";
+import type { Viewer } from "@egocapture/core/server/auth";
+import { database } from "@egocapture/core/server/database";
+import { serverEnvironment } from "@egocapture/core/server/env";
+import { createPublicId } from "@egocapture/core/domain/public-id";
+import { createSupabaseAdminClient } from "@egocapture/core/server/supabase/admin";
 
 const uploadPublicIdSchema = z.string().regex(/^UP-[23456789ABCDEFGHJKLMNPQRSTUVWXYZ]{6,16}$/);
 const EXTRACTION_TIMEOUT_MS = 25_000;

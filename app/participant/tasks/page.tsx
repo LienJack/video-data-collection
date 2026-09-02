@@ -1,6 +1,6 @@
 import Link from "next/link";
-import { requireParticipant } from "@/src/server/auth";
-import { listParticipantAssignments } from "@/src/server/services/tasks";
+import { requireParticipant } from "@egocapture/core/server/auth";
+import { listParticipantAssignments } from "@egocapture/core/server/services/tasks";
 
 export const dynamic = "force-dynamic";
 

@@ -2,7 +2,7 @@ import { randomBytes, randomUUID } from "node:crypto";
 import { createClient } from "@supabase/supabase-js";
 import postgres from "postgres";
 import { api, assert, CookieJar, integrationEnvironment } from "@/scripts/check-support";
-import { createPublicId } from "@/src/domain/public-id";
+import { createPublicId } from "@egocapture/core/domain/public-id";
 
 async function main() {
   const env = integrationEnvironment();

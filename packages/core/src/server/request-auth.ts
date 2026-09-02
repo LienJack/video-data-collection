@@ -1,7 +1,7 @@
 import "server-only";
 
-import { DomainError } from "@/src/domain/errors";
-import { getViewer, type Viewer } from "@/src/server/auth";
+import { DomainError } from "@egocapture/core/domain/errors";
+import { getViewer, type Viewer } from "@egocapture/core/server/auth";
 
 export async function requireApiViewer(): Promise<Viewer> {
   const viewer = await getViewer();

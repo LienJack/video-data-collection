@@ -6,7 +6,7 @@ import {
   markerUri,
   signMarkerPayload,
   verifyMarkerJws,
-} from "@/src/domain/marker";
+} from "@egocapture/core/domain/marker";
 
 describe("signed session marker", () => {
   it("signs and verifies the exact non-PII payload with Ed25519", async () => {

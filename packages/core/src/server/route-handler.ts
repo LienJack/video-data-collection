@@ -1,8 +1,8 @@
 import "server-only";
 
 import { ZodError } from "zod";
-import { DomainError } from "@/src/domain/errors";
-import { apiError, requestId } from "@/src/server/api";
+import { DomainError } from "@egocapture/core/domain/errors";
+import { apiError, requestId } from "@egocapture/core/server/api";
 
 export async function routeHandler(
   request: Request,

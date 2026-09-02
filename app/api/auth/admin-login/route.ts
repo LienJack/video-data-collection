@@ -1,9 +1,9 @@
 import { z } from "zod";
-import { apiError, apiSuccess, hasTrustedOrigin, requestId } from "@/src/server/api";
-import { database } from "@/src/server/database";
-import { createSupabaseServerClient } from "@/src/server/supabase/server";
-import { resolveAdminEmail } from "@/src/domain/admin-identity";
-import { serverEnvironment } from "@/src/server/env";
+import { apiError, apiSuccess, hasTrustedOrigin, requestId } from "@egocapture/core/server/api";
+import { database } from "@egocapture/core/server/database";
+import { createSupabaseServerClient } from "@egocapture/core/server/supabase/server";
+import { resolveAdminEmail } from "@egocapture/core/domain/admin-identity";
+import { serverEnvironment } from "@egocapture/core/server/env";
 
 export const runtime = "nodejs";
 

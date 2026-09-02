@@ -1,8 +1,8 @@
 import Link from "next/link";
 import { UploadQueue } from "@/app/participant/uploads/upload-queue";
-import { requireParticipant } from "@/src/server/auth";
-import { listParticipantSessions } from "@/src/server/services/sessions";
-import { listParticipantUploads } from "@/src/server/services/uploads";
+import { requireParticipant } from "@egocapture/core/server/auth";
+import { listParticipantSessions } from "@egocapture/core/server/services/sessions";
+import { listParticipantUploads } from "@egocapture/core/server/services/uploads";
 
 export const dynamic = "force-dynamic";
 

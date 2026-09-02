@@ -6,11 +6,11 @@ import path from "node:path";
 import { createClient } from "@supabase/supabase-js";
 import postgres from "postgres";
 import { Upload, type HttpRequest } from "tus-js-client";
-import { internalParticipantEmail } from "@/src/domain/invitation";
-import { createPublicId } from "@/src/domain/public-id";
-import { taskContentHash } from "@/src/domain/task-instructions";
-import { defaultTaskInstructions } from "@/src/domain/task-template";
-import { fingerprintV1 } from "@/src/domain/upload";
+import { internalParticipantEmail } from "@egocapture/core/domain/invitation";
+import { createPublicId } from "@egocapture/core/domain/public-id";
+import { taskContentHash } from "@egocapture/core/domain/task-instructions";
+import { defaultTaskInstructions } from "@egocapture/core/domain/task-template";
+import { fingerprintV1 } from "@egocapture/core/domain/upload";
 import { api, assert, CookieJar, integrationEnvironment } from "@/scripts/check-support";
 
 type PreviousUpload = {

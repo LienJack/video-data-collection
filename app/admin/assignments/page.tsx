@@ -1,8 +1,8 @@
 import { Plus } from "@phosphor-icons/react/dist/ssr";
 import Link from "next/link";
 import { AssignmentActions } from "@/app/admin/assignments/assignment-actions";
-import { requireAdmin } from "@/src/server/auth";
-import { assignmentListSchema, listAssignments } from "@/src/server/services/tasks";
+import { requireAdmin } from "@egocapture/core/server/auth";
+import { assignmentListSchema, listAssignments } from "@egocapture/core/server/services/tasks";
 
 export const dynamic = "force-dynamic";
 

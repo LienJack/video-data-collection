@@ -2,21 +2,21 @@ import "server-only";
 
 import { createHmac, randomUUID } from "node:crypto";
 import { z } from "zod";
-import { DomainError } from "@/src/domain/errors";
+import { DomainError } from "@egocapture/core/domain/errors";
 import {
   createInvitationToken,
   hashInvitationToken,
   internalParticipantEmail,
   invitationExpiresAt,
-} from "@/src/domain/invitation";
-import { assertParticipantTransition, type ParticipantStatus } from "@/src/domain/participant";
-import { createPublicId } from "@/src/domain/public-id";
-import { writeAudit } from "@/src/server/audit";
-import type { Viewer } from "@/src/server/auth";
-import { database } from "@/src/server/database";
-import { serverEnvironment } from "@/src/server/env";
-import { withIdempotency } from "@/src/server/idempotency";
-import { createSupabaseAdminClient } from "@/src/server/supabase/admin";
+} from "@egocapture/core/domain/invitation";
+import { assertParticipantTransition, type ParticipantStatus } from "@egocapture/core/domain/participant";
+import { createPublicId } from "@egocapture/core/domain/public-id";
+import { writeAudit } from "@egocapture/core/server/audit";
+import type { Viewer } from "@egocapture/core/server/auth";
+import { database } from "@egocapture/core/server/database";
+import { serverEnvironment } from "@egocapture/core/server/env";
+import { withIdempotency } from "@egocapture/core/server/idempotency";
+import { createSupabaseAdminClient } from "@egocapture/core/server/supabase/admin";
 
 export const createParticipantSchema = z.object({
   studyPublicId: z.string().regex(/^ST-[23456789ABCDEFGHJKLMNPQRSTUVWXYZ]{6,16}$/),

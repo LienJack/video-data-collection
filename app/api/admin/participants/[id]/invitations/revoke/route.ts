@@ -1,12 +1,12 @@
 import { z } from "zod";
-import { DomainError } from "@/src/domain/errors";
-import { apiSuccess, hasTrustedOrigin } from "@/src/server/api";
-import { requireApiAdmin } from "@/src/server/request-auth";
-import { routeHandler } from "@/src/server/route-handler";
+import { DomainError } from "@egocapture/core/domain/errors";
+import { apiSuccess, hasTrustedOrigin } from "@egocapture/core/server/api";
+import { requireApiAdmin } from "@egocapture/core/server/request-auth";
+import { routeHandler } from "@egocapture/core/server/route-handler";
 import {
   participantReasonSchema,
   revokeInvitation,
-} from "@/src/server/services/participants";
+} from "@egocapture/core/server/services/participants";
 
 const idSchema = z.string().regex(/^PT-[23456789ABCDEFGHJKLMNPQRSTUVWXYZ]{6,16}$/);
 type IdContext = { params: Promise<{ id: string }> };

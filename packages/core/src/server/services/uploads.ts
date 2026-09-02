@@ -9,20 +9,20 @@ import {
   MAX_UPLOAD_BYTES_PER_PARTICIPANT_PER_24H,
   STORAGE_BUCKET,
   TUS_CHUNK_SIZE_BYTES,
-} from "@/src/domain/constants";
-import { DomainError } from "@/src/domain/errors";
-import { createPublicId } from "@/src/domain/public-id";
+} from "@egocapture/core/domain/constants";
+import { DomainError } from "@egocapture/core/domain/errors";
+import { createPublicId } from "@egocapture/core/domain/public-id";
 import {
   createUploadIntentInputSchema,
   createUploadObjectKey,
   sanitizeOriginalFilename,
-} from "@/src/domain/upload";
-import { writeAudit } from "@/src/server/audit";
-import type { Viewer } from "@/src/server/auth";
-import { database } from "@/src/server/database";
-import { serverEnvironment } from "@/src/server/env";
-import { withIdempotency } from "@/src/server/idempotency";
-import { createSupabaseAdminClient } from "@/src/server/supabase/admin";
+} from "@egocapture/core/domain/upload";
+import { writeAudit } from "@egocapture/core/server/audit";
+import type { Viewer } from "@egocapture/core/server/auth";
+import { database } from "@egocapture/core/server/database";
+import { serverEnvironment } from "@egocapture/core/server/env";
+import { withIdempotency } from "@egocapture/core/server/idempotency";
+import { createSupabaseAdminClient } from "@egocapture/core/server/supabase/admin";
 
 const uploadPublicIdSchema = z.string().regex(/^UP-[23456789ABCDEFGHJKLMNPQRSTUVWXYZ]{6,16}$/);
 

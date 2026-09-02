@@ -2,7 +2,7 @@ import "server-only";
 
 import { createServerClient } from "@supabase/ssr";
 import { cookies } from "next/headers";
-import { serverEnvironment } from "@/src/server/env";
+import { serverEnvironment } from "@egocapture/core/server/env";
 
 export async function createSupabaseServerClient() {
   const environment = serverEnvironment();

@@ -2,8 +2,8 @@ import "server-only";
 
 import { cache } from "react";
 import { redirect } from "next/navigation";
-import { database } from "@/src/server/database";
-import { createSupabaseServerClient } from "@/src/server/supabase/server";
+import { database } from "@egocapture/core/server/database";
+import { createSupabaseServerClient } from "@egocapture/core/server/supabase/server";
 
 export type Viewer = {
   profileId: string;

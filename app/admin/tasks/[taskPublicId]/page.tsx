@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { TaskEditor } from "@/app/admin/tasks/task-editor";
-import { requireAdmin } from "@/src/server/auth";
-import { getTask } from "@/src/server/services/tasks";
+import { requireAdmin } from "@egocapture/core/server/auth";
+import { getTask } from "@egocapture/core/server/services/tasks";
 
 export const dynamic = "force-dynamic";
 

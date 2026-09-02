@@ -4,20 +4,20 @@ import type { JWK } from "jose";
 import type postgres from "postgres";
 import QRCode from "qrcode";
 import { z } from "zod";
-import { DomainError } from "@/src/domain/errors";
+import { DomainError } from "@egocapture/core/domain/errors";
 import {
   createMarkerPayload,
   markerShortCode,
   markerUri,
   signMarkerPayload,
-} from "@/src/domain/marker";
-import { createPublicId } from "@/src/domain/public-id";
-import { writeAudit } from "@/src/server/audit";
-import type { Viewer } from "@/src/server/auth";
-import { decodeCreatedAtCursor, encodeCreatedAtCursor } from "@/src/server/cursor";
-import { database } from "@/src/server/database";
-import { serverEnvironment } from "@/src/server/env";
-import { withIdempotency } from "@/src/server/idempotency";
+} from "@egocapture/core/domain/marker";
+import { createPublicId } from "@egocapture/core/domain/public-id";
+import { writeAudit } from "@egocapture/core/server/audit";
+import type { Viewer } from "@egocapture/core/server/auth";
+import { decodeCreatedAtCursor, encodeCreatedAtCursor } from "@egocapture/core/server/cursor";
+import { database } from "@egocapture/core/server/database";
+import { serverEnvironment } from "@egocapture/core/server/env";
+import { withIdempotency } from "@egocapture/core/server/idempotency";
 
 const assignmentPublicIdSchema = z.string().regex(/^AS-[23456789ABCDEFGHJKLMNPQRSTUVWXYZ]{6,16}$/);
 const devicePublicIdSchema = z.string().regex(/^DEV-[23456789ABCDEFGHJKLMNPQRSTUVWXYZ]{6,16}$/);

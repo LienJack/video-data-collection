@@ -1,9 +1,9 @@
 import { createHash, randomBytes, randomUUID } from "node:crypto";
 import { createClient } from "@supabase/supabase-js";
 import postgres from "postgres";
-import { internalParticipantEmail } from "@/src/domain/invitation";
-import { createPublicId } from "@/src/domain/public-id";
-import { defaultTaskInstructions } from "@/src/domain/task-template";
+import { internalParticipantEmail } from "@egocapture/core/domain/invitation";
+import { createPublicId } from "@egocapture/core/domain/public-id";
+import { defaultTaskInstructions } from "@egocapture/core/domain/task-template";
 import { api, assert, CookieJar, integrationEnvironment } from "@/scripts/check-support";
 
 async function main() {

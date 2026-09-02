@@ -25,6 +25,9 @@
     "paths": {
       "@/*": [
         "./*"
+      ],
+      "@egocapture/core/*": [
+        "./packages/core/src/*"
       ]
     }
   },

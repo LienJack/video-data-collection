@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { canStartParticipantActivity, canTransitionParticipant } from "@/src/domain/participant";
+import { canStartParticipantActivity, canTransitionParticipant } from "@egocapture/core/domain/participant";
 
 describe("participant lifecycle", () => {
   it("allows only the declared lifecycle edges", () => {

@@ -1,5 +1,5 @@
 import type { NextRequest } from "next/server";
-import { refreshSession } from "@/src/server/supabase/proxy";
+import { refreshSession } from "@egocapture/core/server/supabase/proxy";
 
 export async function proxy(request: NextRequest) {
   return await refreshSession(request);

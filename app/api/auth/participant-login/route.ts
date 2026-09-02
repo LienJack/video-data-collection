@@ -1,7 +1,7 @@
 import { z } from "zod";
-import { apiError, apiSuccess, hasTrustedOrigin, requestId } from "@/src/server/api";
-import { database } from "@/src/server/database";
-import { createSupabaseServerClient } from "@/src/server/supabase/server";
+import { apiError, apiSuccess, hasTrustedOrigin, requestId } from "@egocapture/core/server/api";
+import { database } from "@egocapture/core/server/database";
+import { createSupabaseServerClient } from "@egocapture/core/server/supabase/server";
 
 export const runtime = "nodejs";
 

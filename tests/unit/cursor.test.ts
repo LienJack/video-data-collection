@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { DomainError } from "@/src/domain/errors";
-import { decodeCreatedAtCursor, encodeCreatedAtCursor } from "@/src/server/cursor";
+import { DomainError } from "@egocapture/core/domain/errors";
+import { decodeCreatedAtCursor, encodeCreatedAtCursor } from "@egocapture/core/server/cursor";
 
 describe("opaque created-at cursor", () => {
   it("round-trips the stable timestamp and tie-breaker", () => {

@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { UploadActions } from "@/app/admin/uploads/[uploadPublicId]/upload-actions";
-import { requireAdmin } from "@/src/server/auth";
-import { getAdminUpload } from "@/src/server/services/review";
+import { requireAdmin } from "@egocapture/core/server/auth";
+import { getAdminUpload } from "@egocapture/core/server/services/review";
 
 export const dynamic = "force-dynamic";
 

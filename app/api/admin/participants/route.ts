@@ -1,14 +1,14 @@
-import { DomainError } from "@/src/domain/errors";
-import { apiSuccess, hasTrustedOrigin } from "@/src/server/api";
-import { requireIdempotencyKey } from "@/src/server/idempotency";
-import { requireApiAdmin } from "@/src/server/request-auth";
-import { routeHandler } from "@/src/server/route-handler";
+import { DomainError } from "@egocapture/core/domain/errors";
+import { apiSuccess, hasTrustedOrigin } from "@egocapture/core/server/api";
+import { requireIdempotencyKey } from "@egocapture/core/server/idempotency";
+import { requireApiAdmin } from "@egocapture/core/server/request-auth";
+import { routeHandler } from "@egocapture/core/server/route-handler";
 import {
   createParticipant,
   createParticipantSchema,
   listParticipants,
   participantListSchema,
-} from "@/src/server/services/participants";
+} from "@egocapture/core/server/services/participants";
 
 export async function GET(request: Request) {
   return routeHandler(request, async (requestId) => {

@@ -1,5 +1,5 @@
-import { apiError, apiSuccess, requestId } from "@/src/server/api";
-import { database } from "@/src/server/database";
+import { apiError, apiSuccess, requestId } from "@egocapture/core/server/api";
+import { database } from "@egocapture/core/server/database";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";

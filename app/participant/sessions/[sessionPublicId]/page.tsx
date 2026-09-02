@@ -2,8 +2,8 @@ import { LockKey, UploadSimple } from "@phosphor-icons/react/dist/ssr";
 import Image from "next/image";
 import Link from "next/link";
 import { MarkerControls } from "@/app/participant/sessions/[sessionPublicId]/marker-controls";
-import { requireParticipant } from "@/src/server/auth";
-import { getMarker } from "@/src/server/services/sessions";
+import { requireParticipant } from "@egocapture/core/server/auth";
+import { getMarker } from "@egocapture/core/server/services/sessions";
 
 export const dynamic = "force-dynamic";
 

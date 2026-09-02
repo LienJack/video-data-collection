@@ -1,5 +1,5 @@
-import { apiError, apiSuccess, hasTrustedOrigin, requestId } from "@/src/server/api";
-import { createSupabaseServerClient } from "@/src/server/supabase/server";
+import { apiError, apiSuccess, hasTrustedOrigin, requestId } from "@egocapture/core/server/api";
+import { createSupabaseServerClient } from "@egocapture/core/server/supabase/server";
 
 export async function POST(request: Request) {
   const id = requestId(request);

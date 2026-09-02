@@ -1,8 +1,8 @@
 import Link from "next/link";
 import { TaskEditor } from "@/app/admin/tasks/task-editor";
-import { defaultTaskInstructions } from "@/src/domain/task-template";
-import { requireAdmin } from "@/src/server/auth";
-import { database } from "@/src/server/database";
+import { defaultTaskInstructions } from "@egocapture/core/domain/task-template";
+import { requireAdmin } from "@egocapture/core/server/auth";
+import { database } from "@egocapture/core/server/database";
 
 export default async function NewTaskPage() {
   const viewer = await requireAdmin();

@@ -2,15 +2,15 @@ import "server-only";
 
 import { randomUUID } from "node:crypto";
 import { z } from "zod";
-import { STORAGE_BUCKET } from "@/src/domain/constants";
-import { DomainError } from "@/src/domain/errors";
-import { compareDeviceConsistency } from "@/src/metadata/device-consistency";
-import { writeAudit } from "@/src/server/audit";
-import type { Viewer } from "@/src/server/auth";
-import { decodeCreatedAtCursor, encodeCreatedAtCursor } from "@/src/server/cursor";
-import { database } from "@/src/server/database";
-import { withIdempotency } from "@/src/server/idempotency";
-import { createSupabaseAdminClient } from "@/src/server/supabase/admin";
+import { STORAGE_BUCKET } from "@egocapture/core/domain/constants";
+import { DomainError } from "@egocapture/core/domain/errors";
+import { compareDeviceConsistency } from "@egocapture/core/metadata/device-consistency";
+import { writeAudit } from "@egocapture/core/server/audit";
+import type { Viewer } from "@egocapture/core/server/auth";
+import { decodeCreatedAtCursor, encodeCreatedAtCursor } from "@egocapture/core/server/cursor";
+import { database } from "@egocapture/core/server/database";
+import { withIdempotency } from "@egocapture/core/server/idempotency";
+import { createSupabaseAdminClient } from "@egocapture/core/server/supabase/admin";
 
 const reviewPublicIdSchema = z.string().regex(/^RV-[23456789ABCDEFGHJKLMNPQRSTUVWXYZ]{6,16}$/);
 const uploadPublicIdSchema = z.string().regex(/^UP-[23456789ABCDEFGHJKLMNPQRSTUVWXYZ]{6,16}$/);

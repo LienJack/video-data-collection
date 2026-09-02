@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { NewParticipantForm } from "@/app/admin/participants/new/new-participant-form";
-import { requireAdmin } from "@/src/server/auth";
-import { database } from "@/src/server/database";
+import { requireAdmin } from "@egocapture/core/server/auth";
+import { database } from "@egocapture/core/server/database";
 
 export default async function NewParticipantPage() {
   const viewer = await requireAdmin();

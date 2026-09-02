@@ -3,7 +3,7 @@ import { readFileSync } from "node:fs";
 import path from "node:path";
 import process from "node:process";
 import postgres from "postgres";
-import { createPublicId } from "@/src/domain/public-id";
+import { createPublicId } from "@egocapture/core/domain/public-id";
 
 class RollbackCheck extends Error {}
 

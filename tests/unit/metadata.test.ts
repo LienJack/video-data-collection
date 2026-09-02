@@ -1,8 +1,8 @@
 import { describe, expect, it, vi } from "vitest";
 import type { MediaInfoResult } from "mediainfo.js";
-import { compareDeviceConsistency, normalizeManufacturer } from "@/src/metadata/device-consistency";
-import { normalizeMediaInfo } from "@/src/metadata/normalize";
-import { BudgetedRangeReader, MAX_METADATA_BYTES, MetadataRangeError } from "@/src/metadata/range-reader";
+import { compareDeviceConsistency, normalizeManufacturer } from "@egocapture/core/metadata/device-consistency";
+import { normalizeMediaInfo } from "@egocapture/core/metadata/normalize";
+import { BudgetedRangeReader, MAX_METADATA_BYTES, MetadataRangeError } from "@egocapture/core/metadata/range-reader";
 
 describe("metadata normalization", () => {
   it("uses a timezone-bearing QuickTime date before container, track and local times", () => {

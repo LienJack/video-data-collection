@@ -1,7 +1,7 @@
 import "server-only";
 
 import postgres from "postgres";
-import { serverEnvironment } from "@/src/server/env";
+import { serverEnvironment } from "@egocapture/core/server/env";
 
 type DatabaseGlobal = typeof globalThis & {
   egocaptureDatabase?: postgres.Sql;

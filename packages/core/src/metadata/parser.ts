@@ -2,9 +2,9 @@ import "server-only";
 
 import mediaInfoFactory, { type MediaInfoResult } from "mediainfo.js";
 import { createFile, type Movie, type MP4BoxBuffer } from "mp4box";
-import { normalizeMediaInfo } from "@/src/metadata/normalize";
-import { MetadataRangeError, type BudgetedRangeReader } from "@/src/metadata/range-reader";
-import type { MetadataEvidence, Mp4Supplement, NormalizedMetadata } from "@/src/metadata/types";
+import { normalizeMediaInfo } from "@egocapture/core/metadata/normalize";
+import { MetadataRangeError, type BudgetedRangeReader } from "@egocapture/core/metadata/range-reader";
+import type { MetadataEvidence, Mp4Supplement, NormalizedMetadata } from "@egocapture/core/metadata/types";
 
 const MEDIAINFO_PACKAGE_VERSION = "0.3.7";
 const MP4BOX_PACKAGE_VERSION = "2.4.1";

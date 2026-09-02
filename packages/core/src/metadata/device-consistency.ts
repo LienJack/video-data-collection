@@ -1,4 +1,4 @@
-import type { DeclaredDevice, DeviceConsistency, ExtractedDevice } from "@/src/metadata/types";
+import type { DeclaredDevice, DeviceConsistency, ExtractedDevice } from "@egocapture/core/metadata/types";
 
 const MANUFACTURER_ALIASES: Record<string, string> = {
   applecomputerinc: "apple",

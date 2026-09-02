@@ -1,10 +1,10 @@
 import { z } from "zod";
-import { DomainError } from "@/src/domain/errors";
-import { internalParticipantEmail } from "@/src/domain/invitation";
-import { apiSuccess, hasTrustedOrigin } from "@/src/server/api";
-import { routeHandler } from "@/src/server/route-handler";
-import { acceptInvitation } from "@/src/server/services/participants";
-import { createSupabaseServerClient } from "@/src/server/supabase/server";
+import { DomainError } from "@egocapture/core/domain/errors";
+import { internalParticipantEmail } from "@egocapture/core/domain/invitation";
+import { apiSuccess, hasTrustedOrigin } from "@egocapture/core/server/api";
+import { routeHandler } from "@egocapture/core/server/route-handler";
+import { acceptInvitation } from "@egocapture/core/server/services/participants";
+import { createSupabaseServerClient } from "@egocapture/core/server/supabase/server";
 
 const inputSchema = z.object({ password: z.string().min(10).max(128) });
 type TokenContext = { params: Promise<{ token: string }> };

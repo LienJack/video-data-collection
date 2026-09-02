@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { resolveAdminEmail } from "@/src/domain/admin-identity";
+import { resolveAdminEmail } from "@egocapture/core/domain/admin-identity";
 
 const configured = {
   username: "admin",

@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { AssignmentForm } from "@/app/admin/assignments/new/assignment-form";
-import { requireAdmin } from "@/src/server/auth";
-import { database } from "@/src/server/database";
+import { requireAdmin } from "@egocapture/core/server/auth";
+import { database } from "@egocapture/core/server/database";
 
 export const dynamic = "force-dynamic";
 

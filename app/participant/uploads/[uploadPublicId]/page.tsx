@@ -1,6 +1,6 @@
 import Link from "next/link";
-import { requireParticipant } from "@/src/server/auth";
-import { getParticipantUpload } from "@/src/server/services/uploads";
+import { requireParticipant } from "@egocapture/core/server/auth";
+import { getParticipantUpload } from "@egocapture/core/server/services/uploads";
 
 export const dynamic = "force-dynamic";
 

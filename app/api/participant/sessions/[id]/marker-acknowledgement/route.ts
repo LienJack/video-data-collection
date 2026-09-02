@@ -1,9 +1,9 @@
 import { z } from "zod";
-import { DomainError } from "@/src/domain/errors";
-import { apiSuccess, hasTrustedOrigin } from "@/src/server/api";
-import { requireApiParticipant } from "@/src/server/request-auth";
-import { routeHandler } from "@/src/server/route-handler";
-import { acknowledgeMarker } from "@/src/server/services/sessions";
+import { DomainError } from "@egocapture/core/domain/errors";
+import { apiSuccess, hasTrustedOrigin } from "@egocapture/core/server/api";
+import { requireApiParticipant } from "@egocapture/core/server/request-auth";
+import { routeHandler } from "@egocapture/core/server/route-handler";
+import { acknowledgeMarker } from "@egocapture/core/server/services/sessions";
 
 const idSchema = z.string().regex(/^RS-[23456789ABCDEFGHJKLMNPQRSTUVWXYZ]{6,16}$/);
 type IdContext = { params: Promise<{ id: string }> };

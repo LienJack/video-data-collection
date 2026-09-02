@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { DomainError } from "@/src/domain/errors";
+import { DomainError } from "@egocapture/core/domain/errors";
 
 const createdAtCursorSchema = z.object({
   createdAt: z.string().datetime(),

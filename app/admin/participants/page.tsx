@@ -1,8 +1,8 @@
 import Link from "next/link";
 import { MagnifyingGlass, Plus } from "@phosphor-icons/react/dist/ssr";
-import { requireAdmin } from "@/src/server/auth";
-import { database } from "@/src/server/database";
-import { listParticipants, participantListSchema } from "@/src/server/services/participants";
+import { requireAdmin } from "@egocapture/core/server/auth";
+import { database } from "@egocapture/core/server/database";
+import { listParticipants, participantListSchema } from "@egocapture/core/server/services/participants";
 
 export const dynamic = "force-dynamic";
 

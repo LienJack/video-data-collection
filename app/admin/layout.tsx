@@ -1,7 +1,7 @@
 import { ClipboardText, HardDrives, ListChecks, Pulse, Radio, Scan, Scroll, UsersThree } from "@phosphor-icons/react/dist/ssr";
 import Link from "next/link";
 import { LogoutButton } from "@/app/admin/logout-button";
-import { requireAdmin } from "@/src/server/auth";
+import { requireAdmin } from "@egocapture/core/server/auth";
 
 export const dynamic = "force-dynamic";
 

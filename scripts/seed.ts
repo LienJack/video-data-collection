@@ -2,9 +2,9 @@ import { randomUUID } from "node:crypto";
 import { createClient, type SupabaseClient, type User } from "@supabase/supabase-js";
 import postgres from "postgres";
 import { integrationEnvironment } from "@/scripts/check-support";
-import { internalParticipantEmail } from "@/src/domain/invitation";
-import { defaultTaskInstructions } from "@/src/domain/task-template";
-import { taskContentHash, taskInstructionsSchema, type TaskInstructions } from "@/src/domain/task-instructions";
+import { internalParticipantEmail } from "@egocapture/core/domain/invitation";
+import { defaultTaskInstructions } from "@egocapture/core/domain/task-template";
+import { taskContentHash, taskInstructionsSchema, type TaskInstructions } from "@egocapture/core/domain/task-instructions";
 
 const ids = {
   study: "10000000-0000-4000-8000-000000000001",

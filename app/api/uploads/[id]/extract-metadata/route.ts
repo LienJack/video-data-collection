@@ -1,8 +1,8 @@
-import { DomainError } from "@/src/domain/errors";
-import { apiSuccess, hasTrustedOrigin } from "@/src/server/api";
-import { requireApiViewer } from "@/src/server/request-auth";
-import { routeHandler } from "@/src/server/route-handler";
-import { extractUploadMetadata } from "@/src/server/services/metadata";
+import { DomainError } from "@egocapture/core/domain/errors";
+import { apiSuccess, hasTrustedOrigin } from "@egocapture/core/server/api";
+import { requireApiViewer } from "@egocapture/core/server/request-auth";
+import { routeHandler } from "@egocapture/core/server/route-handler";
+import { extractUploadMetadata } from "@egocapture/core/server/services/metadata";
 
 export const runtime = "nodejs";
 export const maxDuration = 60;

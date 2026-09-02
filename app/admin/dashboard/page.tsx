@@ -1,7 +1,7 @@
 import { ArrowRight, CloudArrowUp, WarningCircle } from "@phosphor-icons/react/dist/ssr";
 import Link from "next/link";
-import { requireAdmin } from "@/src/server/auth";
-import { dashboardSummary } from "@/src/server/services/review";
+import { requireAdmin } from "@egocapture/core/server/auth";
+import { dashboardSummary } from "@egocapture/core/server/services/review";
 
 export const dynamic = "force-dynamic";
 

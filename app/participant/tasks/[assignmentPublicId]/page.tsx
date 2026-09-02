@@ -1,10 +1,10 @@
 import Link from "next/link";
 import { AcknowledgeButton } from "@/app/participant/tasks/[assignmentPublicId]/acknowledge-button";
 import { SessionCreate } from "@/app/participant/tasks/[assignmentPublicId]/session-create";
-import { criterionDisplayStatus } from "@/src/domain/task-instructions";
-import { requireParticipant } from "@/src/server/auth";
-import { getParticipantAssignment } from "@/src/server/services/tasks";
-import { listParticipantDevices, listParticipantSessions } from "@/src/server/services/sessions";
+import { criterionDisplayStatus } from "@egocapture/core/domain/task-instructions";
+import { requireParticipant } from "@egocapture/core/server/auth";
+import { getParticipantAssignment } from "@egocapture/core/server/services/tasks";
+import { listParticipantDevices, listParticipantSessions } from "@egocapture/core/server/services/sessions";
 
 export const dynamic = "force-dynamic";
 

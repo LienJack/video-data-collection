@@ -2,7 +2,7 @@ import "server-only";
 
 import { createHash } from "node:crypto";
 import type postgres from "postgres";
-import { DomainError } from "@/src/domain/errors";
+import { DomainError } from "@egocapture/core/domain/errors";
 
 type Options<T> = {
   actorAuthUserId: string;

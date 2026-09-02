@@ -1,14 +1,14 @@
 import "server-only";
 
 import { randomUUID } from "node:crypto";
-import { STORAGE_BUCKET } from "@/src/domain/constants";
-import { createPublicId } from "@/src/domain/public-id";
-import { writeAudit } from "@/src/server/audit";
-import type { Viewer } from "@/src/server/auth";
-import { database } from "@/src/server/database";
-import { extractUploadMetadata } from "@/src/server/services/metadata";
-import { completeUpload } from "@/src/server/services/uploads";
-import { createSupabaseAdminClient } from "@/src/server/supabase/admin";
+import { STORAGE_BUCKET } from "@egocapture/core/domain/constants";
+import { createPublicId } from "@egocapture/core/domain/public-id";
+import { writeAudit } from "@egocapture/core/server/audit";
+import type { Viewer } from "@egocapture/core/server/auth";
+import { database } from "@egocapture/core/server/database";
+import { extractUploadMetadata } from "@egocapture/core/server/services/metadata";
+import { completeUpload } from "@egocapture/core/server/services/uploads";
+import { createSupabaseAdminClient } from "@egocapture/core/server/supabase/admin";
 
 const MAX_CRON_ITEMS = 10;
 const FIXTURE_ASSET_ID = "74000000-0000-4000-8000-000000000001";

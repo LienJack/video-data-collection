@@ -4,7 +4,7 @@ import {
   taskContentHash,
   taskInstructionsSchema,
   type TaskInstructions,
-} from "@/src/domain/task-instructions";
+} from "@egocapture/core/domain/task-instructions";
 
 const instructions: TaskInstructions = {
   schemaVersion: "ego-task/1",

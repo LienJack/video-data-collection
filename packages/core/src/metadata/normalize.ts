@@ -6,7 +6,7 @@ import type {
   MetadataEvidence,
   Mp4Supplement,
   NormalizedMetadata,
-} from "@/src/metadata/types";
+} from "@egocapture/core/metadata/types";
 
 type TrackRecord = Track & Record<string, unknown>;
 

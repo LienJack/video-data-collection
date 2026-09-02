@@ -8,6 +8,12 @@ importers:
 
   .:
     dependencies:
+      '@egocapture/core':
+        specifier: workspace:*
+        version: link:packages/core
+      '@egocapture/ui':
+        specifier: workspace:*
+        version: link:packages/ui
       '@phosphor-icons/react':
         specifier: ^2.1.10
         version: 2.1.10(react-dom@19.2.8(react@19.2.8))(react@19.2.8)
@@ -102,6 +108,10 @@ importers:
       vitest:
         specifier: 3.2.4
         version: 3.2.4(@types/node@24.3.0)(jiti@2.7.0)(jsdom@26.1.0)(lightningcss@1.30.1)(tsx@4.20.5)
+
+  packages/core: {}
+
+  packages/ui: {}
 
 packages:
 

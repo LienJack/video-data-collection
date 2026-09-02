@@ -5,7 +5,7 @@ import {
   fingerprintV1,
   sanitizeOriginalFilename,
   uploadMetadata,
-} from "@/src/domain/upload";
+} from "@egocapture/core/domain/upload";
 
 describe("upload domain", () => {
   it("sanitizes path fragments and control characters from display filenames", () => {

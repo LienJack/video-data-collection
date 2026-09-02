@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { ReviewDecisionPanel } from "@/app/admin/review/[casePublicId]/review-decision-panel";
-import { requireAdmin } from "@/src/server/auth";
-import { getReviewCase } from "@/src/server/services/review";
+import { requireAdmin } from "@egocapture/core/server/auth";
+import { getReviewCase } from "@egocapture/core/server/services/review";
 
 export const dynamic = "force-dynamic";
 

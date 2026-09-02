@@ -4,7 +4,7 @@ import {
   hashInvitationToken,
   internalParticipantEmail,
   invitationExpiresAt,
-} from "@/src/domain/invitation";
+} from "@egocapture/core/domain/invitation";
 
 describe("participant invitations", () => {
   it("stores only a deterministic 32-byte SHA-256 digest", () => {

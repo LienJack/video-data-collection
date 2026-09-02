@@ -1,7 +1,7 @@
-import { apiSuccess } from "@/src/server/api";
-import { requireApiParticipant } from "@/src/server/request-auth";
-import { routeHandler } from "@/src/server/route-handler";
-import { listParticipantAssignments } from "@/src/server/services/tasks";
+import { apiSuccess } from "@egocapture/core/server/api";
+import { requireApiParticipant } from "@egocapture/core/server/request-auth";
+import { routeHandler } from "@egocapture/core/server/route-handler";
+import { listParticipantAssignments } from "@egocapture/core/server/services/tasks";
 
 export async function GET(request: Request) {
   return routeHandler(request, async (requestId) => {

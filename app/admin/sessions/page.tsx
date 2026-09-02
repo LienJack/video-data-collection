@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { SessionClose } from "@/app/admin/sessions/session-close";
-import { requireAdmin } from "@/src/server/auth";
-import { adminSessionListSchema, listAdminSessions } from "@/src/server/services/sessions";
+import { requireAdmin } from "@egocapture/core/server/auth";
+import { adminSessionListSchema, listAdminSessions } from "@egocapture/core/server/services/sessions";
 
 export const dynamic = "force-dynamic";
 

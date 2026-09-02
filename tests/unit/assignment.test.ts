@@ -3,7 +3,7 @@ import {
   canAcknowledgeAssignment,
   canCancelAssignment,
   statusAfterExtension,
-} from "@/src/domain/assignment";
+} from "@egocapture/core/domain/assignment";
 
 describe("assignment lifecycle", () => {
   it("allows acknowledgement only from assigned", () => {

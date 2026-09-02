@@ -7,7 +7,7 @@ import {
   type JWTPayload,
 } from "jose";
 import { z } from "zod";
-import { MARKER_TTL_SECONDS } from "@/src/domain/constants";
+import { MARKER_TTL_SECONDS } from "@egocapture/core/domain/constants";
 
 export const markerPayloadSchema = z.object({
   v: z.literal(1),

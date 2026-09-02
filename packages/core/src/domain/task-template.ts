@@ -1,4 +1,4 @@
-import type { TaskInstructions } from "@/src/domain/task-instructions";
+import type { TaskInstructions } from "@egocapture/core/domain/task-instructions";
 
 export const defaultTaskInstructions: TaskInstructions = {
   schemaVersion: "ego-task/1",

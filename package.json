@@ -49,6 +49,8 @@
     "check": "pnpm lint && pnpm typecheck && pnpm test && pnpm build"
   },
   "dependencies": {
+    "@egocapture/core": "workspace:*",
+    "@egocapture/ui": "workspace:*",
     "@phosphor-icons/react": "^2.1.10",
     "@supabase/ssr": "0.12.5",
     "@supabase/supabase-js": "2.112.4",

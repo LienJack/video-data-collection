@@ -3,7 +3,7 @@ import { z } from "zod";
 import {
   MAX_FILE_SIZE_BYTES,
   STORAGE_BUCKET,
-} from "@/src/domain/constants";
+} from "@egocapture/core/domain/constants";
 
 export const uploadExtensionSchema = z.enum(["mp4", "mov", "insv"]);
 export type UploadExtension = z.infer<typeof uploadExtensionSchema>;

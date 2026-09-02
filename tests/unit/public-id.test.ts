@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { createPublicId, isPublicId } from "@/src/domain/public-id";
+import { createPublicId, isPublicId } from "@egocapture/core/domain/public-id";
 
 describe("public ids", () => {
   it("creates prefixed, non-ambiguous ids", () => {

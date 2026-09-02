@@ -1,6 +1,6 @@
 import Link from "next/link";
-import { requireAdmin } from "@/src/server/auth";
-import { auditListSchema, listAuditEvents } from "@/src/server/services/review";
+import { requireAdmin } from "@egocapture/core/server/auth";
+import { auditListSchema, listAuditEvents } from "@egocapture/core/server/services/review";
 
 export const dynamic = "force-dynamic";
 
