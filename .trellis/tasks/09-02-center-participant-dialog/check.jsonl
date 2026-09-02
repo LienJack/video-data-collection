@@ -1,0 +1,2 @@
+{"file":".trellis/tasks/09-02-center-participant-dialog/prd.md","reason":"Verify every approved acceptance criterion, especially step navigation, state retention, scroll reachability, and filtering semantics."}
+{"file":"node_modules/next/dist/docs/03-architecture/accessibility.md","reason":"Check keyboard and accessible naming behavior for the dialog, step controls, and multi-select filter."}
