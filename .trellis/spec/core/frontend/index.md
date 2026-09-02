@@ -25,6 +25,7 @@ This directory contains guidelines for frontend development. Fill in each file w
 | [Lifecycle State Machines](./lifecycle-state-machine-contract.md) | XState, service transaction, PostgreSQL guard, upload actor, and test contract | Active |
 | [Internationalization](./i18n-contract.md) | Locale resolution, catalogs, formatting, error/status mapping, and test contract | Active |
 | [Deterministic Demo Data Refresh](./demo-data-refresh-contract.md) | Guarded PostgreSQL/Auth/Storage reset, deterministic catalog, and acceptance contract | Active |
+| [Public Vercel and Supabase Deployment](./public-deployment-contract.md) | Dedicated provider identity, serverless pooling, auth cookies, signed upload, and public proof contract | Active |
 
 ---
 
