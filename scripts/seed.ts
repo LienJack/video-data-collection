@@ -217,6 +217,26 @@ async function main() {
           notes = excluded.notes, is_fixture = true
       `;
       await transaction`
+        insert into egocapture.participant_login_credentials (
+          participant_id, password, version, updated_at, synced_at
+        ) values (
+          ${ids.participant}::uuid, ${env.demoParticipantPassword}, 1, now(), now()
+        )
+        on conflict (participant_id) do update set
+          password = excluded.password,
+          version = case
+            when egocapture.participant_login_credentials.password is distinct from excluded.password
+              then egocapture.participant_login_credentials.version + 1
+            else egocapture.participant_login_credentials.version
+          end,
+          updated_at = case
+            when egocapture.participant_login_credentials.password is distinct from excluded.password
+              then excluded.updated_at
+            else egocapture.participant_login_credentials.updated_at
+          end,
+          synced_at = excluded.synced_at
+      `;
+      await transaction`
         insert into egocapture.consent_records (
           id, participant_id, status, recorded_by, accepted_at
         ) values (

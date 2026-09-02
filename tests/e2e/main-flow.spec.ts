@@ -47,7 +47,7 @@ test("Admin 建档到 Participant 上传与不可变纠正的完整闭环", asyn
   const suffix = randomUUID().slice(0, 8);
   const alias = `E2E Participant ${suffix}`;
   const taskTitle = `E2E Full Flow ${suffix}`;
-  const participantPassword = `E2E-${suffix}-Strong!`;
+  let participantPassword = "";
   let participantPublicId = "";
   let devicePublicId = "";
   let taskPublicId = "";
@@ -62,6 +62,19 @@ test("Admin 建档到 Participant 上传与不可变纠正的完整闭环", asyn
     await page.getByRole("button", { name: "创建 Draft Participant" }).click();
     await expect(page).toHaveURL(/\/participants\/PT-/);
     participantPublicId = publicId(page.url(), "PT");
+    const credentialResponse = await page.request.get(
+      `${adminOrigin}/api/admin/participants/${participantPublicId}`,
+    );
+    expect(credentialResponse.ok()).toBe(true);
+    const credentialPayload = await credentialResponse.json() as {
+      data?: { loginCredential?: { password?: string | null; status?: string; canLogin?: boolean } };
+    };
+    participantPassword = credentialPayload.data?.loginCredential?.password || "";
+    expect(participantPassword).toHaveLength(16);
+    expect(credentialPayload.data?.loginCredential).toMatchObject({
+      status: "pending_activation",
+      canLogin: false,
+    });
 
     await page.getByRole("button", { name: "生成 / 重发邀请" }).click();
     const invitationLink = page.locator('a[href*="/invite/"]');
@@ -71,8 +84,7 @@ test("Admin 建档到 Participant 上传与不可变纠正的完整闭环", asyn
 
     await logout(page);
     await page.goto(invitationUrl);
-    await page.getByLabel("设置密码").fill(participantPassword);
-    await page.getByLabel("再次输入", { exact: true }).fill(participantPassword);
+    await expect(page.getByRole("textbox")).toHaveCount(0);
     await page.getByRole("button", { name: "接受邀请并进入任务" }).click();
     await expect(page).toHaveURL(/\/tasks$/);
 

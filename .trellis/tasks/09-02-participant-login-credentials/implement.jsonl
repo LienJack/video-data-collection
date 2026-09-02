@@ -1,0 +1,7 @@
+{"file":".trellis/tasks/09-02-participant-login-credentials/prd.md","reason":"Authoritative credential persistence, generation, lifecycle, authorization, and acceptance requirements."}
+{"file":".trellis/tasks/09-02-participant-login-credentials/design.md","reason":"Migration, credential states, invitation flow, Supabase synchronization, failure recovery, and API contracts."}
+{"file":".trellis/tasks/09-02-participant-table-experience/prd.md","reason":"Parent product decisions and cross-child credential/drawer boundary."}
+{"file":".trellis/spec/core/frontend/index.md","reason":"Core package guidance index for participant services and credential contracts."}
+{"file":".trellis/spec/participant-web/frontend/index.md","reason":"Participant frontend guidance index for invitation acceptance changes."}
+{"file":".trellis/spec/admin-web/frontend/index.md","reason":"Admin guidance index for protected credential routes."}
+{"file":".trellis/spec/guides/cross-layer-thinking-guide.md","reason":"Database to Supabase to API contract and failure-recovery checklist."}

@@ -21,6 +21,7 @@ This directory contains guidelines for frontend development. Fill in each file w
 | [Quality Guidelines](./quality-guidelines.md) | Code standards, forbidden patterns | To fill |
 | [Type Safety](./type-safety.md) | Type patterns, validation | To fill |
 | [Admin Table Pagination](./pagination-contract.md) | Cross-layer page result, query, URL, UI, and test contract | Active |
+| [Participant Login Credentials](./participant-credential-contract.md) | Plaintext participant credential authority, sync, API, and test contract | Active |
 
 ---
 

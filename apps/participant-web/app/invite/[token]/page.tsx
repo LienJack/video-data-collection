@@ -12,10 +12,10 @@ export default async function InvitationPage({ params }: { params: Promise<{ tok
     <main className="flex min-h-[100dvh] items-center justify-center px-5 py-12">
       <Card className="w-full max-w-lg p-7 sm:p-10">
         <p className="page-kicker">Participant activation</p>
-        <h1 className="page-title text-[clamp(2.5rem,7vw,4rem)]">{valid ? "建立你的采集账号" : "邀请无效或已过期"}</h1>
+        <h1 className="page-title text-[clamp(2.5rem,7vw,4rem)]">{valid ? "确认参与研究" : "邀请无效或已过期"}</h1>
         {valid ? (
           <>
-            <p className="mt-4 text-sm leading-7 text-[var(--muted)]">设置密码后，邀请会立即失效，并进入只属于你的 Participant 工作区。</p>
+            <p className="mt-4 text-sm leading-7 text-[var(--muted)]">确认接受后，邀请会立即失效，并进入只属于你的 Participant 工作区。</p>
             <AcceptInvitationForm token={token} />
           </>
         ) : (

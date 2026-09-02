@@ -1,6 +1,6 @@
 import "server-only";
 
-import { createHmac, randomUUID } from "node:crypto";
+import { createHash, createHmac, randomUUID } from "node:crypto";
 import { z } from "zod";
 import { DomainError } from "@egocapture/core/domain/errors";
 import {
@@ -10,6 +10,12 @@ import {
   invitationExpiresAt,
 } from "@egocapture/core/domain/invitation";
 import { assertParticipantTransition, type ParticipantStatus } from "@egocapture/core/domain/participant";
+import {
+  createParticipantPassword,
+  participantCredentialCanLogin,
+  participantCredentialStatus,
+  type ParticipantLoginCredential,
+} from "@egocapture/core/domain/participant-credential";
 import { createPublicId } from "@egocapture/core/domain/public-id";
 import { createPageResult, pageNumberSchema, pageSizeSchema, resolvePage } from "@egocapture/core/pagination";
 import {
@@ -96,6 +102,43 @@ type ParticipantRow = {
   displayAlias: string;
   isFixture: boolean;
 };
+
+type ParticipantCredentialRow = ParticipantRow & {
+  authUserId: string | null;
+  loginPassword: string | null;
+  loginCredentialVersion: number;
+  loginPasswordUpdatedAt: Date | null;
+  loginPasswordSyncedAt: Date | null;
+};
+
+const credentialResetCommandName = "participant.credentials.reset";
+
+function credentialRequestHash(participantPublicId: string) {
+  return createHash("sha256").update(JSON.stringify({ participantPublicId })).digest("hex");
+}
+
+function toLoginCredential(participant: ParticipantCredentialRow): ParticipantLoginCredential {
+  const status = participantCredentialStatus({
+    password: participant.loginPassword,
+    authUserId: participant.authUserId,
+    updatedAt: participant.loginPasswordUpdatedAt,
+    syncedAt: participant.loginPasswordSyncedAt,
+  });
+  return {
+    username: participant.publicId,
+    password: participant.loginPassword,
+    loginUrl: `${serverEnvironment().PARTICIPANT_SITE_URL.replace(/\/$/, "")}/login`,
+    version: participant.loginCredentialVersion,
+    status,
+    canLogin: participantCredentialCanLogin({
+      credentialStatus: status,
+      participantStatus: participant.status,
+      consentStatus: participant.consentStatus,
+    }),
+    updatedAt: participant.loginPasswordUpdatedAt?.toISOString() ?? null,
+    syncedAt: participant.loginPasswordSyncedAt?.toISOString() ?? null,
+  };
+}
 
 async function participantForAdmin(
   _viewer: Viewer,
@@ -212,6 +255,11 @@ export async function getParticipant(viewer: Viewer, participantPublicId: string
     invitationStatus: string | null;
     invitationExpiresAt: Date | null;
     updatedAt: Date;
+    authUserId: string | null;
+    loginPassword: string | null;
+    loginCredentialVersion: number;
+    loginPasswordUpdatedAt: Date | null;
+    loginPasswordSyncedAt: Date | null;
   }[]>`
     select
       participant.public_id,
@@ -227,8 +275,15 @@ export async function getParticipant(viewer: Viewer, participantPublicId: string
       device.public_id as default_device_public_id,
       invitation.status as invitation_status,
       invitation.expires_at as invitation_expires_at,
-      participant.updated_at
+      participant.updated_at,
+      participant.auth_user_id,
+      credential.password as login_password,
+      coalesce(credential.version, 0)::integer as login_credential_version,
+      credential.updated_at as login_password_updated_at,
+      credential.synced_at as login_password_synced_at
     from egocapture.participants participant
+    left join egocapture.participant_login_credentials credential
+      on credential.participant_id = participant.id
     left join egocapture.devices device on device.id = participant.default_device_id
     left join lateral (
       select participant_invitation.status, participant_invitation.expires_at
@@ -239,7 +294,25 @@ export async function getParticipant(viewer: Viewer, participantPublicId: string
     ) invitation on true
     where participant.id = ${participant.id}::uuid
   `;
-  return detail;
+  const {
+    authUserId,
+    loginPassword,
+    loginCredentialVersion,
+    loginPasswordUpdatedAt,
+    loginPasswordSyncedAt,
+    ...publicDetail
+  } = detail;
+  return {
+    ...publicDetail,
+    loginCredential: toLoginCredential({
+      ...participant,
+      authUserId,
+      loginPassword,
+      loginCredentialVersion,
+      loginPasswordUpdatedAt,
+      loginPasswordSyncedAt,
+    }),
+  };
 }
 
 export async function updateParticipant(
@@ -340,6 +413,8 @@ export async function createParticipant(
         if (usage.count >= 25) throw new DomainError("DEMO_PARTICIPANT_LIMIT", "公开 Demo 最多创建 25 个临时 Participant", 429);
       }
       const publicId = createPublicId("PT");
+      const loginPassword = createParticipantPassword();
+      const loginPasswordUpdatedAt = new Date();
       const [participant] = await transaction<{ id: string; publicId: string }[]>`
         insert into egocapture.participants (
           public_id, display_alias, management_email, locale, timezone,
@@ -350,6 +425,13 @@ export async function createParticipant(
           ${input.notes ?? null}, ${viewer.profileId}::uuid
         ) returning id, public_id
       `;
+      await transaction`
+        insert into egocapture.participant_login_credentials (
+          participant_id, password, version, updated_at
+        ) values (
+          ${participant.id}::uuid, ${loginPassword}, 1, ${loginPasswordUpdatedAt}
+        )
+      `;
       await writeAudit(transaction, {
         actorProfileId: viewer.profileId,
         actorAuthUserId: viewer.authUserId,
@@ -357,7 +439,13 @@ export async function createParticipant(
         entityType: "participant",
         entityPublicId: participant.publicId,
         requestId,
-        afterValues: { publicId: participant.publicId, status: "draft", consentStatus: "pending" },
+        afterValues: {
+          publicId: participant.publicId,
+          status: "draft",
+          consentStatus: "pending",
+          credentialVersion: 1,
+          credentialStatus: "pending_activation",
+        },
       });
       return { participantPublicId: participant.publicId };
     },
@@ -546,7 +634,7 @@ export async function revokeInvitation(
   });
 }
 
-export async function acceptInvitation(token: string, password: string, requestId: string) {
+export async function acceptInvitation(token: string, requestId: string) {
   if (!/^[A-Za-z0-9_-]{43}$/.test(token)) {
     throw new DomainError("INVITATION_INVALID_OR_EXPIRED", "邀请无效或已过期", 400);
   }
@@ -570,14 +658,31 @@ export async function acceptInvitation(token: string, password: string, requestI
       if (!invitation || invitation.status !== "invited") {
         throw new DomainError("INVITATION_INVALID_OR_EXPIRED", "邀请无效或已过期", 400);
       }
+      const [storedCredential] = await transaction<{
+        loginPassword: string;
+        loginCredentialVersion: number;
+        loginPasswordUpdatedAt: Date;
+      }[]>`
+        select
+          password as login_password,
+          version::integer as login_credential_version,
+          updated_at as login_password_updated_at
+        from egocapture.participant_login_credentials
+        where participant_id = ${invitation.id}::uuid
+        for update
+      `;
+      const loginPassword = storedCredential?.loginPassword ?? createParticipantPassword();
+      const loginCredentialVersion = storedCredential?.loginCredentialVersion ?? 1;
+      const loginPasswordUpdatedAt = storedCredential?.loginPasswordUpdatedAt ?? new Date();
       const email = internalParticipantEmail(invitation.publicId);
       const { data, error } = await supabase.auth.admin.createUser({
         email,
-        password,
+        password: loginPassword,
         email_confirm: true,
       });
       if (error || !data.user) throw new DomainError("INVITATION_ACCEPT_FAILED", "暂时无法接受邀请", 503);
       createdAuthUserId = data.user.id;
+      const loginPasswordSyncedAt = new Date();
       const [profile] = await transaction<{ id: string }[]>`
         insert into egocapture.profiles (auth_user_id, role, display_name)
         values (${createdAuthUserId}::uuid, 'participant', ${invitation.displayAlias})
@@ -589,6 +694,19 @@ export async function acceptInvitation(token: string, password: string, requestI
             status = 'active',
             consent_status = 'valid'
         where id = ${invitation.id}::uuid
+      `;
+      await transaction`
+        insert into egocapture.participant_login_credentials (
+          participant_id, password, version, updated_at, synced_at
+        ) values (
+          ${invitation.id}::uuid, ${loginPassword}, ${loginCredentialVersion},
+          ${loginPasswordUpdatedAt}, ${loginPasswordSyncedAt}
+        )
+        on conflict (participant_id) do update set
+          password = excluded.password,
+          version = excluded.version,
+          updated_at = excluded.updated_at,
+          synced_at = excluded.synced_at
       `;
       await transaction`
         update egocapture.participant_invitations
@@ -610,14 +728,312 @@ export async function acceptInvitation(token: string, password: string, requestI
         entityPublicId: invitation.publicId,
         requestId,
         beforeValues: { status: "invited", consentStatus: invitation.consentStatus },
-        afterValues: { status: "active", consentStatus: "valid" },
+        afterValues: {
+          status: "active",
+          consentStatus: "valid",
+          credentialVersion: loginCredentialVersion,
+          credentialStatus: "ready",
+        },
       });
-      return { participantPublicId: invitation.publicId };
+      return { participantPublicId: invitation.publicId, loginPassword };
     });
   } catch (error) {
     if (createdAuthUserId) await supabase.auth.admin.deleteUser(createdAuthUserId);
     throw error;
   }
+}
+
+export async function resetParticipantCredential(
+  viewer: Viewer,
+  participantPublicId: string,
+  idempotencyKey: string,
+  requestId: string,
+): Promise<{ loginCredential: ParticipantLoginCredential; updatedAt: string }> {
+  const db = database();
+  const requestHash = credentialRequestHash(participantPublicId);
+  const lockKey = `${viewer.authUserId}:${credentialResetCommandName}:${idempotencyKey}`;
+  const prepared = await db.begin(async (transaction) => {
+    await transaction`select pg_advisory_xact_lock(hashtext(${lockKey}))`;
+    const [receipt] = await transaction<{ requestHash: string; expiresAt: Date }[]>`
+      select request_hash, expires_at
+      from egocapture.command_receipts
+      where actor_auth_user_id = ${viewer.authUserId}::uuid
+        and command_name = ${credentialResetCommandName}
+        and idempotency_key = ${idempotencyKey}
+      limit 1
+    `;
+    if (receipt && receipt.expiresAt > new Date()) {
+      if (receipt.requestHash !== requestHash) {
+        throw new DomainError("IDEMPOTENCY_KEY_REUSED", "该 Idempotency-Key 已用于不同请求", 409);
+      }
+      return { replay: true as const };
+    }
+    if (receipt) {
+      await transaction`
+        delete from egocapture.command_receipts
+        where actor_auth_user_id = ${viewer.authUserId}::uuid
+          and command_name = ${credentialResetCommandName}
+          and idempotency_key = ${idempotencyKey}
+      `;
+    }
+
+    const [participantBase] = await transaction<(ParticipantRow & { authUserId: string | null })[]>`
+      select
+        participant.id, participant.public_id, participant.status,
+        participant.consent_status, participant.display_alias,
+        participant.is_fixture, participant.auth_user_id
+      from egocapture.participants participant
+      where participant.public_id = ${participantPublicId}
+      for update of participant
+    `;
+    if (!participantBase) throw new DomainError("NOT_FOUND", "Participant 或资源不存在", 404);
+    const [storedCredential] = await transaction<{
+      loginPassword: string;
+      loginCredentialVersion: number;
+      loginPasswordUpdatedAt: Date;
+      loginPasswordSyncedAt: Date | null;
+    }[]>`
+      select
+        password as login_password,
+        version::integer as login_credential_version,
+        updated_at as login_password_updated_at,
+        synced_at as login_password_synced_at
+      from egocapture.participant_login_credentials
+      where participant_id = ${participantBase.id}::uuid
+      for update
+    `;
+    const participant: ParticipantCredentialRow = {
+      ...participantBase,
+      loginPassword: storedCredential?.loginPassword ?? null,
+      loginCredentialVersion: storedCredential?.loginCredentialVersion ?? 0,
+      loginPasswordUpdatedAt: storedCredential?.loginPasswordUpdatedAt ?? null,
+      loginPasswordSyncedAt: storedCredential?.loginPasswordSyncedAt ?? null,
+    };
+    protectFixture(viewer, participant);
+
+    const currentStatus = participantCredentialStatus({
+      password: participant.loginPassword,
+      authUserId: participant.authUserId,
+      updatedAt: participant.loginPasswordUpdatedAt,
+      syncedAt: participant.loginPasswordSyncedAt,
+    });
+    const isPendingSync = currentStatus === "pending_sync";
+    const loginPassword = isPendingSync && participant.loginPassword
+      ? participant.loginPassword
+      : createParticipantPassword();
+    const loginCredentialVersion = isPendingSync
+      ? participant.loginCredentialVersion
+      : participant.loginCredentialVersion + 1;
+    const loginPasswordUpdatedAt = isPendingSync && participant.loginPasswordUpdatedAt
+      ? participant.loginPasswordUpdatedAt
+      : new Date();
+
+    if (!isPendingSync) {
+      await transaction`
+        insert into egocapture.participant_login_credentials (
+          participant_id, password, version, updated_at, synced_at
+        ) values (
+          ${participant.id}::uuid, ${loginPassword}, ${loginCredentialVersion},
+          ${loginPasswordUpdatedAt}, null
+        )
+        on conflict (participant_id) do update set
+          password = excluded.password,
+          version = excluded.version,
+          updated_at = excluded.updated_at,
+          synced_at = null
+      `;
+      await writeAudit(transaction, {
+        actorProfileId: viewer.profileId,
+        actorAuthUserId: viewer.authUserId,
+        action: "participant.login_credential_prepared",
+        entityType: "participant",
+        entityPublicId: participant.publicId,
+        requestId,
+        beforeValues: {
+          credentialVersion: participant.loginCredentialVersion,
+          credentialStatus: currentStatus,
+        },
+        afterValues: {
+          credentialVersion: loginCredentialVersion,
+          credentialStatus: participant.authUserId ? "pending_sync" : "pending_activation",
+        },
+      });
+    }
+
+    const nextParticipant: ParticipantCredentialRow = {
+      ...participant,
+      loginPassword,
+      loginCredentialVersion,
+      loginPasswordUpdatedAt,
+      loginPasswordSyncedAt: null,
+    };
+    let participantUpdatedAt: Date | null = null;
+    if (!isPendingSync) {
+      const [updatedParticipant] = await transaction<{ updatedAt: Date }[]>`
+        update egocapture.participants
+        set updated_at = now()
+        where id = ${participant.id}::uuid
+        returning updated_at
+      `;
+      participantUpdatedAt = updatedParticipant.updatedAt;
+    }
+    if (!participant.authUserId) {
+      await transaction`
+        insert into egocapture.command_receipts (
+          actor_auth_user_id, command_name, idempotency_key,
+          request_hash, response_status, response_body
+        ) values (
+          ${viewer.authUserId}::uuid, ${credentialResetCommandName}, ${idempotencyKey},
+          ${requestHash}, 200,
+          ${transaction.json({
+            participantPublicId,
+            credentialVersion: loginCredentialVersion,
+            credentialStatus: "pending_activation",
+          })}
+        )
+      `;
+      return {
+        replay: false as const,
+        participant: nextParticipant,
+        participantUpdatedAt: participantUpdatedAt!,
+      };
+    }
+    return { replay: false as const, participant: nextParticipant, participantUpdatedAt };
+  });
+
+  if (prepared.replay) {
+    const current = await getParticipant(viewer, participantPublicId);
+    return {
+      loginCredential: current.loginCredential,
+      updatedAt: current.updatedAt.toISOString(),
+    };
+  }
+  if (!prepared.participant.authUserId) {
+    return {
+      loginCredential: toLoginCredential(prepared.participant),
+      updatedAt: prepared.participantUpdatedAt!.toISOString(),
+    };
+  }
+
+  const supabase = createSupabaseAdminClient();
+  const { error } = await supabase.auth.admin.updateUserById(prepared.participant.authUserId, {
+    password: prepared.participant.loginPassword!,
+  });
+  if (error) {
+    throw new DomainError(
+      "PARTICIPANT_CREDENTIAL_SYNC_FAILED",
+      "登录密码暂未同步，请重试该操作后再交付凭据",
+      503,
+    );
+  }
+
+  return await db.begin(async (transaction) => {
+    await transaction`select pg_advisory_xact_lock(hashtext(${lockKey}))`;
+    const [participantBase] = await transaction<(ParticipantRow & { authUserId: string | null })[]>`
+      select
+        participant.id, participant.public_id, participant.status,
+        participant.consent_status, participant.display_alias,
+        participant.is_fixture, participant.auth_user_id
+      from egocapture.participants participant
+      where participant.public_id = ${participantPublicId}
+      for update of participant
+    `;
+    const [storedCredential] = participantBase
+      ? await transaction<{
+          loginPassword: string;
+          loginCredentialVersion: number;
+          loginPasswordUpdatedAt: Date;
+          loginPasswordSyncedAt: Date | null;
+        }[]>`
+          select
+            password as login_password,
+            version::integer as login_credential_version,
+            updated_at as login_password_updated_at,
+            synced_at as login_password_synced_at
+          from egocapture.participant_login_credentials
+          where participant_id = ${participantBase.id}::uuid
+          for update
+        `
+      : [];
+    const participant: ParticipantCredentialRow | null = participantBase && storedCredential
+      ? { ...participantBase, ...storedCredential }
+      : null;
+    if (!participant || participant.loginCredentialVersion !== prepared.participant.loginCredentialVersion) {
+      throw new DomainError(
+        "PARTICIPANT_CREDENTIAL_CHANGED",
+        "登录凭据已发生变化，请重新读取 Participant 详情",
+        409,
+      );
+    }
+    if (participant.authUserId !== prepared.participant.authUserId) {
+      throw new DomainError(
+        "PARTICIPANT_CREDENTIAL_CHANGED",
+        "登录账号已发生变化，请重新读取 Participant 详情",
+        409,
+      );
+    }
+
+    let finalized = participant;
+    const status = participantCredentialStatus({
+      password: participant.loginPassword,
+      authUserId: participant.authUserId,
+      updatedAt: participant.loginPasswordUpdatedAt,
+      syncedAt: participant.loginPasswordSyncedAt,
+    });
+    if (status !== "ready") {
+      const [updated] = await transaction<{ loginPasswordSyncedAt: Date }[]>`
+        update egocapture.participant_login_credentials
+        set synced_at = now()
+        where participant_id = ${participant.id}::uuid
+          and version = ${participant.loginCredentialVersion}
+        returning synced_at as login_password_synced_at
+      `;
+      finalized = { ...participant, loginPasswordSyncedAt: updated.loginPasswordSyncedAt };
+      await writeAudit(transaction, {
+        actorProfileId: viewer.profileId,
+        actorAuthUserId: viewer.authUserId,
+        action: "participant.login_credential_synced",
+        entityType: "participant",
+        entityPublicId: participant.publicId,
+        requestId,
+        afterValues: {
+          credentialVersion: participant.loginCredentialVersion,
+          credentialStatus: "ready",
+        },
+      });
+    }
+    await transaction`
+      insert into egocapture.command_receipts (
+        actor_auth_user_id, command_name, idempotency_key,
+        request_hash, response_status, response_body
+      ) values (
+        ${viewer.authUserId}::uuid, ${credentialResetCommandName}, ${idempotencyKey},
+        ${requestHash}, 200,
+        ${transaction.json({
+          participantPublicId,
+          credentialVersion: participant.loginCredentialVersion,
+          credentialStatus: "ready",
+        })}
+      )
+      on conflict (actor_auth_user_id, command_name, idempotency_key)
+      do update set
+        request_hash = excluded.request_hash,
+        response_status = excluded.response_status,
+        response_body = excluded.response_body,
+        created_at = now(),
+        expires_at = now() + interval '24 hours'
+    `;
+    const [updatedParticipant] = await transaction<{ updatedAt: Date }[]>`
+      update egocapture.participants
+      set updated_at = now()
+      where id = ${participant.id}::uuid
+      returning updated_at
+    `;
+    return {
+      loginCredential: toLoginCredential(finalized),
+      updatedAt: updatedParticipant.updatedAt.toISOString(),
+    };
+  });
 }
 
 export async function changeParticipantStatus(
