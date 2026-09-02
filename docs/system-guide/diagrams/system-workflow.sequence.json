@@ -2,212 +2,157 @@
   "schema_version": 1,
   "diagram_type": "sequence",
   "meta": {
-    "title": "管理员与参与者双端联动闭环",
+    "title": "管理员与参与者如何完成一次采集",
     "locale": "zh-CN",
     "output": "apps/admin-web/public/system-guide/diagrams/system-workflow.html",
     "quality_profile": "showcase",
     "column_fit": "spread",
-    "viewBox": [1500, 700],
-    "views": [
-      {
-        "id": "publish-and-assign",
-        "label": "发布与分配",
-        "focus": ["admin-web", "control-plane", "postgres"],
-        "note": "Admin 发布不可变 TaskVersion，并创建 Participant Assignment。"
-      },
-      {
-        "id": "record-and-upload",
-        "label": "Session 与直传",
-        "focus": ["participant-web", "control-plane", "private-storage"],
-        "note": "Participant 确认任务、创建 Recording Session，并通过 TUS 直传视频。"
-      },
-      {
-        "id": "verify-and-review",
-        "label": "对账与审核",
-        "focus": ["private-storage", "control-plane", "postgres", "admin-web"],
-        "note": "对象核验、Match、Review 与 Audit 汇合为可追溯闭环。"
-      }
-    ]
+    "viewBox": [1500, 720]
   },
   "participants": [
-    {
-      "id": "admin-web",
-      "type": "frontend",
-      "label": "Admin Web"
-    },
-    {
-      "id": "control-plane",
-      "type": "backend",
-      "label": "控制面服务"
-    },
-    {
-      "id": "postgres",
-      "type": "database",
-      "label": "PostgreSQL"
-    },
-    {
-      "id": "participant-web",
-      "type": "frontend",
-      "label": "Participant Web"
-    },
-    {
-      "id": "private-storage",
-      "type": "cloud",
-      "label": "私有对象存储"
-    }
+    { "id": "collection-admin", "type": "external", "label": "管理员" },
+    { "id": "task-participant", "type": "external", "label": "参与者" },
+    { "id": "capture-device", "type": "frontend", "label": "采集设备" },
+    { "id": "collection-system", "type": "backend", "label": "系统" }
   ],
   "segments": [
-    {
-      "from": 150,
-      "to": 218,
-      "label": "发布与分配"
-    },
-    {
-      "from": 226,
-      "to": 322,
-      "label": "参与者确认与 Recording Session"
-    },
-    {
-      "from": 330,
-      "to": 452,
-      "label": "UploadAttempt 与 TUS 直传"
-    },
-    {
-      "from": 460,
-      "to": 620,
-      "label": "对账、Review 与 Audit"
-    }
+    { "from": 150, "to": 264, "label": "一、管理员准备与发起" },
+    { "from": 272, "to": 454, "label": "二、参与者确认、准备与外部录制" },
+    { "from": 462, "to": 638, "label": "三、上传、核验、异常处置与最终接受" }
   ],
   "messages": [
     {
-      "id": "admin-publish-assignment",
-      "from": "admin-web",
-      "to": "control-plane",
+      "id": "admin-defines-collection",
+      "from": "collection-admin",
+      "to": "collection-system",
       "y": 170,
-      "label": "发布 TaskVersion + 创建 Assignment",
+      "label": "明确目标、步骤、画面要求、禁止事项与截止时间",
       "variant": "emphasis"
     },
     {
-      "id": "control-persist-assignment",
-      "from": "control-plane",
-      "to": "postgres",
-      "y": 202,
-      "label": "追加不可变版本、分配与 AuditEvent",
-      "variant": "emphasis"
+      "id": "system-shows-fixed-requirements",
+      "from": "collection-system",
+      "to": "task-participant",
+      "y": 208,
+      "label": "展示本次固定要求与截止时间"
     },
     {
-      "id": "participant-create-session",
-      "from": "participant-web",
-      "to": "control-plane",
-      "y": 240,
-      "label": "确认 TaskVersion + 创建 RecordingSession"
-    },
-    {
-      "id": "control-verify-session-authority",
-      "from": "control-plane",
-      "to": "postgres",
-      "y": 272,
-      "label": "校验 Assignment / Device / Consent；追加 Session"
-    },
-    {
-      "id": "control-return-marker",
-      "from": "control-plane",
-      "to": "participant-web",
-      "y": 304,
-      "label": "返回 Session + 签名 Marker",
+      "id": "participant-confirms-assignment",
+      "from": "task-participant",
+      "to": "collection-admin",
+      "y": 246,
+      "label": "阅读要求；确认可以按时执行",
       "variant": "return"
     },
     {
-      "id": "participant-create-attempt",
-      "from": "participant-web",
-      "to": "control-plane",
-      "y": 344,
-      "label": "手动选择 Session；创建 UploadAttempt"
+      "id": "participant-checks-device",
+      "from": "task-participant",
+      "to": "capture-device",
+      "y": 292,
+      "label": "检查设备、电量、空间与拍摄环境"
     },
     {
-      "id": "control-return-upload-grant",
-      "from": "control-plane",
-      "to": "participant-web",
-      "y": 376,
-      "label": "持久化 object key；返回短期 TUS 授权",
-      "variant": "security"
+      "id": "device-reports-readiness",
+      "from": "capture-device",
+      "to": "task-participant",
+      "y": 326,
+      "label": "显示准备结果；条件不满足时先反馈",
+      "variant": "return"
     },
     {
-      "id": "participant-upload-bytes",
-      "from": "participant-web",
-      "to": "private-storage",
-      "y": 408,
-      "label": "TUS 分片直传视频字节",
-      "variant": "emphasis",
-      "note": "视频请求体不经过 Next.js / Vercel Function"
-    },
-    {
-      "id": "participant-request-complete",
-      "from": "participant-web",
-      "to": "control-plane",
-      "y": 440,
-      "label": "Complete：请求对账（非完成证明）"
-    },
-    {
-      "id": "control-verify-object",
-      "from": "control-plane",
-      "to": "private-storage",
-      "y": 472,
-      "label": "HEAD / Range：核验对象与轻量 metadata"
-    },
-    {
-      "id": "control-persist-validation",
-      "from": "control-plane",
-      "to": "postgres",
-      "y": 504,
-      "label": "追加 VideoAsset、Validation / Match / Review",
+      "id": "participant-starts-collection",
+      "from": "task-participant",
+      "to": "collection-system",
+      "y": 360,
+      "label": "确认准备就绪；建立本次采集",
       "variant": "emphasis"
     },
     {
-      "id": "admin-submit-review",
-      "from": "admin-web",
-      "to": "control-plane",
-      "y": 544,
-      "label": "ReviewCase：Confirm / Correct + Reason"
+      "id": "system-shows-session-marker",
+      "from": "collection-system",
+      "to": "task-participant",
+      "y": 394,
+      "label": "显示本次现场标记与采集要求",
+      "variant": "return"
     },
     {
-      "id": "control-append-decision",
-      "from": "control-plane",
-      "to": "postgres",
-      "y": 576,
-      "label": "追加 superseding MatchDecision + AuditEvent",
+      "id": "participant-records-externally",
+      "from": "task-participant",
+      "to": "capture-device",
+      "y": 428,
+      "label": "按要求完成外部录制"
+    },
+    {
+      "id": "device-retains-original",
+      "from": "capture-device",
+      "to": "task-participant",
+      "y": 456,
+      "label": "录制结束；保留原始视频文件",
+      "variant": "return"
+    },
+    {
+      "id": "participant-submits-original",
+      "from": "task-participant",
+      "to": "collection-system",
+      "y": 484,
+      "label": "手动选择本次采集和原文件并上传",
       "variant": "emphasis"
     },
     {
-      "id": "control-return-evidence",
-      "from": "control-plane",
-      "to": "admin-web",
+      "id": "system-enters-verification",
+      "from": "collection-system",
+      "to": "task-participant",
+      "y": 516,
+      "label": "上传 100%：进入完整性与归属核验",
+      "variant": "return"
+    },
+    {
+      "id": "system-reports-review-result",
+      "from": "collection-system",
+      "to": "collection-admin",
+      "y": 548,
+      "label": "正常可复核；异常给出原因与建议动作"
+    },
+    {
+      "id": "admin-resolves-exception",
+      "from": "collection-admin",
+      "to": "task-participant",
+      "y": 578,
+      "label": "异常时联系、纠正归属或要求重录",
+      "variant": "dashed"
+    },
+    {
+      "id": "participant-resubmits",
+      "from": "task-participant",
+      "to": "collection-system",
       "y": 608,
-      "label": "返回新旧决定链与审计证据",
-      "variant": "return"
+      "label": "按处置重新准备、录制并提交原文件",
+      "variant": "dashed"
+    },
+    {
+      "id": "admin-accepts-collection",
+      "from": "collection-admin",
+      "to": "collection-system",
+      "y": 636,
+      "label": "核验通过后接受；本次采集完成",
+      "variant": "emphasis"
     }
   ],
   "cards": [
     {
       "dot": "cyan",
-      "title": "同一权威联动",
-      "items": [
-        "Admin 发布与分配，Participant 在授权范围内确认、建 Session 与上传。"
-      ]
+      "title": "谁发起、谁执行",
+      "items": ["管理员定义目标并指派；参与者确认要求、准备设备、录制并提交原文件。"]
     },
     {
       "dot": "emerald",
-      "title": "控制面 / 数据面分离",
-      "items": [
-        "视频字节直达私有 Storage；Complete 只启动对象与 metadata 对账。"
-      ]
+      "title": "什么时候算完成",
+      "items": ["上传达到 100% 只代表传输结束；核验通过且管理员接受后，本次采集才完成。"]
     },
     {
-      "dot": "violet",
-      "title": "不可变审核闭环",
-      "items": [
-        "人工纠正新增 MatchDecision 并 supersede 旧决定，关键动作追加 AuditEvent。"
-      ]
+      "dot": "rose",
+      "title": "失败后怎么办",
+      "items": ["系统说明异常原因；管理员联系、纠正或要求重录，参与者随后重新提交。"]
     }
   ]
 }

@@ -1,0 +1,7 @@
+{"file":".trellis/tasks/09-02-system-guide-business-large-upload/prd.md","reason":"Acceptance source for business clarity, Leader readability, current/future truth, diagrams, tests, and scoped commit."}
+{"file":".trellis/tasks/09-02-system-guide-business-large-upload/design.md","reason":"Review source for role handoffs, completion semantics, upload recovery truth, failure messages, diagram geometry, compatibility, and rollback."}
+{"file":".trellis/spec/admin-web/frontend/index.md","reason":"Admin frontend review guidance index."}
+{"file":".trellis/spec/admin-web/frontend/quality-guidelines.md","reason":"Review contract for protected parent route, same-origin diagram assets, iframe headers, and E2E coverage."}
+{"file":".trellis/tasks/09-02-system-guide-business-large-upload/research/repository-and-reader-evidence.md","reason":"Evidence baseline for current copy defects, verified business flow, TUS implementation, and unverified production claims."}
+{"file":".trellis/tasks/09-02-system-guide-business-large-upload/research/upload-and-business-evidence.md","reason":"Official fact baseline for TUS, Supabase, S3 Multipart, refresh recovery, and current-versus-future claims."}
+{"file":"docs/acceptance/2026-09-02-local-mvp.md","reason":"Current local proof boundary for all implemented-ability claims."}

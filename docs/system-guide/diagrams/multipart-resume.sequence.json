@@ -2,230 +2,177 @@
   "schema_version": 1,
   "diagram_type": "sequence",
   "meta": {
-    "title": "未来方案：S3 Multipart 跨天断点续传",
+    "title": "未来方案：数 GB 文件如何分片、暂停与恢复",
     "locale": "zh-CN",
     "output": "apps/admin-web/public/system-guide/diagrams/multipart-resume.html",
     "quality_profile": "showcase",
     "column_fit": "spread",
-    "viewBox": [1500, 750],
-    "views": [
-      {
-        "id": "multipart-init",
-        "label": "初始化与首批分片",
-        "focus": ["participant", "participant-web", "upload-control", "postgres", "object-storage"],
-        "note": "业务 UploadAttempt 持有 provider uploadId、校验合同与分片回执。"
-      },
-      {
-        "id": "multipart-resume",
-        "label": "暂停与恢复",
-        "focus": ["participant", "participant-web", "upload-control", "object-storage"],
-        "note": "恢复同一 uploadId，只补签并上传缺失分片。"
-      },
-      {
-        "id": "multipart-complete",
-        "label": "合并与二次核验",
-        "focus": ["participant-web", "upload-control", "postgres", "object-storage"],
-        "note": "CompleteMultipartUpload 后仍需 HeadObject、大小与 checksum 对账。"
-      }
-    ]
+    "viewBox": [1500, 780]
   },
   "participants": [
-    {
-      "id": "participant",
-      "type": "external",
-      "label": "参与者"
-    },
-    {
-      "id": "participant-web",
-      "type": "frontend",
-      "label": "上传客户端"
-    },
-    {
-      "id": "upload-control",
-      "type": "backend",
-      "label": "上传控制面"
-    },
-    {
-      "id": "postgres",
-      "type": "database",
-      "label": "PostgreSQL"
-    },
-    {
-      "id": "object-storage",
-      "type": "cloud",
-      "label": "S3 兼容存储"
-    }
+    { "id": "participant", "type": "external", "label": "参与者" },
+    { "id": "uploader", "type": "frontend", "label": "上传器" },
+    { "id": "upload-service", "type": "backend", "label": "上传服务" },
+    { "id": "object-storage", "type": "cloud", "label": "对象存储" }
   ],
   "segments": [
-    {
-      "from": 150,
-      "to": 366,
-      "label": "初始化与首批分片"
-    },
-    {
-      "from": 374,
-      "to": 548,
-      "label": "跨天恢复与缺片补传"
-    },
-    {
-      "from": 556,
-      "to": 662,
-      "label": "合并、核验与过期清理"
-    }
+    { "from": 150, "to": 310, "label": "一、识别文件并确认每个分片" },
+    { "from": 318, "to": 510, "label": "二、暂停或刷新后恢复同一上传" },
+    { "from": 518, "to": 712, "label": "三、合并校验，或终止并清理" }
   ],
   "messages": [
     {
-      "id": "participant-select-file",
+      "id": "select-original-file",
       "from": "participant",
-      "to": "participant-web",
+      "to": "uploader",
       "y": 170,
-      "label": "选择文件；计算流式 fingerprint / checksum"
+      "label": "选择数 GB 原文件；建立文件身份"
     },
     {
-      "id": "client-create-upload-attempt",
-      "from": "participant-web",
-      "to": "upload-control",
+      "id": "create-upload-session",
+      "from": "uploader",
+      "to": "upload-service",
       "y": 200,
-      "label": "创建业务 UploadAttempt",
+      "label": "为这个文件创建可恢复的上传会话",
       "variant": "emphasis"
     },
     {
-      "id": "control-create-multipart",
-      "from": "upload-control",
-      "to": "object-storage",
+      "id": "return-session-grants",
+      "from": "upload-service",
+      "to": "uploader",
       "y": 230,
-      "label": "CreateMultipartUpload（接收 provider uploadId）"
-    },
-    {
-      "id": "control-persist-upload-id",
-      "from": "upload-control",
-      "to": "postgres",
-      "y": 260,
-      "label": "持久化 uploadId、region、expiry 与 checksum contract",
-      "variant": "emphasis"
-    },
-    {
-      "id": "control-sign-first-parts",
-      "from": "upload-control",
-      "to": "participant-web",
-      "y": 290,
-      "label": "返回所需 part 的短期 presigned URL",
+      "label": "返回会话标识与短期分片授权",
       "variant": "security"
     },
     {
-      "id": "client-upload-first-parts",
-      "from": "participant-web",
+      "id": "upload-parts",
+      "from": "uploader",
       "to": "object-storage",
-      "y": 320,
-      "label": "并发 PUT parts（有界重试）",
+      "y": 260,
+      "label": "有界并发上传；失败片独立重试",
       "variant": "emphasis"
     },
     {
-      "id": "client-submit-part-receipts",
-      "from": "participant-web",
-      "to": "upload-control",
-      "y": 350,
-      "label": "幂等提交 partNumber + size + ETag / checksum"
+      "id": "confirm-parts",
+      "from": "object-storage",
+      "to": "uploader",
+      "y": 290,
+      "label": "逐片确认；进度只累计已确认字节",
+      "variant": "return"
     },
     {
-      "id": "participant-reselects-file",
+      "id": "pause-transfer",
       "from": "participant",
-      "to": "participant-web",
-      "y": 390,
-      "label": "暂停 / 断网；跨天重选原文件并校验 fingerprint",
+      "to": "uploader",
+      "y": 330,
+      "label": "暂停：停发新片，保留会话与已确认进度",
       "variant": "dashed"
     },
     {
-      "id": "client-resume-attempt",
-      "from": "participant-web",
-      "to": "upload-control",
-      "y": 420,
-      "label": "恢复同一 UploadAttempt / uploadId",
+      "id": "reselect-after-refresh",
+      "from": "participant",
+      "to": "uploader",
+      "y": 362,
+      "label": "刷新或重开后，重新选择原文件",
+      "variant": "dashed"
+    },
+    {
+      "id": "resume-same-session",
+      "from": "uploader",
+      "to": "upload-service",
+      "y": 394,
+      "label": "核对文件身份；找回同一上传会话",
       "variant": "emphasis"
     },
     {
-      "id": "control-list-provider-parts",
-      "from": "upload-control",
+      "id": "query-confirmed-parts",
+      "from": "upload-service",
       "to": "object-storage",
-      "y": 450,
-      "label": "ListParts：读取 provider 已接收分片"
+      "y": 426,
+      "label": "查询远端已接收分片清单"
     },
     {
-      "id": "control-reconcile-manifest",
-      "from": "upload-control",
-      "to": "postgres",
-      "y": 480,
-      "label": "对账应用 manifest 与 provider receipts"
+      "id": "return-confirmed-parts",
+      "from": "object-storage",
+      "to": "upload-service",
+      "y": 458,
+      "label": "返回已确认分片",
+      "variant": "return"
     },
     {
-      "id": "control-resign-missing-parts",
-      "from": "upload-control",
-      "to": "participant-web",
-      "y": 510,
-      "label": "只为缺失 part 补签；不创建新 uploadId",
+      "id": "reauthorize-missing-parts",
+      "from": "upload-service",
+      "to": "uploader",
+      "y": 490,
+      "label": "短期授权过期：只为缺失分片重新授权",
       "variant": "security"
     },
     {
-      "id": "client-upload-missing-parts",
-      "from": "participant-web",
+      "id": "upload-only-missing",
+      "from": "uploader",
       "to": "object-storage",
-      "y": 538,
-      "label": "PUT 缺失 parts；回执幂等重放",
+      "y": 530,
+      "label": "只补传缺失分片，不重传已确认部分",
       "variant": "emphasis"
     },
     {
-      "id": "client-complete-manifest",
-      "from": "participant-web",
-      "to": "upload-control",
-      "y": 570,
-      "label": "提交有序完成 manifest"
+      "id": "request-combine",
+      "from": "uploader",
+      "to": "upload-service",
+      "y": 562,
+      "label": "全部分片到达；请求合并与整体校验"
     },
     {
-      "id": "control-complete-and-verify",
-      "from": "upload-control",
+      "id": "combine-and-check",
+      "from": "upload-service",
       "to": "object-storage",
-      "y": 600,
-      "label": "CompleteMultipartUpload + HeadObject / checksum 核验",
+      "y": 594,
+      "label": "按顺序合并，并核验大小与完整性",
       "variant": "emphasis"
     },
     {
-      "id": "control-finalize-video-asset",
-      "from": "upload-control",
-      "to": "postgres",
-      "y": 630,
-      "label": "登记 StoredObject / VideoAsset 与 completion receipt",
-      "variant": "emphasis"
+      "id": "transfer-complete",
+      "from": "upload-service",
+      "to": "uploader",
+      "y": 626,
+      "label": "传输完成；继续等待业务接受",
+      "variant": "return"
     },
     {
-      "id": "control-abort-expired",
-      "from": "upload-control",
+      "id": "session-expired",
+      "from": "upload-service",
+      "to": "uploader",
+      "y": 658,
+      "label": "会话已过期或被清理：明确开启新上传",
+      "variant": "dashed"
+    },
+    {
+      "id": "cancel-and-clean",
+      "from": "uploader",
       "to": "object-storage",
-      "y": 660,
-      "label": "过期 / 放弃：Abort + 生命周期清理残留 parts",
+      "y": 690,
+      "label": "取消：终止恢复资格并安排清理残片",
       "variant": "dashed"
     }
   ],
   "cards": [
     {
       "dot": "amber",
-      "title": "未来方案，尚未接入",
+      "title": "未来生产设计，尚未交付",
       "items": [
-        "当前 MVP 仍使用 TUS；本图描述生产级数 GB / 跨天上传的演进路径。"
+        "当前 MVP 已验证小型视频的 TUS 分片、暂停与恢复；数 GB、跨天和弱网仍需真实验证。",
+        "分片 100% 后仍要合并、整体校验并等待业务接受。"
       ]
     },
     {
       "dot": "cyan",
-      "title": "恢复同一 provider 会话",
-      "items": [
-        "ListParts 只做对账，只补签缺失 part；重复回执按 UploadAttempt 幂等合并。"
-      ]
+      "title": "恢复同一上传，只补缺片",
+      "items": ["刷新后重选原文件并核对身份；远端清单决定哪些分片无需重传。"]
     },
     {
-      "dot": "emerald",
-      "title": "Complete 后仍需核验",
-      "items": [
-        "Multipart ETag 不是通用完整文件哈希；完成后仍核对 key、size、checksum 与 receipt。"
-      ]
+      "dot": "rose",
+      "title": "暂停、取消和过期不是一回事",
+      "items": ["暂停可继续；取消会清理。短期授权可补发，但整个会话过期后必须开启新上传。"]
     }
   ]
 }

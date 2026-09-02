@@ -8,7 +8,7 @@ import { SystemWorkflowArticle } from "./system-workflow-article";
 
 export const metadata: Metadata = {
   title: "系统说明 · EgoCapture",
-  description: "EgoCapture 系统架构、双端流程、大型文件断点上传与未来直播录制方案。",
+  description: "EgoCapture 采集业务闭环、超大文件传输设计、系统架构与未来直播方案。",
 };
 
 const contents = [
@@ -35,7 +35,7 @@ export default function SystemGuidePage() {
             <div>
               <h1 className="page-title">系统说明</h1>
               <p className="mt-5 max-w-3xl text-base leading-7 text-[var(--muted)] sm:text-lg sm:leading-8">
-                面向管理员与演示者的技术说明中心。先看懂当前双端系统如何运行，再了解大型文件上传和直播采集可以如何演进。
+                面向业务负责人、管理员与项目演示者的业务与方案说明。这里先讲清一次采集由谁发起、如何交接、何时完成，再说明超大文件如何可靠传输，以及系统未来如何演进。
               </p>
             </div>
           </div>

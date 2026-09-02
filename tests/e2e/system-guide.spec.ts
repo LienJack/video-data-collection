@@ -53,6 +53,23 @@ test("Admin 右上角入口打开包含四篇文章与四张交互图的说明�
     await expect(page.locator(`a[href="#${articleId}"]`)).toBeVisible();
   }
 
+  const workflowArticle = page.locator("article#system-workflow");
+  await expect(workflowArticle).toContainText("一次采集完成不等于上传进度达到 100%");
+  await expect(workflowArticle).toContainText("管理员准备并发起");
+  await expect(workflowArticle).toContainText("参与者理解并准备");
+  await expect(workflowArticle).toContainText("管理员复核并收口");
+  await expect(workflowArticle.getByText("当前已实现", { exact: true })).toBeVisible();
+
+  const uploadArticle = page.locator("article#resumable-upload");
+  await expect(uploadArticle).toContainText("刷新或第二天重开后重新选择原文件");
+  await expect(uploadArticle).toContainText("只补传缺失分片");
+  await expect(uploadArticle).toContainText("当前 MVP：TUS 受限恢复");
+  await expect(uploadArticle).toContainText("未来生产设计：持久化 Multipart");
+  await expect(uploadArticle).toContainText("当前没有运行中的 S3 Multipart");
+  await expect(uploadArticle.getByText("当前已实现", { exact: true })).toBeVisible();
+  await expect(uploadArticle.getByText("未来方案", { exact: true })).toBeVisible();
+  await expect(uploadArticle.getByText("能力边界", { exact: true })).toBeVisible();
+
   const diagramFrames = page.locator("main iframe");
   await expect(diagramFrames).toHaveCount(4);
   for (let index = 0; index < 4; index += 1) {
