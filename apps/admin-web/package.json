@@ -13,6 +13,7 @@
     "@egocapture/ui": "workspace:*",
     "@hookform/resolvers": "^5.9.1",
     "@phosphor-icons/react": "^2.1.10",
+    "mediainfo.js": "0.3.7",
     "next": "16.3.4",
     "react": "19.2.8",
     "react-dom": "19.2.8",
