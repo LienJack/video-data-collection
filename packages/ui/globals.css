@@ -73,6 +73,11 @@
     box-sizing: border-box;
     border-color: var(--border);
   }
+
+  a {
+    color: inherit;
+    text-decoration: none;
+  }
 }
 
 html {
@@ -102,7 +107,6 @@ button, [role="button"] {
 
 button:not(:disabled):active, [role="button"]:active { transform: scale(0.98); }
 
-a { color: inherit; text-decoration: none; }
 ::selection { background: rgb(57 117 173 / 22%); color: var(--ink); }
 
 .display {
