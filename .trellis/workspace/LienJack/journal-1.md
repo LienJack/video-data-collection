@@ -93,3 +93,25 @@ Unified seven admin data lists on semantic tables and page-number pagination, ad
 ### Status
 
 [OK] **Completed**
+
+
+## Session 5: Participant login credential management
+
+**Date**: 2026-09-02
+**Task**: Participant login credential management
+**Package**: admin-web
+**Branch**: `codex/egocapture-mvp`
+
+### Summary
+
+Added admin-readable plaintext participant credentials in an isolated server-only table, system-generated passwords, invitation acceptance without password entry, recoverable Supabase reset synchronization, and NAS-backed authorization/leakage/integration tests.
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `96709ec` | (see git log) |
+
+### Status
+
+[OK] **Completed**

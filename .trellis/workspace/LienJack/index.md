@@ -8,7 +8,7 @@
 
 <!-- @@@auto:current-status -->
 - **Active File**: `journal-1.md`
-- **Total Sessions**: 4
+- **Total Sessions**: 5
 - **Last Active**: 2026-09-02
 <!-- @@@/auto:current-status -->
 
@@ -19,7 +19,7 @@
 <!-- @@@auto:active-documents -->
 | File | Lines | Status |
 |------|-------|--------|
-| `journal-1.md` | ~95 | Active |
+| `journal-1.md` | ~117 | Active |
 <!-- @@@/auto:active-documents -->
 
 ---
@@ -29,6 +29,7 @@
 <!-- @@@auto:session-history -->
 | # | Date | Title | Commits | Branch |
 |---|------|-------|---------|--------|
+| 5 | 2026-09-02 | Participant login credential management | `96709ec` | `codex/egocapture-mvp` |
 | 4 | 2026-09-02 | Unified admin table pagination | `50527a7` | `codex/egocapture-mvp` |
 | 3 | 2026-09-02 | Deliver Admin system documentation center | `6f65fae` | `codex/egocapture-mvp` |
 | 2 | 2026-09-02 | 落地采集记录工作台 | `5030d41` | `codex/egocapture-mvp` |
