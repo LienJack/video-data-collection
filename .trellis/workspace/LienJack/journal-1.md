@@ -205,3 +205,25 @@ Added typed zh-CN, English, and Japanese catalogs, locale negotiation and persis
 ### Status
 
 [OK] **Completed**
+
+
+## Session 10: Harden state machine registry RLS
+
+**Date**: 2026-09-03
+**Task**: Harden state machine registry RLS
+**Package**: admin-web
+**Branch**: `codex/egocapture-mvp`
+
+### Summary
+
+Added migration 0024 to enable RLS on the lifecycle registry without policies or grants, added static all-business-table coverage, preserved 14 machines and 133 edges, and restored all NAS checks.
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `c2228c9` | (see git log) |
+
+### Status
+
+[OK] **Completed**
