@@ -61,7 +61,7 @@ const taskParticipantSelectionSchema = z.object({
 });
 
 export const addTaskParticipantsSchema = z.object({
-  taskVersion: z.number().int().positive(),
+  taskVersion: z.number().int().positive().optional(),
   dueAt: z.string().datetime({ offset: true }),
   note: z.string().trim().max(500).nullable().optional(),
   participants: z.array(taskParticipantSelectionSchema).min(1).max(100),
@@ -129,7 +129,7 @@ export async function listTasks(_viewer: Viewer, input: z.infer<typeof taskListS
       task.lifecycle,
       latest.version as latest_version,
       latest.content_hash as latest_content_hash,
-      coalesce(operations.participant_count, 0)::integer as participant_count,
+      (coalesce(operations.participant_count, 0) + coalesce(planned.participant_count, 0))::integer as participant_count,
       coalesce(operations.completed_count, 0)::integer as completed_count,
       coalesce(operations.video_count, 0)::integer as video_count,
       coalesce(operations.attention_count, 0)::integer as attention_count,
@@ -170,6 +170,13 @@ export async function listTasks(_viewer: Viewer, input: z.infer<typeof taskListS
         on review.assignment_id = assignment.id or review.video_asset_id = asset.id
       where assignment.task_id = task.id
     ) operations on true
+    left join lateral (
+      select count(*)::integer as participant_count
+      from egocapture.task_participant_plans plan
+      where plan.task_id = task.id
+        and plan.removed_at is null
+        and plan.assignment_id is null
+    ) planned on true
     where (${input.search ?? null}::text is null
         or task.public_id ilike '%' || ${input.search ?? ""} || '%'
         or task.title ilike '%' || ${input.search ?? ""} || '%')
@@ -241,13 +248,13 @@ export async function getTaskOperations(_viewer: Viewer, taskPublicId: string) {
   `;
   if (!task) throw new DomainError("NOT_FOUND", "Task 或资源不存在", 404);
 
-  const participants = await db<{
-    assignmentPublicId: string;
+  const assignedParticipants = await db<{
+    assignmentPublicId: string | null;
     participantPublicId: string;
     participantAlias: string;
     participantStatus: string;
     status: AssignmentStatus;
-    taskVersion: number;
+    taskVersion: number | null;
     locale: string;
     dueAt: Date;
     createdAt: Date;
@@ -302,6 +309,53 @@ export async function getTaskOperations(_viewer: Viewer, taskPublicId: string) {
     order by (assignment.status = 'canceled'), assignment.created_at desc, assignment.public_id
   `;
 
+  const plannedParticipants = await db<{
+    assignmentPublicId: string | null;
+    participantPublicId: string;
+    participantAlias: string;
+    participantStatus: string;
+    status: "planned";
+    taskVersion: number | null;
+    locale: string;
+    dueAt: Date;
+    createdAt: Date;
+    canceledAt: Date | null;
+    sessionCount: number;
+    videoCount: number;
+    isMissing: boolean;
+    reviewCount: number;
+    preferredDevicePublicId: string | null;
+    replacesAssignmentPublicId: string | null;
+    replacedByAssignmentPublicId: string | null;
+  }[]>`
+    select
+      null::text as assignment_public_id,
+      participant.public_id as participant_public_id,
+      participant.display_alias as participant_alias,
+      participant.status as participant_status,
+      'planned'::text as status,
+      null::integer as task_version,
+      plan.locale,
+      plan.due_at,
+      plan.created_at,
+      null::timestamptz as canceled_at,
+      0::integer as session_count,
+      0::integer as video_count,
+      false as is_missing,
+      0::integer as review_count,
+      preferred_device.public_id as preferred_device_public_id,
+      null::text as replaces_assignment_public_id,
+      null::text as replaced_by_assignment_public_id
+    from egocapture.task_participant_plans plan
+    join egocapture.participants participant on participant.id = plan.participant_id
+    left join egocapture.devices preferred_device on preferred_device.id = plan.preferred_device_id
+    where plan.task_id = ${task.id}::uuid
+      and plan.removed_at is null
+      and plan.assignment_id is null
+    order by plan.created_at desc, participant.public_id
+  `;
+  const participants = [...plannedParticipants, ...assignedParticipants];
+
   const eligibleParticipants = await db<{
     publicId: string;
     displayAlias: string;
@@ -311,6 +365,7 @@ export async function getTaskOperations(_viewer: Viewer, taskPublicId: string) {
     countryRegion: string | null;
     defaultDevicePublicId: string | null;
     currentAssignmentPublicId: string | null;
+    currentTaskState: "planned" | "assigned" | null;
     devices: Array<{ publicId: string; label: string }>;
   }[]>`
     select
@@ -322,6 +377,11 @@ export async function getTaskOperations(_viewer: Viewer, taskPublicId: string) {
       participant.country_region,
       default_device.public_id as default_device_public_id,
       current_assignment.public_id as current_assignment_public_id,
+      case
+        when current_assignment.public_id is not null then 'assigned'
+        when current_plan.id is not null then 'planned'
+        else null
+      end as current_task_state,
       coalesce(devices.items, '[]'::jsonb) as devices
     from egocapture.participants participant
     left join egocapture.devices default_device on default_device.id = participant.default_device_id
@@ -334,6 +394,15 @@ export async function getTaskOperations(_viewer: Viewer, taskPublicId: string) {
       order by assignment.created_at desc
       limit 1
     ) current_assignment on true
+    left join lateral (
+      select plan.id
+      from egocapture.task_participant_plans plan
+      where plan.participant_id = participant.id
+        and plan.task_id = ${task.id}::uuid
+        and plan.removed_at is null
+        and plan.assignment_id is null
+      limit 1
+    ) current_plan on true
     left join lateral (
       select jsonb_agg(
         jsonb_build_object(
@@ -440,7 +509,9 @@ export async function getTaskOperations(_viewer: Viewer, taskPublicId: string) {
   const videoCount = new Set(uploads.filter((upload) => upload.videoAssetPublicId && ["participant_claim", "admin_confirmed", "admin_corrected"].includes(upload.decisionType ?? "")).map((upload) => upload.videoAssetPublicId)).size;
   const operationalStatus = task.lifecycle === "archived"
     ? "archived"
-    : currentParticipants.length === 0
+    : task.lifecycle === "draft"
+      ? "draft"
+      : currentParticipants.length === 0
       ? "awaiting_participants"
       : completedCount === currentParticipants.length
         ? "completed"
@@ -588,14 +659,108 @@ export async function publishTask(
         from egocapture.task_versions
         where task_id = ${task.id}::uuid
       `;
-      await transaction`
+      const [publishedVersion] = await transaction<{ id: string }[]>`
         insert into egocapture.task_versions (
           task_id, version, instructions, content_hash, published_by
         ) values (
           ${task.id}::uuid, ${next.version},
           ${transaction.json(instructions)}, ${contentHash}, ${viewer.profileId}::uuid
         )
+        returning id
       `;
+      const plannedParticipants = await transaction<{
+        id: string;
+        participantId: string;
+        participantPublicId: string;
+        participantStatus: string;
+        consentStatus: string;
+        preferredDeviceId: string | null;
+        preferredDevicePublicId: string | null;
+        dueAt: Date;
+        locale: string;
+        note: string | null;
+      }[]>`
+        select
+          plan.id,
+          participant.id as participant_id,
+          participant.public_id as participant_public_id,
+          participant.status as participant_status,
+          participant.consent_status,
+          plan.preferred_device_id,
+          device.public_id as preferred_device_public_id,
+          plan.due_at,
+          plan.locale,
+          plan.note
+        from egocapture.task_participant_plans plan
+        join egocapture.participants participant on participant.id = plan.participant_id
+        left join egocapture.devices device on device.id = plan.preferred_device_id
+        where plan.task_id = ${task.id}::uuid
+          and plan.removed_at is null
+          and plan.assignment_id is null
+        order by plan.created_at, plan.id
+        for update of plan, participant
+      `;
+      for (const planned of plannedParticipants) {
+        if (planned.participantStatus !== "active" || planned.consentStatus !== "valid") {
+          throw new DomainError(
+            "PARTICIPANT_NOT_ELIGIBLE",
+            `参与者 ${planned.participantPublicId} 当前不可分配，请先从草稿名单移除或恢复其状态`,
+            422,
+          );
+        }
+        if (planned.dueAt <= new Date()) {
+          throw new DomainError(
+            "ROSTER_DUE_AT_PAST",
+            `参与者 ${planned.participantPublicId} 的截止时间已过，请先从草稿名单移除后重新添加`,
+            422,
+          );
+        }
+        const preferredDeviceId = await resolvePreferredDevice(
+          transaction,
+          planned.participantId,
+          planned.preferredDevicePublicId,
+        );
+        if (planned.preferredDeviceId && !preferredDeviceId) {
+          throw new DomainError(
+            "DEVICE_NOT_AVAILABLE",
+            `参与者 ${planned.participantPublicId} 的首选设备当前不可用，请先更新草稿名单`,
+            422,
+          );
+        }
+        const assignmentPublicId = createPublicId("AS");
+        const [assignment] = await transaction<{ id: string }[]>`
+          insert into egocapture.assignments (
+            public_id, participant_id, task_id, task_version_id, preferred_device_id,
+            due_at, locale, note, created_by
+          ) values (
+            ${assignmentPublicId}, ${planned.participantId}::uuid, ${task.id}::uuid,
+            ${publishedVersion.id}::uuid, ${preferredDeviceId}::uuid,
+            ${planned.dueAt}, ${planned.locale}, ${planned.note}, ${viewer.profileId}::uuid
+          )
+          returning id
+        `;
+        await transaction`
+          update egocapture.task_participant_plans
+          set assignment_id = ${assignment.id}::uuid, updated_at = now()
+          where id = ${planned.id}::uuid
+        `;
+        await writeAudit(transaction, {
+          actorProfileId: viewer.profileId,
+          actorAuthUserId: viewer.authUserId,
+          action: "assignment.created",
+          entityType: "assignment",
+          entityPublicId: assignmentPublicId,
+          requestId,
+          afterValues: {
+            participantPublicId: planned.participantPublicId,
+            taskPublicId,
+            taskVersion: next.version,
+            dueAt: planned.dueAt.toISOString(),
+            preferredDevicePublicId: planned.preferredDevicePublicId,
+            source: "draft_task_participant",
+          },
+        });
+      }
       const [updated] = await transaction<{ updatedAt: Date }[]>`
         update egocapture.tasks set lifecycle = 'active' where id = ${task.id}::uuid
         returning updated_at
@@ -607,12 +772,18 @@ export async function publishTask(
         entityType: "task",
         entityPublicId: task.publicId,
         requestId,
-        afterValues: { version: next.version, contentHash, schemaVersion: instructions.schemaVersion },
+        afterValues: {
+          version: next.version,
+          contentHash,
+          schemaVersion: instructions.schemaVersion,
+          materializedParticipantCount: plannedParticipants.length,
+        },
       });
       return {
         taskPublicId,
         version: next.version,
         contentHash,
+        materializedParticipantCount: plannedParticipants.length,
         updatedAt: updated.updatedAt.toISOString(),
       };
     },
@@ -814,22 +985,43 @@ export async function addTaskParticipants(
     idempotencyKey,
     input: { taskPublicId, ...input },
     execute: async () => {
-      const [taskVersion] = await transaction<{
-        taskId: string;
-        taskVersionId: string;
+      const [task] = await transaction<{
+        id: string;
         lifecycle: string;
       }[]>`
-        select task.id as task_id, version.id as task_version_id, task.lifecycle
+        select task.id, task.lifecycle
         from egocapture.tasks task
-        join egocapture.task_versions version on version.task_id = task.id
-          and version.version = ${input.taskVersion}
         where task.public_id = ${taskPublicId}
-        for share of task, version
+        for update of task
       `;
-      if (!taskVersion) throw new DomainError("NOT_FOUND", "任务或已发布版本不存在", 404);
-      if (taskVersion.lifecycle === "archived") throw new DomainError("TASK_ARCHIVED", "已归档任务不能添加参与者", 409);
+      if (!task) throw new DomainError("NOT_FOUND", "任务不存在", 404);
+      if (task.lifecycle === "archived") throw new DomainError("TASK_ARCHIVED", "已归档任务不能添加参与者", 409);
 
-      const created: Array<{ participantPublicId: string; assignmentPublicId: string }> = [];
+      const [latestVersion] = await transaction<{ id: string; version: number }[]>`
+        select id, version
+        from egocapture.task_versions
+        where task_id = ${task.id}::uuid
+        order by version desc
+        limit 1
+      `;
+      const requestedVersion = input.taskVersion ?? latestVersion?.version ?? null;
+      const [taskVersion] = requestedVersion === null
+        ? []
+        : await transaction<{ id: string; version: number }[]>`
+            select id, version
+            from egocapture.task_versions
+            where task_id = ${task.id}::uuid and version = ${requestedVersion}
+            limit 1
+          `;
+      if (requestedVersion !== null && !taskVersion) {
+        throw new DomainError("NOT_FOUND", "所选任务版本不存在", 404);
+      }
+
+      const created: Array<{
+        participantPublicId: string;
+        assignmentPublicId: string | null;
+        state: "planned" | "assigned";
+      }> = [];
       const skipped: Array<{ participantPublicId: string; code: string; message: string }> = [];
 
       for (const selection of input.participants) {
@@ -853,15 +1045,27 @@ export async function addTaskParticipants(
           skipped.push({ participantPublicId: participant.publicId, code: "PARTICIPANT_NOT_ELIGIBLE", message: "参与者必须处于启用状态且授权有效" });
           continue;
         }
-        const [existing] = await transaction<{ publicId: string }[]>`
-          select public_id from egocapture.assignments
+        const [existing] = await transaction<{ state: string }[]>`
+          select 'assigned'::text as state
+          from egocapture.assignments
           where participant_id = ${participant.id}::uuid
-            and task_id = ${taskVersion.taskId}::uuid
+            and task_id = ${task.id}::uuid
             and status <> 'canceled'
+          union all
+          select 'planned'::text as state
+          from egocapture.task_participant_plans
+          where participant_id = ${participant.id}::uuid
+            and task_id = ${task.id}::uuid
+            and removed_at is null
+            and assignment_id is null
           limit 1
         `;
         if (existing) {
-          skipped.push({ participantPublicId: participant.publicId, code: "CURRENT_ASSIGNMENT_EXISTS", message: "已经在当前任务中" });
+          skipped.push({
+            participantPublicId: participant.publicId,
+            code: existing.state === "planned" ? "CURRENT_TASK_PARTICIPANT_EXISTS" : "CURRENT_ASSIGNMENT_EXISTS",
+            message: existing.state === "planned" ? "已经在草稿发布名单中" : "已经在当前任务中",
+          });
           continue;
         }
         const preferredDeviceId = await resolvePreferredDevice(transaction, participant.id, selection.preferredDevicePublicId);
@@ -869,14 +1073,40 @@ export async function addTaskParticipants(
           skipped.push({ participantPublicId: participant.publicId, code: "DEVICE_NOT_AVAILABLE", message: "首选设备不可用于该参与者" });
           continue;
         }
+        if (!taskVersion) {
+          await transaction`
+            insert into egocapture.task_participant_plans (
+              task_id, participant_id, preferred_device_id, due_at, locale, note, created_by
+            ) values (
+              ${task.id}::uuid, ${participant.id}::uuid, ${preferredDeviceId}::uuid,
+              ${dueAt}, ${participant.locale}, ${input.note ?? null}, ${viewer.profileId}::uuid
+            )
+          `;
+          await writeAudit(transaction, {
+            actorProfileId: viewer.profileId,
+            actorAuthUserId: viewer.authUserId,
+            action: "task.participant_planned",
+            entityType: "task",
+            entityPublicId: taskPublicId,
+            requestId,
+            afterValues: {
+              participantPublicId: participant.publicId,
+              dueAt: dueAt.toISOString(),
+              preferredDevicePublicId: selection.preferredDevicePublicId ?? null,
+            },
+          });
+          created.push({ participantPublicId: participant.publicId, assignmentPublicId: null, state: "planned" });
+          continue;
+        }
+
         const assignmentPublicId = createPublicId("AS");
         await transaction`
           insert into egocapture.assignments (
             public_id, participant_id, task_id, task_version_id, preferred_device_id,
             due_at, locale, note, created_by
           ) values (
-            ${assignmentPublicId}, ${participant.id}::uuid, ${taskVersion.taskId}::uuid,
-            ${taskVersion.taskVersionId}::uuid, ${preferredDeviceId}::uuid,
+            ${assignmentPublicId}, ${participant.id}::uuid, ${task.id}::uuid,
+            ${taskVersion.id}::uuid, ${preferredDeviceId}::uuid,
             ${dueAt}, ${participant.locale}, ${input.note ?? null}, ${viewer.profileId}::uuid
           )
         `;
@@ -890,13 +1120,13 @@ export async function addTaskParticipants(
           afterValues: {
             participantPublicId: participant.publicId,
             taskPublicId,
-            taskVersion: input.taskVersion,
+            taskVersion: taskVersion.version,
             dueAt: dueAt.toISOString(),
             preferredDevicePublicId: selection.preferredDevicePublicId ?? null,
             source: "task_roster",
           },
         });
-        created.push({ participantPublicId: participant.publicId, assignmentPublicId });
+        created.push({ participantPublicId: participant.publicId, assignmentPublicId, state: "assigned" });
       }
 
       await writeAudit(transaction, {
@@ -907,7 +1137,8 @@ export async function addTaskParticipants(
         entityPublicId: taskPublicId,
         requestId,
         afterValues: {
-          taskVersion: input.taskVersion,
+          taskVersion: taskVersion?.version ?? null,
+          state: taskVersion ? "assigned" : "planned",
           createdCount: created.length,
           skippedCount: skipped.length,
           participantPublicIds: created.map((item) => item.participantPublicId),
@@ -916,6 +1147,62 @@ export async function addTaskParticipants(
       return { taskPublicId, created, skipped };
     },
   }));
+}
+
+export async function removePlannedTaskParticipant(
+  viewer: Viewer,
+  taskPublicId: string,
+  participantPublicId: string,
+  requestId: string,
+) {
+  taskPublicIdSchema.parse(taskPublicId);
+  participantPublicIdSchema.parse(participantPublicId);
+  const db = database();
+  return await db.begin(async (transaction) => {
+    const [plan] = await transaction<{
+      id: string;
+      participantPublicId: string;
+      dueAt: Date;
+      preferredDevicePublicId: string | null;
+    }[]>`
+      select
+        plan.id,
+        participant.public_id as participant_public_id,
+        plan.due_at,
+        device.public_id as preferred_device_public_id
+      from egocapture.task_participant_plans plan
+      join egocapture.tasks task on task.id = plan.task_id
+      join egocapture.participants participant on participant.id = plan.participant_id
+      left join egocapture.devices device on device.id = plan.preferred_device_id
+      where task.public_id = ${taskPublicId}
+        and participant.public_id = ${participantPublicId}
+        and plan.removed_at is null
+        and plan.assignment_id is null
+      for update of plan
+    `;
+    if (!plan) throw new DomainError("NOT_FOUND", "草稿发布名单中没有该参与者", 404);
+    await transaction`
+      update egocapture.task_participant_plans
+      set removed_at = now(), removed_by = ${viewer.profileId}::uuid, updated_at = now()
+      where id = ${plan.id}::uuid
+    `;
+    await writeAudit(transaction, {
+      actorProfileId: viewer.profileId,
+      actorAuthUserId: viewer.authUserId,
+      action: "task.participant_unplanned",
+      entityType: "task",
+      entityPublicId: taskPublicId,
+      requestId,
+      beforeValues: {
+        participantPublicId: plan.participantPublicId,
+        dueAt: plan.dueAt.toISOString(),
+        preferredDevicePublicId: plan.preferredDevicePublicId,
+        state: "planned",
+      },
+      afterValues: { participantPublicId: plan.participantPublicId, state: "removed" },
+    });
+    return { taskPublicId, participantPublicId, status: "removed" as const };
+  });
 }
 
 export async function replaceTaskParticipant(

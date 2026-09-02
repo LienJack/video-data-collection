@@ -38,7 +38,7 @@ export default async function TaskDetailPage({ params, searchParams }: { params:
   const search = await searchParams;
   const [task, operations] = await Promise.all([getTask(viewer, taskPublicId), getTaskOperations(viewer, taskPublicId)]);
   const requestedTab = typeof search.tab === "string" && search.tab in tabLabels ? search.tab as Tab : "overview";
-  const activeTab: Tab = task.versions.length === 0 ? "instructions" : requestedTab;
+  const activeTab: Tab = requestedTab;
   const serializedParticipants = operations.participants.map((participant) => ({ ...participant, dueAt: participant.dueAt.toISOString(), createdAt: participant.createdAt.toISOString(), canceledAt: participant.canceledAt?.toISOString() ?? null }));
   const serializedUploads = operations.uploads.map((upload) => ({ ...upload, createdAt: upload.createdAt.toISOString() }));
   const serializedAudits = operations.audits.map((audit) => ({ ...audit, createdAt: audit.createdAt.toISOString() }));
@@ -70,10 +70,10 @@ export default async function TaskDetailPage({ params, searchParams }: { params:
 
       <div className="mt-6">
         {activeTab === "overview" ? <TaskOverviewPanel summary={summary} participants={serializedParticipants} uploads={serializedUploads} audits={serializedAudits} /> : null}
-        {activeTab === "participants" ? <TaskParticipantsPanel participants={serializedParticipants} versions={task.versions} candidates={operations.eligibleParticipants} /> : null}
+        {activeTab === "participants" ? <TaskParticipantsPanel taskPublicId={task.publicId} participants={serializedParticipants} versions={task.versions} candidates={operations.eligibleParticipants} /> : null}
         {activeTab === "uploads" ? <TaskUploadsPanel uploads={serializedUploads} /> : null}
         {activeTab === "audit" ? <TaskAuditPanel audits={serializedAudits} /> : null}
-        {activeTab === "instructions" ? <div className="grid gap-8 xl:grid-cols-[minmax(0,1fr)_20rem]"><TaskEditor mode="edit" taskPublicId={task.publicId} initialInstructions={task.draftInstructions} initialUpdatedAt={task.updatedAt.toISOString()} /><aside className="mt-8 h-fit rounded-[1.35rem] bg-white/82 p-5 shadow-[var(--shadow-soft)] backdrop-blur-xl"><h2 className="text-lg font-semibold tracking-[-0.02em]">已发布版本</h2><div className="mt-4 space-y-3">{task.versions.map((version) => <Card as="article" key={version.version} className="gap-2 border-0 bg-[var(--paper)] p-4 shadow-none"><div className="flex items-center justify-between gap-3"><p className="font-semibold">版本 {version.version}</p><Badge variant="outline">冻结</Badge></div><p className="break-all font-mono text-[10px] text-[var(--muted)]">{version.contentHash}</p><p className="text-xs text-[var(--muted)]">{version.publishedAt.toLocaleString("zh-CN")}</p></Card>)}{task.versions.length === 0 ? <p className="text-sm leading-6 text-[var(--muted)]">发布第一个版本后，才能添加参与者。</p> : null}</div></aside></div> : null}
+        {activeTab === "instructions" ? <div className="grid gap-8 xl:grid-cols-[minmax(0,1fr)_20rem]"><TaskEditor mode="edit" taskPublicId={task.publicId} initialInstructions={task.draftInstructions} initialUpdatedAt={task.updatedAt.toISOString()} /><aside className="mt-8 h-fit rounded-[1.35rem] bg-white/82 p-5 shadow-[var(--shadow-soft)] backdrop-blur-xl"><h2 className="text-lg font-semibold tracking-[-0.02em]">已发布版本</h2><div className="mt-4 space-y-3">{task.versions.map((version) => <Card as="article" key={version.version} className="gap-2 border-0 bg-[var(--paper)] p-4 shadow-none"><div className="flex items-center justify-between gap-3"><p className="font-semibold">版本 {version.version}</p><Badge variant="outline">冻结</Badge></div><p className="break-all font-mono text-[10px] text-[var(--muted)]">{version.contentHash}</p><p className="text-xs text-[var(--muted)]">{version.publishedAt.toLocaleString("zh-CN")}</p></Card>)}{task.versions.length === 0 ? <p className="text-sm leading-6 text-[var(--muted)]">可以先在“参与者”中维护发布名单。首次发布时，系统会把名单绑定到冻结版本并生成 Assignment。</p> : null}</div></aside></div> : null}
       </div>
     </main>
   );

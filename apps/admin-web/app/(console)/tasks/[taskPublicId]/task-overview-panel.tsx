@@ -29,6 +29,7 @@ type TaskOverviewPanelProps = {
 };
 
 const statusLabels: Record<string, string> = {
+  draft: "草稿",
   awaiting_participants: "待分配参与者",
   running: "采集中",
   needs_attention: "需要处理",
@@ -37,6 +38,7 @@ const statusLabels: Record<string, string> = {
 };
 
 const assignmentLabels: Record<string, string> = {
+  planned: "待发布",
   assigned: "待确认",
   acknowledged: "已确认",
   session_created: "已创建录制",
@@ -128,7 +130,7 @@ export function TaskOverviewPanel({ summary, participants, uploads, audits }: Ta
           <Progress value={completion} aria-label={`任务完成率 ${completion}%`} className="h-2" />
           <div className="grid gap-2 sm:grid-cols-2">
             {upcoming.map((participant) => (
-              <div key={participant.assignmentPublicId} className="rounded-2xl bg-[var(--paper)] p-4">
+              <div key={participant.assignmentPublicId ?? `planned-${participant.participantPublicId}`} className="rounded-2xl bg-[var(--paper)] p-4">
                 <div className="flex min-w-0 items-start justify-between gap-3">
                   <div className="min-w-0">
                     <p className="break-words text-sm font-semibold">{participant.participantAlias}</p>

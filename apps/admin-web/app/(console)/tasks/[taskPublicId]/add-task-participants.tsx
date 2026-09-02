@@ -19,11 +19,16 @@ type EligibleParticipant = {
   countryRegion: string | null;
   defaultDevicePublicId: string | null;
   currentAssignmentPublicId: string | null;
+  currentTaskState: "planned" | "assigned" | null;
   devices: Array<{ publicId: string; label: string }>;
 };
 
 type Result = {
-  created: Array<{ participantPublicId: string; assignmentPublicId: string }>;
+  created: Array<{
+    participantPublicId: string;
+    assignmentPublicId: string | null;
+    state: "planned" | "assigned";
+  }>;
   skipped: Array<{ participantPublicId: string; code: string; message: string }>;
 };
 
@@ -34,7 +39,8 @@ function initialDueAt() {
 }
 
 function eligibility(participant: EligibleParticipant) {
-  if (participant.currentAssignmentPublicId) return { allowed: false, reason: "已在当前任务中" };
+  if (participant.currentTaskState === "planned") return { allowed: false, reason: "已在发布名单中" };
+  if (participant.currentTaskState === "assigned" || participant.currentAssignmentPublicId) return { allowed: false, reason: "已在当前任务中" };
   if (participant.status !== "active") return { allowed: false, reason: "参与者未启用" };
   if (participant.consentStatus !== "valid") return { allowed: false, reason: "授权状态无效" };
   return { allowed: true, reason: "可以分配" };
@@ -93,10 +99,6 @@ export function AddTaskParticipants({
       setError("请至少选择一名参与者。");
       return;
     }
-    if (!taskVersion) {
-      setError("请先发布任务版本，再添加参与者。");
-      return;
-    }
     setBusy(true);
     setError("");
     setResult(null);
@@ -104,7 +106,7 @@ export function AddTaskParticipants({
       method: "POST",
       headers: { "content-type": "application/json", "idempotency-key": crypto.randomUUID() },
       body: JSON.stringify({
-        taskVersion,
+        taskVersion: taskVersion || undefined,
         dueAt: new Date(dueAt).toISOString(),
         note: note.trim() || null,
         participants: selected.map((participantPublicId) => ({
@@ -126,7 +128,7 @@ export function AddTaskParticipants({
 
   return (
     <>
-      <Button size="lg" onClick={open} disabled={versions.length === 0} className="shadow-[0_10px_30px_rgb(57_117_173_/_22%)]"><UserPlus className="size-5" weight="bold" />添加参与者</Button>
+      <Button size="lg" onClick={open} className="shadow-[0_10px_30px_rgb(57_117_173_/_22%)]"><UserPlus className="size-5" weight="bold" />添加参与者</Button>
       <dialog ref={dialogRef} onCancel={(event) => { event.preventDefault(); close(); }} className="apple-dialog w-[min(70rem,calc(100%-1.5rem))] max-h-[calc(100dvh-1.5rem)] overflow-hidden p-0 text-[var(--ink)] backdrop:bg-[rgb(15_23_42_/_28%)]">
         <form onSubmit={submit} className="flex max-h-[calc(100dvh-1.5rem)] flex-col">
           <header className="apple-dialog-header flex items-start justify-between gap-4 px-5 py-4 sm:px-7 sm:py-5">
@@ -141,7 +143,7 @@ export function AddTaskParticipants({
           <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-5 py-5 sm:px-7">
             {result ? (
               <section role="status" className="mb-5 rounded-2xl bg-[var(--teal-soft)] p-5">
-                <div className="flex items-center gap-3"><CheckCircle className="size-6 text-[var(--signal-dark)]" weight="fill" /><p className="font-semibold">成功添加 {result.created.length} 名参与者</p></div>
+                <div className="flex items-center gap-3"><CheckCircle className="size-6 text-[var(--signal-dark)]" weight="fill" /><p className="font-semibold">{versions.length === 0 ? `已加入发布名单 · ${result.created.length} 人` : `成功添加 ${result.created.length} 名参与者`}</p></div>
                 {result.skipped.length > 0 ? <div className="mt-4 space-y-2 text-sm"><p className="font-semibold">{result.skipped.length} 人未添加</p>{result.skipped.map((item) => <p key={item.participantPublicId}>{item.participantPublicId}：{item.message}</p>)}</div> : null}
               </section>
             ) : null}
@@ -171,7 +173,7 @@ export function AddTaskParticipants({
 
               <section aria-labelledby="assignment-settings-heading" className="space-y-5">
                 <div><h3 id="assignment-settings-heading" className="text-base font-semibold">分配设置</h3><p className="mt-1 text-xs text-[var(--muted)]">公共设置会应用到本次选择的所有人。</p></div>
-                <Label htmlFor="task-version">任务版本<NativeSelect id="task-version" value={String(taskVersion)} onChange={(event) => setTaskVersion(Number(event.target.value))} className="mt-2 w-full bg-white">{versions.map((version) => <NativeSelectOption key={version.version} value={String(version.version)}>版本 {version.version}{version.version === latestVersion ? " · 最新" : ""}</NativeSelectOption>)}</NativeSelect></Label>
+                {versions.length > 0 ? <Label htmlFor="task-version">任务版本<NativeSelect id="task-version" value={String(taskVersion)} onChange={(event) => setTaskVersion(Number(event.target.value))} className="mt-2 w-full bg-white">{versions.map((version) => <NativeSelectOption key={version.version} value={String(version.version)}>版本 {version.version}{version.version === latestVersion ? " · 最新" : ""}</NativeSelectOption>)}</NativeSelect></Label> : <Alert><AlertDescription>当前任务仍是草稿。参与者会先加入发布名单；首次发布时，系统会把名单绑定到冻结的版本并生成正式 Assignment。</AlertDescription></Alert>}
                 <Label htmlFor="task-due-at">截止时间<Input id="task-due-at" type="datetime-local" required value={dueAt} onChange={(event) => setDueAt(event.target.value)} className="mt-2 bg-white" /></Label>
                 <Label htmlFor="task-note">分配备注<Input id="task-note" value={note} onChange={(event) => setNote(event.target.value)} maxLength={500} placeholder="选填，参与者可看到" className="mt-2 bg-white" /></Label>
 
@@ -183,7 +185,7 @@ export function AddTaskParticipants({
 
           <footer className="apple-dialog-footer flex flex-wrap items-center justify-between gap-3 px-5 py-4 sm:px-7">
             <p className="text-sm font-medium text-[var(--muted)]">已选择 <span className="tabular-nums text-[var(--ink)]">{selected.length}</span> 人</p>
-            <div className="flex gap-2"><Button type="button" variant="ghost" onClick={close}>完成</Button><Button type="submit" disabled={busy || selected.length === 0}>{busy ? "正在分配…" : <><Plus className="size-4" weight="bold" />分配给 {selected.length} 人</>}</Button></div>
+            <div className="flex gap-2"><Button type="button" variant="ghost" onClick={close}>完成</Button><Button type="submit" disabled={busy || selected.length === 0}>{busy ? (versions.length === 0 ? "正在加入…" : "正在分配…") : <><Plus className="size-4" weight="bold" />{versions.length === 0 ? "加入发布名单" : `分配给 ${selected.length} 人`}</>}</Button></div>
           </footer>
         </form>
       </dialog>

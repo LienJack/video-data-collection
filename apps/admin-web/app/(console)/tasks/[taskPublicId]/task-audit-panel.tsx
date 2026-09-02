@@ -20,6 +20,8 @@ const actionLabels: Record<string, string> = {
   "task.updated": "更新任务说明",
   "task.version_published": "发布任务版本",
   "task.participant_added": "添加参与者",
+  "task.participant_planned": "加入草稿发布名单",
+  "task.participant_unplanned": "移出草稿发布名单",
   "task.participants_added": "批量添加参与者",
   "task.participant_removed": "停止参与",
   "task.participant_replaced": "替换参与者",
