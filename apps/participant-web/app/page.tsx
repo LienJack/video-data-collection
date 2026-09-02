@@ -5,27 +5,27 @@ import { MagneticLink } from "@/app/_components/magnetic-link";
 import styles from "@/app/home.module.css";
 
 const proofPoints = [
-  { value: "TaskVersion", label: "任务说明不可变" },
-  { value: "Ed25519", label: "Session Marker 签名" },
-  { value: "6 MiB", label: "可恢复上传分片" },
-  { value: "0 byte", label: "视频经 Next.js" },
+  { value: "固定任务版本", label: "采集开始后不受草稿修改影响" },
+  { value: "签名会话标记", label: "记录本次采集所属会话" },
+  { value: "支持断点续传", label: "暂停或中断后可以继续上传" },
+  { value: "直传私有存储", label: "视频不经过应用服务器" },
 ];
 
 const workflow = [
   {
     code: "01",
-    title: "接收一份不会变的任务",
-    copy: "参与者看到的是已发布版本。后续草稿修改不会悄悄改变已经开始的采集。",
+    title: "确认本次采集任务",
+    copy: "开始前查看已发布的任务说明。采集开始后，本次任务内容不会受后续草稿修改影响。",
   },
   {
     code: "02",
-    title: "在录制前建立 Session",
-    copy: "系统生成不含个人信息的签名标记，让应用外拍摄也能与本次任务准确对应。",
+    title: "创建录制会话",
+    copy: "录制前创建会话并生成不含个人信息的签名标记，用于记录本次录制对应的任务。",
   },
   {
     code: "03",
-    title: "直接上传，交给人工复核",
-    copy: "文件可暂停、可恢复地直达私有存储；异常和重复候选进入复核，不做草率的自动删除。",
+    title: "选择会话并上传视频",
+    copy: "选择对应的录制会话后上传视频。上传可暂停、可恢复；疑似异常或重复的视频会进入人工复核，不会自动删除。",
   },
 ];
 
@@ -37,7 +37,7 @@ export default function Home() {
           EgoCapture
         </Link>
         <p className="hidden text-[0.68rem] font-semibold uppercase tracking-[0.18em] text-[var(--home-muted)] sm:block">
-          Research field system
+          第一人称视频采集平台
         </p>
         <Link href="/login" className={styles.navAction}>
           登录工作台
@@ -48,24 +48,24 @@ export default function Home() {
         <div className="lg:col-span-7 lg:pr-10 xl:pr-20">
           <p className={styles.kicker}>
             <span aria-hidden="true" />
-            第一人称视频采集 / 工作台
+            第一人称视频采集平台
           </p>
           <h1 className={`${styles.heroTitle} mt-7 max-w-[12ch]`}>
             视频记录现场。
-            <span>我们记录来路。</span>
+            <span>每段素材都有清晰来路。</span>
           </h1>
           <p className="mt-7 max-w-[39rem] text-[1rem] leading-8 text-[var(--home-muted)] sm:mt-8 sm:text-[1.08rem]">
-            任务说明、录制会话、分片上传和人工复核，落在同一条证据链上。参与者按任务行动，研究团队随时知道每段视频为何采集、属于哪次会话、现在走到哪一步。
+            参与者根据已发布的任务完成录制和上传；研究团队可查看任务版本、录制会话、上传进度与复核结果，随时了解每段视频的来源和状态。
           </p>
           <div className={`${styles.heroActions} mt-9 flex flex-wrap items-center gap-5`}>
-            <MagneticLink href="/login">进入工作台</MagneticLink>
+            <MagneticLink href="/login">登录工作台</MagneticLink>
             <Link href="#workflow" className={styles.textAction}>
-              查看采集流程
+              查看三步流程
             </Link>
           </div>
           <p className="mt-7 flex max-w-lg items-start gap-3 text-xs leading-6 text-[var(--home-muted)]">
             <span className="mt-[0.55rem] size-1.5 shrink-0 rounded-full bg-[var(--home-accent)]" aria-hidden="true" />
-            演示环境仅使用合成身份与无敏感信息的视频；真实采集仍需遵守项目知情同意与数据治理要求。
+            演示环境请勿使用真实身份或上传敏感视频。开展真实采集前，请确认已完成知情同意和数据治理流程。
           </p>
         </div>
 
@@ -77,9 +77,9 @@ export default function Home() {
       <section className={`${styles.proofBand} mx-auto max-w-[1400px] px-6 py-8 sm:px-9 sm:py-10 lg:px-12`} aria-labelledby="proof-title">
         <div className="grid gap-9 lg:grid-cols-[1fr_2fr] lg:items-end">
           <div>
-            <p className="text-[0.66rem] font-semibold uppercase tracking-[0.18em] text-white/48">Provenance, not just storage</p>
+            <p className="text-[0.66rem] font-semibold uppercase tracking-[0.18em] text-white/48">不止存储，更可追溯</p>
             <h2 id="proof-title" className="display mt-3 max-w-md text-2xl font-semibold leading-tight tracking-[-0.04em] text-white sm:text-3xl">
-              每段视频都有可检查的上下文。
+              每段视频的来源和处理状态都可核查。
             </h2>
           </div>
           <dl className="grid grid-cols-2 border-l border-white/10 lg:grid-cols-4">
@@ -97,13 +97,13 @@ export default function Home() {
         <div className="lg:col-span-5">
           <p className={styles.kicker}>
             <span aria-hidden="true" />
-            一次可信采集
+            三步完成采集
           </p>
           <h2 className="display mt-6 max-w-[12ch] text-4xl font-semibold leading-[1.02] tracking-[-0.055em] sm:text-5xl">
-            参与者只管完成任务，研究团队掌握每一步。
+            参与者按步骤完成采集，研究团队随时查看进度。
           </h2>
           <p className="mt-6 max-w-md text-sm leading-7 text-[var(--home-muted)]">
-            常用路径保持简单，系统在背后保存任务版本、会话标记、上传状态与复核决定。
+            参与者只需按页面提示操作；系统会自动保存任务版本、录制会话、上传状态和复核结果。
           </p>
         </div>
 
@@ -122,11 +122,11 @@ export default function Home() {
 
       <footer className={`${styles.footer} mx-auto flex max-w-[1400px] flex-col gap-7 px-2 py-9 sm:flex-row sm:items-center sm:justify-between sm:px-4`}>
         <div>
-          <p className="display text-xl font-semibold tracking-[-0.04em]">准备好后，从身份验证开始。</p>
-          <p className="mt-2 text-xs leading-5 text-[var(--home-muted)]">参与者使用 Participant ID，管理员使用工作邮箱。</p>
+          <p className="display text-xl font-semibold tracking-[-0.04em]">登录后开始采集或管理任务。</p>
+          <p className="mt-2 text-xs leading-5 text-[var(--home-muted)]">参与者使用邀请中的 Participant ID，管理员使用工作邮箱登录。</p>
         </div>
         <Link href="/login" className={styles.footerAction}>
-          打开登录页
+          登录工作台
         </Link>
       </footer>
     </main>

@@ -6,8 +6,8 @@ const adminOrigin = process.env.ADMIN_SITE_URL || "http://localhost:3001";
 
 test("landing page exposes the product boundary", async ({ page }) => {
   await page.goto("/");
-  await expect(page.getByRole("heading", { name: /视频记录现场/ })).toBeVisible();
-  await expect(page.getByText("0 byte")).toBeVisible();
+  await expect(page.getByRole("heading", { name: "视频记录现场。 每段素材都有清晰来路。" })).toBeVisible();
+  await expect(page.getByText("直传私有存储")).toBeVisible();
 });
 
 test("participant and admin deployments stay isolated on mobile", async ({ page }) => {
