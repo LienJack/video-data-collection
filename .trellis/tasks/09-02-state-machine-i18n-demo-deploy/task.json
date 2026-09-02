@@ -1,0 +1,31 @@
+{
+  "id": "state-machine-i18n-demo-deploy",
+  "name": "state-machine-i18n-demo-deploy",
+  "title": "状态机、国际化、演示数据与真实部署",
+  "description": "",
+  "status": "in_progress",
+  "dev_type": null,
+  "scope": null,
+  "package": "admin-web",
+  "priority": "P2",
+  "creator": "LienJack",
+  "assignee": "LienJack",
+  "createdAt": "2026-09-02",
+  "completedAt": null,
+  "branch": null,
+  "base_branch": "main",
+  "worktree_path": null,
+  "commit": null,
+  "pr_url": null,
+  "subtasks": [],
+  "children": [
+    "09-02-unified-state-machines",
+    "09-02-zh-en-ja-i18n",
+    "09-02-deterministic-demo-data",
+    "09-02-vercel-supabase-production"
+  ],
+  "parent": null,
+  "relatedFiles": [],
+  "notes": "",
+  "meta": {}
+}

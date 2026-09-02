@@ -1,0 +1,4 @@
+{"file":".trellis/spec/admin-web/frontend/index.md","reason":"Admin deployment unit and Cron surface."}
+{"file":".trellis/spec/participant-web/frontend/index.md","reason":"Participant deployment and direct upload surface."}
+{"file":".trellis/spec/guides/cross-layer-thinking-guide.md","reason":"Cloud provisioning crosses build, compute, database, Auth and Storage."}
+{"file":".trellis/tasks/09-02-vercel-supabase-production/research/cloud-preflight.md","reason":"Verified account, isolation, region and unknowns."}
