@@ -22,7 +22,8 @@
     "09-02-unified-state-machines",
     "09-02-zh-en-ja-i18n",
     "09-02-deterministic-demo-data",
-    "09-02-vercel-supabase-production"
+    "09-02-vercel-supabase-production",
+    "09-03-state-machine-registry-rls"
   ],
   "parent": null,
   "relatedFiles": [],

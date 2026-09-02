@@ -33,6 +33,12 @@ returning id;
 
 The database contract is `egocapture.state_machine_transitions(machine, from_state, to_state)` plus row-level `BEFORE UPDATE` triggers using `egocapture.enforce_state_machine_transition()`.
 
+Registry access hardening is an additive migration signature:
+
+```sql
+alter table egocapture.state_machine_transitions enable row level security;
+```
+
 ### 3. Contracts
 
 - Machine identifiers and English state/event keys are stable application data. Localize labels only at the UI boundary.
@@ -41,6 +47,7 @@ The database contract is `egocapture.state_machine_transitions(machine, from_sta
 - Every lifecycle update either locks the row first or uses an expected-old-state condition and checks the returned row count.
 - Compound commands keep state writes, `AuditEvent`, and idempotency receipts in one database transaction.
 - The PostgreSQL registry is an additive migration snapshot. Never edit an already-applied migration; add a new migration for graph changes.
+- Every `egocapture` business table, including internal registries, has RLS enabled in the migration chain. An internal registry has no browser-facing policy or grant unless a separate reviewed contract requires one; trusted owner/service-role database paths remain the only access path.
 - `db:verify` compares every live registry edge with `allLifecycleEdges`, verifies all registered triggers, probes an illegal transition, and rejects fixture bypass functions/settings.
 - Participant upload actors may own runtime resources, but persisted upload DTOs must not contain `File`, TUS clients, `AbortController`, database handles, or opaque XState snapshots.
 - Local database checks use the NAS profile and its supervised SSH tunnel. Do not start a local database Docker stack for acceptance.
@@ -57,6 +64,8 @@ The database contract is `egocapture.state_machine_transitions(machine, from_sta
 | Upload callback arrives after pause, cancel, replacement, or unmount | Ignore it or compensate on the server; do not advance the stale actor |
 | Storage reports a complete TUS object while the attempt is paused | Reconciliation may use the declared `complete` event; the explicit `paused -> completed` edge is required |
 | Fixture tooling attempts an illegal reverse transition | Reject it; refresh must delete and reseed instead of bypassing guards |
+| A migration creates an `egocapture` business table without enabling RLS | Static database contract and live `dev:nas:check` fail |
+| Registry hardening adds a policy, grant, or FORCE RLS | Reject the migration; it changes the reviewed trusted-server access boundary |
 
 ### 5. Good / Base / Bad Cases
 
@@ -65,6 +74,8 @@ The database contract is `egocapture.state_machine_transitions(machine, from_sta
 - Bad: read `status` before a transaction, update with a stale assumption, ignore an empty `RETURNING`, then write an audit claiming success.
 - Good: keep every non-canceled Assignment-to-accepted Review correction edge explicit because the Review command historically supports that contract.
 - Bad: add a hidden session setting that disables lifecycle triggers for demo rows.
+- Good: add a later migration that enables RLS on an existing internal registry while preserving its rows, digest, triggers, and zero-policy access boundary.
+- Bad: edit the historical table-creation migration or add a permissive `authenticated` read policy merely to make an RLS check pass.
 
 ### 6. Tests Required
 
@@ -72,6 +83,7 @@ The database contract is `egocapture.state_machine_transitions(machine, from_sta
 - Unit: `lifecycleEdges` and capability selectors expose the same graph used by transition execution.
 - Unit/UI: two upload items evolve independently; pause/resume/cancel work; late credentials and TUS callbacks after cancel/unmount cannot restart or mutate an item.
 - Database: live registry and `allLifecycleEdges` have identical edge sets; exactly one trigger exists for every controlled column; a direct illegal SQL update is rejected.
+- Database/security: the migration snapshot enables RLS for every created `egocapture` business table; live registry reports `relrowsecurity = true`, `relforcerowsecurity = false`, zero policies, and no `public`/`anon`/`authenticated` table privileges.
 - Concurrency: two commands using the same expected old state produce one success, one stale result, and one set of audit/effect records.
 - Integration: Participant, Task, Session, Upload, Review, and Cron checks run against the NAS database profile.
 - E2E: the Admin-to-Participant upload and immutable Review correction flow passes on one database migration frontier.
@@ -115,3 +127,14 @@ await db.begin(async (tx) => {
 ```
 
 The row state, transition decision, conditional write, and audit share one transaction boundary.
+
+For registry hardening, do not rewrite an applied migration or grant browser access:
+
+```sql
+-- Wrong: mutates history and broadens the surface.
+grant select on egocapture.state_machine_transitions to authenticated;
+create policy registry_read on egocapture.state_machine_transitions for select using (true);
+
+-- Correct: a new sequential migration preserves the trusted-server boundary.
+alter table egocapture.state_machine_transitions enable row level security;
+```
