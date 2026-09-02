@@ -27,7 +27,7 @@ test("统一入口展示视频记录、准确异常入口和一跳处理", async
   const missing = page.getByRole("link", { name: /缺少上传/ });
   await expect(missing).toHaveAttribute("href", "/participants?missing=yes");
 
-  const failedUpload = page.getByRole("article").filter({ hasText: "demo-upload-failed.mp4" });
+  const failedUpload = page.getByRole("row").filter({ hasText: "demo-upload-failed.mp4" });
   await expect(failedUpload).toContainText("Participant Demo");
   const reviewLink = failedUpload.getByRole("link", { name: "处理异常" });
   await expect(reviewLink).toHaveAttribute("href", /\/review\/RV-/);
@@ -47,16 +47,17 @@ test("统一入口展示视频记录、准确异常入口和一跳处理", async
   await clearFilters.press("Enter");
   await expect(page).toHaveURL(/\/records\?tab=videos$/);
 
-  await page.goto(`${adminOrigin}/records?tab=unknown&cursor=not-a-cursor&transferStatus=unknown`);
+  await page.goto(`${adminOrigin}/records?tab=unknown&page=not-a-page&transferStatus=unknown`);
   await expect(page.getByRole("heading", { name: "视频记录", level: 2 })).toBeVisible();
   await expect(page.getByLabel("传输状态")).toHaveValue("");
+  await expect(page.getByRole("navigation", { name: "表格分页" })).toContainText("第 1 /");
 });
 
 test("会话页默认开放、可查历史并保留关闭原因校验", async ({ page }) => {
   await page.goto(`${adminOrigin}/records?tab=sessions`);
   await expect(page.getByRole("heading", { name: "录制会话", level: 2 })).toBeVisible();
   await expect(page.getByLabel("会话状态")).toHaveValue("open");
-  const session = page.getByRole("article").filter({ hasText: "RS-23456789" });
+  const session = page.getByRole("row").filter({ hasText: "RS-23456789" });
   await expect(session).toContainText("匹配视频");
   await expect(session.getByRole("link", { name: "查看相关视频" })).toHaveAttribute("href", "/records?tab=videos&search=RS-23456789");
 
@@ -78,7 +79,7 @@ test("会话页默认开放、可查历史并保留关闭原因校验", async ({
 test("操作记录提供中文摘要、分类筛选和完整证据", async ({ page }) => {
   await page.goto(`${adminOrigin}/records?tab=activity`);
   await expect(page.getByRole("heading", { name: "操作记录", level: 2 })).toBeVisible();
-  const firstEvent = page.getByRole("article").first();
+  const firstEvent = page.getByRole("row").filter({ hasText: "已记录" }).first();
   await expect(firstEvent).toBeVisible();
   await firstEvent.getByText("查看变更详情").click();
   await expect(firstEvent.getByText(/原始动作：/)).toBeVisible();

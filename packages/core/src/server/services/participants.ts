@@ -11,6 +11,7 @@ import {
 } from "@egocapture/core/domain/invitation";
 import { assertParticipantTransition, type ParticipantStatus } from "@egocapture/core/domain/participant";
 import { createPublicId } from "@egocapture/core/domain/public-id";
+import { createPageResult, pageNumberSchema, pageSizeSchema, resolvePage } from "@egocapture/core/pagination";
 import {
   isCanonicalLocale,
   isSupportedCountryCode,
@@ -50,8 +51,8 @@ export const participantListSchema = z.object({
   countryRegion: countryRegionSchema.optional(),
   missing: z.enum(["yes", "no"]).optional(),
   needsReview: z.enum(["yes", "no"]).optional(),
-  cursor: z.string().regex(/^PT-[23456789ABCDEFGHJKLMNPQRSTUVWXYZ]{6,16}$/).optional(),
-  limit: z.coerce.number().int().min(1).max(50).default(25),
+  page: pageNumberSchema,
+  pageSize: pageSizeSchema(25, 50),
 });
 
 export const participantReasonSchema = z.object({ reason: z.string().trim().min(10).max(500) });
@@ -128,6 +129,31 @@ function protectFixture(viewer: Viewer, participant: ParticipantRow) {
 
 export async function listParticipants(_viewer: Viewer, input: z.infer<typeof participantListSchema>) {
   const db = database();
+  const filters = db`
+    where (${input.search ?? null}::text is null or participant.public_id ilike '%' || ${input.search ?? ""} || '%' or participant.display_alias ilike '%' || ${input.search ?? ""} || '%')
+      and (${input.status ?? null}::text is null or participant.status = ${input.status ?? ""})
+      and (${input.consentStatus ?? null}::text is null or participant.consent_status = ${input.consentStatus ?? ""})
+      and (${input.locale ?? null}::text is null or participant.locale = ${input.locale ?? ""})
+      and (${input.countryRegion ?? null}::text is null or participant.country_region = ${input.countryRegion ?? ""})
+      and (${input.missing ?? null}::text is null or exists (
+        select 1 from egocapture.missing_assignments missing
+        where missing.participant_id = participant.id
+      ) = (${input.missing ?? "yes"} = 'yes'))
+      and (${input.needsReview ?? null}::text is null or exists (
+        select 1
+        from egocapture.review_cases review
+        left join egocapture.assignments review_assignment on review_assignment.id = review.assignment_id
+        left join egocapture.video_assets review_asset on review_asset.id = review.video_asset_id
+        where review.status in ('open', 'in_review')
+          and coalesce(review_assignment.participant_id, review_asset.participant_id) = participant.id
+      ) = (${input.needsReview ?? "yes"} = 'yes'))
+  `;
+  const [count] = await db<{ totalItems: number }[]>`
+    select count(*)::integer as total_items
+    from egocapture.participants participant
+    ${filters}
+  `;
+  const pagination = resolvePage(count?.totalItems ?? 0, input.page, input.pageSize);
   const rows = await db<{
     publicId: string;
     displayAlias: string;
@@ -160,30 +186,12 @@ export async function listParticipants(_viewer: Viewer, input: z.infer<typeof pa
           and coalesce(review_assignment.participant_id, review_asset.participant_id) = participant.id
       ) as needs_review
     from egocapture.participants participant
-    where (${input.search ?? null}::text is null or participant.public_id ilike '%' || ${input.search ?? ""} || '%' or participant.display_alias ilike '%' || ${input.search ?? ""} || '%')
-      and (${input.status ?? null}::text is null or participant.status = ${input.status ?? ""})
-      and (${input.consentStatus ?? null}::text is null or participant.consent_status = ${input.consentStatus ?? ""})
-      and (${input.locale ?? null}::text is null or participant.locale = ${input.locale ?? ""})
-      and (${input.countryRegion ?? null}::text is null or participant.country_region = ${input.countryRegion ?? ""})
-      and (${input.missing ?? null}::text is null or exists (
-        select 1 from egocapture.missing_assignments missing
-        where missing.participant_id = participant.id
-      ) = (${input.missing ?? "yes"} = 'yes'))
-      and (${input.needsReview ?? null}::text is null or exists (
-        select 1
-        from egocapture.review_cases review
-        left join egocapture.assignments review_assignment on review_assignment.id = review.assignment_id
-        left join egocapture.video_assets review_asset on review_asset.id = review.video_asset_id
-        where review.status in ('open', 'in_review')
-          and coalesce(review_assignment.participant_id, review_asset.participant_id) = participant.id
-      ) = (${input.needsReview ?? "yes"} = 'yes'))
-      and (${input.cursor ?? null}::text is null or participant.public_id > ${input.cursor ?? ""})
+    ${filters}
     order by participant.public_id
-    limit ${input.limit + 1}
+    limit ${pagination.pageSize}
+    offset ${pagination.offset}
   `;
-  const hasNext = rows.length > input.limit;
-  const data = rows.slice(0, input.limit);
-  return { items: data, nextCursor: hasNext ? data.at(-1)?.publicId ?? null : null };
+  return createPageResult(rows, pagination);
 }
 
 export async function getParticipant(viewer: Viewer, participantPublicId: string) {

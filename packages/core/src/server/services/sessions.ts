@@ -12,9 +12,9 @@ import {
   signMarkerPayload,
 } from "@egocapture/core/domain/marker";
 import { createPublicId } from "@egocapture/core/domain/public-id";
+import { createPageResult, pageNumberSchema, pageSizeSchema, resolvePage } from "@egocapture/core/pagination";
 import { writeAudit } from "@egocapture/core/server/audit";
 import type { Viewer } from "@egocapture/core/server/auth";
-import { decodeCreatedAtCursor, encodeCreatedAtCursor } from "@egocapture/core/server/cursor";
 import { database } from "@egocapture/core/server/database";
 import { serverEnvironment } from "@egocapture/core/server/env";
 import { withIdempotency } from "@egocapture/core/server/idempotency";
@@ -32,8 +32,8 @@ export const sessionReasonSchema = z.object({ reason: z.string().trim().min(10).
 export const adminSessionListSchema = z.object({
   search: z.string().trim().max(160).optional(),
   status: z.enum(["open", "closed", "all"]).optional(),
-  cursor: z.string().max(512).optional(),
-  limit: z.coerce.number().int().min(1).max(100).default(50),
+  page: pageNumberSchema,
+  pageSize: pageSizeSchema(50),
 });
 
 async function createSignedMarker(input: {
@@ -387,8 +387,27 @@ export async function listAdminSessions(
   viewer: Viewer,
   input: z.infer<typeof adminSessionListSchema> = adminSessionListSchema.parse({}),
 ) {
-  const cursor = decodeCreatedAtCursor(input.cursor);
   const db = database();
+  const source = db`
+    from egocapture.recording_sessions session
+    join egocapture.assignments assignment on assignment.id = session.assignment_id
+    join egocapture.participants participant on participant.id = session.participant_id
+    join egocapture.task_versions version on version.id = session.task_version_id
+    join egocapture.tasks task on task.id = version.task_id
+    join egocapture.devices device on device.id = session.declared_device_id
+    where (${input.search ?? null}::text is null
+        or session.public_id ilike '%' || ${input.search ?? ""} || '%'
+        or assignment.public_id ilike '%' || ${input.search ?? ""} || '%'
+        or participant.public_id ilike '%' || ${input.search ?? ""} || '%'
+        or participant.display_alias ilike '%' || ${input.search ?? ""} || '%'
+        or version.instructions ->> 'title' ilike '%' || ${input.search ?? ""} || '%')
+      and (${input.status ?? null}::text is null or ${input.status ?? ""} = 'all' or session.status = ${input.status ?? ""})
+  `;
+  const [count] = await db<{ totalItems: number }[]>`
+    select count(*)::integer as total_items
+    ${source}
+  `;
+  const pagination = resolvePage(count?.totalItems ?? 0, input.page, input.pageSize);
   const rows = await db<{
     publicId: string;
     assignmentPublicId: string;
@@ -420,33 +439,12 @@ export async function listAdminSessions(
         from egocapture.current_match_decisions decision
         where decision.resolved_session_id = session.id) as matched_video_count,
       session.created_at
-    from egocapture.recording_sessions session
-    join egocapture.assignments assignment on assignment.id = session.assignment_id
-    join egocapture.participants participant on participant.id = session.participant_id
-    join egocapture.task_versions version on version.id = session.task_version_id
-    join egocapture.tasks task on task.id = version.task_id
-    join egocapture.devices device on device.id = session.declared_device_id
-    where (${input.search ?? null}::text is null
-        or session.public_id ilike '%' || ${input.search ?? ""} || '%'
-        or assignment.public_id ilike '%' || ${input.search ?? ""} || '%'
-        or participant.public_id ilike '%' || ${input.search ?? ""} || '%'
-        or participant.display_alias ilike '%' || ${input.search ?? ""} || '%'
-        or version.instructions ->> 'title' ilike '%' || ${input.search ?? ""} || '%')
-      and (${input.status ?? null}::text is null or ${input.status ?? ""} = 'all' or session.status = ${input.status ?? ""})
-      and (
-        ${cursor?.createdAt ?? null}::timestamptz is null
-        or (session.created_at, session.public_id) < (${cursor?.createdAt ?? null}::timestamptz, ${cursor?.publicId ?? ""})
-      )
+    ${source}
     order by session.created_at desc, session.public_id desc
-    limit ${input.limit + 1}
+    limit ${pagination.pageSize}
+    offset ${pagination.offset}
   `;
-  const hasMore = rows.length > input.limit;
-  const items = rows.slice(0, input.limit);
-  const last = items.at(-1);
-  return {
-    items,
-    nextCursor: hasMore && last ? encodeCreatedAtCursor({ createdAt: last.createdAt, publicId: last.publicId }) : null,
-  };
+  return createPageResult(rows, pagination);
 }
 
 export async function closeSession(

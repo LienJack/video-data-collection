@@ -3,9 +3,12 @@ import { Button, buttonVariants } from "@egocapture/ui/components/button";
 import { Empty, EmptyDescription } from "@egocapture/ui/components/empty";
 import { Input } from "@egocapture/ui/components/input";
 import { NativeSelect, NativeSelectOption } from "@egocapture/ui/components/native-select";
-import { ArrowRight, Clock, Plus, UsersThree, VideoCamera } from "@phosphor-icons/react/dist/ssr";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@egocapture/ui/components/table";
+import { ArrowRight, Plus } from "@phosphor-icons/react/dist/ssr";
 import Link from "next/link";
+import { TablePagination } from "@/app/_components/table-pagination";
 import { requireAdmin } from "@/lib/auth";
+import { parsePageParam } from "@/lib/pagination";
 import { listTasks, taskListSchema } from "@egocapture/core/server/services/tasks";
 
 export const dynamic = "force-dynamic";
@@ -34,11 +37,10 @@ export default async function TasksPage({ searchParams }: { searchParams: Promis
   const query = taskListSchema.parse({
     search: typeof params.search === "string" && params.search ? params.search : undefined,
     lifecycle: typeof params.lifecycle === "string" && params.lifecycle ? params.lifecycle : undefined,
-    cursor: typeof params.cursor === "string" && params.cursor ? params.cursor : undefined,
-    limit: 25,
+    page: parsePageParam(params.page),
+    pageSize: 25,
   });
   const result = await listTasks(viewer, query);
-  const next = new URLSearchParams({ ...(query.search ? { search: query.search } : {}), ...(query.lifecycle ? { lifecycle: query.lifecycle } : {}), ...(result.nextCursor ? { cursor: result.nextCursor } : {}) });
 
   return (
     <main className="app-page">
@@ -63,32 +65,30 @@ export default async function TasksPage({ searchParams }: { searchParams: Promis
       </form>
 
       <section className="overflow-hidden rounded-[1.35rem] border border-white/70 bg-white/78 shadow-[var(--shadow-soft)] backdrop-blur-xl" aria-label="任务列表">
-        <div className="hidden grid-cols-[minmax(15rem,1fr)_7rem_7rem_7rem_7rem_7rem_10rem_2rem] gap-4 border-b border-[var(--line)] px-6 py-3 text-xs font-semibold text-[var(--muted)] lg:grid">
-          <span>任务</span><span>状态</span><span>参与者</span><span>完成</span><span>视频</span><span>待处理</span><span>最近截止</span><span aria-hidden="true" />
-        </div>
-        <div className="divide-y divide-[var(--line)]">
+        <Table className="min-w-[72rem]">
+          <TableHeader><TableRow><TableHead className="px-6">任务</TableHead><TableHead>状态</TableHead><TableHead>参与者</TableHead><TableHead>完成</TableHead><TableHead>视频</TableHead><TableHead>待处理</TableHead><TableHead>最近截止</TableHead><TableHead className="pr-6 text-right">操作</TableHead></TableRow></TableHeader>
+          <TableBody>
           {result.items.map((task) => (
-            <Link key={task.publicId} href={`/tasks/${task.publicId}`} className="group grid gap-5 px-5 py-5 transition-[background-color,transform] hover:bg-white active:bg-[var(--teal-soft)] lg:grid-cols-[minmax(15rem,1fr)_7rem_7rem_7rem_7rem_7rem_10rem_2rem] lg:items-center lg:px-6">
-              <div className="min-w-0">
-                <p className="truncate text-base font-semibold tracking-[-0.01em]">{task.title}</p>
+            <TableRow key={task.publicId}>
+              <TableCell className="max-w-sm whitespace-normal px-6 py-4">
+                <Link href={`/tasks/${task.publicId}`} className="text-base font-semibold tracking-[-0.01em] underline decoration-[var(--signal)] underline-offset-4">{task.title}</Link>
                 <p className="mt-1 text-xs font-medium text-[var(--muted)]">{task.publicId}{task.latestVersion ? ` · 版本 ${task.latestVersion}` : " · 尚未发布"}</p>
-              </div>
-              <div><Badge variant={statusVariants[task.operationalStatus] ?? "outline"}>{statusLabels[task.operationalStatus] ?? task.operationalStatus}</Badge></div>
-              <div className="grid grid-cols-4 gap-3 lg:contents">
-                <p className="flex items-center gap-1.5 text-sm tabular-nums"><UsersThree className="size-4 text-[var(--muted)] lg:hidden" />{task.participantCount}</p>
-                <p className="text-sm tabular-nums"><span className="text-[var(--muted)] lg:hidden">完成 </span>{task.completedCount}/{task.participantCount || "—"}</p>
-                <p className="flex items-center gap-1.5 text-sm tabular-nums"><VideoCamera className="size-4 text-[var(--muted)] lg:hidden" />{task.videoCount}</p>
-                <p className={`text-sm tabular-nums ${task.attentionCount > 0 ? "font-semibold text-[var(--destructive)]" : "text-[var(--muted)]"}`}><span className="lg:hidden">待处理 </span>{task.attentionCount}</p>
-              </div>
-              <p className="flex items-center gap-1.5 text-xs text-[var(--muted)]"><Clock className="size-4 lg:hidden" />{task.nextDueAt ? task.nextDueAt.toLocaleDateString("zh-CN") : "—"}</p>
-              <ArrowRight aria-hidden="true" className="hidden size-4 text-[var(--muted)] transition-transform group-hover:translate-x-0.5 lg:block" />
-            </Link>
+              </TableCell>
+              <TableCell><Badge variant={statusVariants[task.operationalStatus] ?? "outline"}>{statusLabels[task.operationalStatus] ?? task.operationalStatus}</Badge></TableCell>
+              <TableCell className="tabular-nums">{task.participantCount}</TableCell>
+              <TableCell className="tabular-nums">{task.completedCount}/{task.participantCount || "—"}</TableCell>
+              <TableCell className="tabular-nums">{task.videoCount}</TableCell>
+              <TableCell className={`tabular-nums ${task.attentionCount > 0 ? "font-semibold text-[var(--destructive)]" : "text-[var(--muted)]"}`}>{task.attentionCount}</TableCell>
+              <TableCell className="text-xs text-[var(--muted)]">{task.nextDueAt ? task.nextDueAt.toLocaleDateString("zh-CN") : "—"}</TableCell>
+              <TableCell className="pr-6 text-right"><Link href={`/tasks/${task.publicId}`} className={buttonVariants({ variant: "outline", size: "sm" })}>查看<ArrowRight aria-hidden="true" /></Link></TableCell>
+            </TableRow>
           ))}
-        </div>
+          </TableBody>
+        </Table>
       </section>
 
       {result.items.length === 0 ? <Empty className="mt-8"><EmptyDescription>没有符合条件的采集任务。清除筛选，或创建第一个任务。</EmptyDescription></Empty> : null}
-      {result.nextCursor ? <Link href={`?${next.toString()}`} className="mt-8 inline-flex min-h-11 items-center font-semibold text-[var(--signal-dark)]">查看下一页 →</Link> : null}
+      <div className="mt-6"><TablePagination pathname="/tasks" query={query} pagination={result} /></div>
     </main>
   );
 }

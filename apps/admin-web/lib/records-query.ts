@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { decodeCreatedAtCursor } from "@egocapture/core/server/cursor";
+import { buildPageHref, parsePageParam } from "./pagination";
 
 const tabSchema = z.enum(["videos", "sessions", "activity"]);
 const transferStatusSchema = z.enum(["created", "uploading", "reconciling", "verified", "failed", "aborted", "expired"]);
@@ -12,7 +12,7 @@ export type RecordsTab = z.infer<typeof tabSchema>;
 
 type SharedRecordsQuery = {
   search?: string;
-  cursor?: string;
+  page: number;
 };
 
 export type VideoRecordsQuery = SharedRecordsQuery & {
@@ -49,22 +49,11 @@ function optionalEnum<T extends z.ZodEnum>(schema: T, value: string | string[] |
   return parsed.success ? parsed.data : undefined;
 }
 
-function optionalCursor(value: string | string[] | undefined) {
-  const cursor = optionalText(value, 512);
-  if (!cursor) return undefined;
-  try {
-    decodeCreatedAtCursor(cursor);
-    return cursor;
-  } catch {
-    return undefined;
-  }
-}
-
 export function parseRecordsQuery(params: RawRecordsSearchParams): RecordsQuery {
   const tab = optionalEnum(tabSchema, params.tab) ?? "videos";
   const shared = {
     search: optionalText(params.search, 160),
-    cursor: optionalCursor(params.cursor),
+    page: parsePageParam(params.page),
   };
 
   if (tab === "sessions") {
@@ -92,18 +81,19 @@ export function parseRecordsQuery(params: RawRecordsSearchParams): RecordsQuery 
   };
 }
 
-export function recordsHref(query: RecordsQuery, cursor?: string | null) {
-  const params = new URLSearchParams({ tab: query.tab });
-  if (query.search) params.set("search", query.search);
+export function recordsHref(query: RecordsQuery, page = query.page) {
+  const params: Record<string, string | undefined> = {
+    tab: query.tab,
+    search: query.search,
+  };
   if (query.tab === "videos") {
-    if (query.transferStatus) params.set("transferStatus", query.transferStatus);
-    if (query.metadataStatus) params.set("metadataStatus", query.metadataStatus);
-    if (query.attention) params.set("attention", query.attention);
+    params.transferStatus = query.transferStatus;
+    params.metadataStatus = query.metadataStatus;
+    params.attention = query.attention;
   } else if (query.tab === "sessions") {
-    params.set("status", query.status);
+    params.status = query.status;
   } else if (query.category) {
-    params.set("category", query.category);
+    params.category = query.category;
   }
-  if (cursor) params.set("cursor", cursor);
-  return `/records?${params.toString()}`;
+  return buildPageHref("/records", params, page);
 }

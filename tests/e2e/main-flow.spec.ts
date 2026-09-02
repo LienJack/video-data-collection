@@ -90,8 +90,10 @@ test("Admin 建档到 Participant 上传与不可变纠正的完整闭环", asyn
     const titleInput = page.getByLabel("任务标题 *");
     const descriptionInput = page.getByLabel("任务描述 *");
     await titleInput.focus();
+    await expect(titleInput).toBeFocused();
     await page.keyboard.type(taskTitle);
-    await page.keyboard.press("Tab");
+    await expect(titleInput).toHaveValue(taskTitle);
+    await titleInput.press("Tab");
     await expect(descriptionInput).toBeFocused();
     await page.keyboard.type("Playwright creates, publishes, assigns, records and uploads this frozen instruction version.");
     await page.getByLabel("目标分辨率 *").selectOption("__custom");
@@ -107,8 +109,8 @@ test("Admin 建档到 Participant 上传与不可变纠正的完整闭环", asyn
     await page.getByRole("button", { name: "创建草稿" }).click();
     await expect(page).toHaveURL(/\/tasks\/TSK-/);
     taskPublicId = publicId(page.url(), "TSK");
-    await page.getByRole("button", { name: "发布新版本" }).click();
     await page.getByRole("link", { name: "任务说明" }).click();
+    await page.getByRole("button", { name: "发布新版本" }).click();
     await expect(page.getByText("版本 1", { exact: true })).toBeVisible();
 
     await page.goto(`${adminOrigin}/assignments/new`);
@@ -120,7 +122,8 @@ test("Admin 建档到 Participant 上传与不可变纠正的完整闭环", asyn
     await page.getByLabel("Due At").fill(localTomorrow);
     await page.getByRole("button", { name: "创建 Assignment" }).click();
     await expect(page).toHaveURL(/\/assignments$/);
-    const assignmentCard = page.getByRole("article").filter({ hasText: participantPublicId });
+    await page.goto(`${adminOrigin}/assignments?search=${participantPublicId}`);
+    const assignmentCard = page.getByRole("row").filter({ hasText: participantPublicId });
     await expect(assignmentCard).toContainText(taskTitle);
     const assignmentPublicId = publicId(await assignmentCard.innerText(), "AS");
 
@@ -177,7 +180,7 @@ test("Admin 建档到 Participant 上传与不可变纠正的完整闭环", asyn
     await expect(page.getByRole("article").filter({ hasText: "unmatched" }).filter({ hasText: "historical" })).toBeVisible();
 
     await page.goto(`${adminOrigin}/audit`);
-    const audit = page.getByRole("article").filter({ hasText: "review_case.correct_match" }).first();
+    const audit = page.getByRole("row").filter({ hasText: "review_case.correct_match" }).first();
     await expect(audit).toContainText(reviewPublicId);
     await expect(audit).toContainText(correctionReason);
   } finally {

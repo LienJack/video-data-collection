@@ -18,22 +18,21 @@ describe("records workspace query", () => {
       metadataStatus: "not-a-status",
       attention: "all",
       search: "x".repeat(161),
-      cursor: "not-a-cursor",
-    })).toEqual({ tab: "videos", search: undefined, cursor: undefined, transferStatus: undefined, metadataStatus: undefined, attention: undefined });
+      page: "not-a-page",
+    })).toEqual({ tab: "videos", search: undefined, page: 1, transferStatus: undefined, metadataStatus: undefined, attention: undefined });
   });
 
   it("defaults sessions to open and preserves delayed-upload history filters", () => {
-    const query = parseRecordsQuery({ tab: "sessions", status: "all", search: " RS-23456789 " });
-    expect(query).toEqual({ tab: "sessions", status: "all", search: "RS-23456789", cursor: undefined });
-    expect(recordsHref(query, "next-page")).toBe("/records?tab=sessions&search=RS-23456789&status=all&cursor=next-page");
+    const query = parseRecordsQuery({ tab: "sessions", status: "all", search: " RS-23456789 ", page: "3" });
+    expect(query).toEqual({ tab: "sessions", status: "all", search: "RS-23456789", page: 3 });
+    expect(recordsHref(query, 2)).toBe("/records?tab=sessions&search=RS-23456789&status=all&page=2");
     expect(parseRecordsQuery({ tab: "sessions", status: "invalid" })).toMatchObject({ tab: "sessions", status: "open" });
   });
 
   it("keeps only activity filters when the activity tab is selected", () => {
-    const cursor = Buffer.from(JSON.stringify({ createdAt: "2026-09-02T00:00:00.000Z", publicId: "event-id" }), "utf8").toString("base64url");
-    const query = parseRecordsQuery({ tab: "activity", category: "review", transferStatus: "failed", cursor });
-    expect(query).toEqual({ tab: "activity", category: "review", search: undefined, cursor });
-    expect(recordsHref(query, query.cursor)).toBe(`/records?tab=activity&category=review&cursor=${cursor}`);
+    const query = parseRecordsQuery({ tab: "activity", category: "review", transferStatus: "failed", page: "4" });
+    expect(query).toEqual({ tab: "activity", category: "review", search: undefined, page: 4 });
+    expect(recordsHref(query)).toBe("/records?tab=activity&category=review&page=4");
   });
 });
 

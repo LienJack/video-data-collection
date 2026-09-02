@@ -9,6 +9,8 @@ import { MagnifyingGlass, Plus } from "@phosphor-icons/react/dist/ssr";
 import { requireAdmin } from "@/lib/auth";
 import { listParticipants, participantListSchema } from "@egocapture/core/server/services/participants";
 import { CountrySelect, LocaleSelect } from "@/app/_components/regional-preferences-fields";
+import { TablePagination } from "@/app/_components/table-pagination";
+import { parsePageParam } from "@/lib/pagination";
 
 export const dynamic = "force-dynamic";
 
@@ -30,15 +32,10 @@ export default async function ParticipantsPage({ searchParams }: { searchParams:
     countryRegion: typeof params.countryRegion === "string" && params.countryRegion ? params.countryRegion : undefined,
     missing: typeof params.missing === "string" && params.missing ? params.missing : undefined,
     needsReview: typeof params.needsReview === "string" && params.needsReview ? params.needsReview : undefined,
-    cursor: typeof params.cursor === "string" && params.cursor ? params.cursor : undefined,
-    limit: 25,
+    page: parsePageParam(params.page),
+    pageSize: 25,
   });
   const result = await listParticipants(viewer, query);
-  const nextParams = new URLSearchParams();
-  for (const [key, value] of Object.entries(query)) {
-    if (key !== "cursor" && key !== "limit" && value !== undefined) nextParams.set(key, String(value));
-  }
-  if (result.nextCursor) nextParams.set("cursor", result.nextCursor);
   return (
     <main className="app-page">
       <header className="flex flex-wrap items-end justify-between gap-6 border-b border-[var(--line)] pb-7">
@@ -72,7 +69,7 @@ export default async function ParticipantsPage({ searchParams }: { searchParams:
       </form>
       <div className="rounded-xl border bg-card shadow-sm overflow-x-auto">
         <Table className="w-full min-w-[820px] border-collapse text-sm">
-          <TableHeader className="text-left text-xs uppercase tracking-[0.12em]"><TableRow><TableHead className="p-4">Participant</TableHead><TableHead className="p-4">Status</TableHead><TableHead className="p-4">Consent</TableHead><TableHead className="p-4">Locale / Region</TableHead><TableHead className="p-4">Signals</TableHead></TableRow></TableHeader>
+          <TableHeader className="text-left text-xs uppercase tracking-[0.12em]"><TableRow><TableHead className="p-4">Participant</TableHead><TableHead className="p-4">Status</TableHead><TableHead className="p-4">Consent</TableHead><TableHead className="p-4">Locale / Region</TableHead><TableHead className="p-4">Signals</TableHead><TableHead className="p-4 text-right">操作</TableHead></TableRow></TableHeader>
           <TableBody>
             {result.items.map((participant) => (
               <TableRow key={participant.publicId} className="border-t border-[var(--line)] hover:bg-white/35">
@@ -81,13 +78,14 @@ export default async function ParticipantsPage({ searchParams }: { searchParams:
                 <TableCell className="p-4">{participant.consentStatus}</TableCell>
                 <TableCell className="p-4">{participant.locale}<span className="text-[var(--muted)]"> · {participant.countryRegion || "—"}</span></TableCell>
                 <TableCell className="p-4"><div className="flex flex-wrap gap-2">{participant.isMissing ? <Badge variant="secondary">Missing</Badge> : null}{participant.needsReview ? <Badge>Needs Review</Badge> : null}{!participant.isMissing && !participant.needsReview ? <span className="text-[var(--muted)]">—</span> : null}</div></TableCell>
+                <TableCell className="p-4 text-right"><Link href={`/participants/${participant.publicId}`} className={buttonVariants({ variant: "outline", size: "sm" })}>查看</Link></TableCell>
               </TableRow>
             ))}
           </TableBody>
         </Table>
         {result.items.length === 0 ? <Empty className="m-4"><EmptyDescription>没有符合条件的 Participant。</EmptyDescription></Empty> : null}
       </div>
-      {result.nextCursor ? <Link className="mt-6 inline-block border-b-2 border-[var(--signal)] pb-1 font-bold" href={`/participants?${nextParams.toString()}`}>下一页 →</Link> : null}
+      <div className="mt-6"><TablePagination pathname="/participants" query={query} pagination={result} /></div>
     </main>
   );
 }

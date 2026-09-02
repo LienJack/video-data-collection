@@ -19,8 +19,8 @@ async function loadTab(viewer: Awaited<ReturnType<typeof requireAdmin>>, query: 
       transferStatus: query.transferStatus,
       metadataStatus: query.metadataStatus,
       attention: query.attention,
-      cursor: query.cursor,
-      limit: 50,
+      page: query.page,
+      pageSize: 50,
     });
     return { tab: "videos" as const, query, result: await listAdminUploads(viewer, input) };
   }
@@ -28,16 +28,16 @@ async function loadTab(viewer: Awaited<ReturnType<typeof requireAdmin>>, query: 
     const input = adminSessionListSchema.parse({
       search: query.search,
       status: query.status,
-      cursor: query.cursor,
-      limit: 50,
+      page: query.page,
+      pageSize: 50,
     });
     return { tab: "sessions" as const, query, result: await listAdminSessions(viewer, input) };
   }
   const input = auditListSchema.parse({
     search: query.search,
     category: query.category,
-    cursor: query.cursor,
-    limit: 50,
+    page: query.page,
+    pageSize: 50,
   });
   return { tab: "activity" as const, query, result: await listAuditEvents(viewer, input) };
 }

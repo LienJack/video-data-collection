@@ -1,11 +1,12 @@
 import { Badge } from "@egocapture/ui/components/badge";
 import { Button, buttonVariants } from "@egocapture/ui/components/button";
-import { Card } from "@egocapture/ui/components/card";
 import { Input } from "@egocapture/ui/components/input";
 import { NativeSelect, NativeSelectOption } from "@egocapture/ui/components/native-select";
-import { ArrowRight, CheckCircle, FileVideo, MagnifyingGlass, UploadSimple, WarningCircle } from "@phosphor-icons/react/dist/ssr";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@egocapture/ui/components/table";
+import { ArrowRight, FileVideo, MagnifyingGlass } from "@phosphor-icons/react/dist/ssr";
 import Link from "next/link";
 import type { listAdminUploads } from "@egocapture/core/server/services/review";
+import { TablePagination } from "@/app/_components/table-pagination";
 import {
   formatRecordBytes,
   formatRecordDate,
@@ -17,7 +18,7 @@ import {
   resolvedSessionForDisplay,
   transferStatusLabel,
 } from "@/lib/record-presenters";
-import { recordsHref, type VideoRecordsQuery } from "@/lib/records-query";
+import type { VideoRecordsQuery } from "@/lib/records-query";
 
 type VideoRecordsResult = Awaited<ReturnType<typeof listAdminUploads>>;
 
@@ -43,40 +44,27 @@ export function VideoRecordsPanel({ query, result }: { query: VideoRecordsQuery;
         <div className="flex items-end gap-2"><Button className="flex-1">筛选</Button>{hasFilters ? <Link href="/records?tab=videos" className={buttonVariants({ variant: "outline", className: "flex-1" })}>清除筛选</Link> : null}</div>
       </form>
 
-      <div className="grid gap-4 xl:grid-cols-2">
-        {result.items.map((upload) => {
-          const health = recordHealth(upload);
-          const HealthIcon = health.tone === "attention" ? WarningCircle : health.tone === "ready" ? CheckCircle : UploadSimple;
-          const healthVariant = health.tone === "attention" ? "destructive" : health.tone === "ready" ? "secondary" : "outline";
-          const finalSession = resolvedSessionForDisplay(upload.decisionType, upload.resolvedSessionPublicId);
-          const actionHref = upload.primaryReviewPublicId ? `/review/${upload.primaryReviewPublicId}` : `/uploads/${upload.publicId}`;
-          const actionLabel = upload.primaryReviewPublicId ? "处理异常" : "查看视频详情";
-          return (
-            <Card as="article" key={upload.publicId} className="gap-5 rounded-[1.35rem] border-white/70 bg-white/80 p-5 shadow-[var(--shadow-soft)] sm:p-6">
-              <div className="flex min-w-0 flex-wrap items-start justify-between gap-3">
-                <div className="flex min-w-0 flex-1 gap-3"><span className="grid size-10 shrink-0 place-items-center rounded-xl bg-[var(--teal-soft)] text-[var(--signal-dark)]" aria-hidden="true"><FileVideo className="size-5" weight="duotone" /></span><div className="min-w-0"><h3 className="break-all text-sm font-semibold leading-5">{upload.originalFilename}</h3><p className="mt-1 break-all text-xs text-[var(--muted)]">{upload.publicId}</p></div></div>
-                <Badge variant={healthVariant}><HealthIcon weight="fill" />{health.label}</Badge>
-              </div>
-
-              <div className="grid gap-3 rounded-2xl bg-[var(--paper)] p-4 text-sm min-[28rem]:grid-cols-2">
-                <div><p className="text-xs font-semibold text-[var(--muted)]">参与者</p><Link href={`/participants/${upload.participantPublicId}`} className="mt-1 block break-words font-semibold underline decoration-[var(--signal)] underline-offset-4">{upload.participantAlias}</Link><p className="mt-1 break-all text-xs text-[var(--muted)]">{upload.participantPublicId}</p></div>
-                <div><p className="text-xs font-semibold text-[var(--muted)]">采集任务</p>{upload.taskPublicId ? <Link href={`/tasks/${upload.taskPublicId}`} className="mt-1 block break-words font-semibold underline decoration-[var(--signal)] underline-offset-4">{upload.taskTitle ?? upload.taskPublicId}</Link> : <p className="mt-1 font-semibold">任务待确定</p>}{upload.taskPublicId ? <p className="mt-1 break-all text-xs text-[var(--muted)]">{upload.taskPublicId}</p> : null}</div>
-                <SessionValue label="声明 Session" value={upload.claimedSessionPublicId} empty="参与者未声明" />
-                <SessionValue label="最终 Session" value={finalSession} empty={upload.decisionType === "rejected" ? "匹配已拒绝" : upload.decisionType === "unmatched" ? "尚未匹配" : "等待管理员确认"} />
-              </div>
-
-              <dl className="grid grid-cols-1 gap-2.5 min-[28rem]:grid-cols-2">
-                <StatusItem label="上传" value={transferStatusLabel(upload.transferStatus)} warning={isUnhealthyTransferStatus(upload.transferStatus)} />
-                <StatusItem label="元数据" value={metadataStatusLabel(upload.metadataStatus)} warning={isUnhealthyMetadataStatus(upload.metadataStatus)} />
-                <StatusItem label="匹配" value={matchDecisionLabel(upload.decisionType)} warning={!upload.decisionType || upload.decisionType === "unmatched" || upload.decisionType === "rejected"} />
-                <StatusItem label="人工复核" value={upload.reviewCount > 0 ? `${upload.reviewCount} 项待处理` : "无需处理"} warning={upload.reviewCount > 0} />
-              </dl>
-
-              <div className="flex flex-wrap items-center justify-between gap-2 text-xs text-[var(--muted)]"><span>{formatRecordBytes(upload.sizeBytes)}</span><time>{formatRecordDate(upload.createdAt)}</time></div>
-              <Link href={actionHref} className={buttonVariants({ className: "w-full" })}>{actionLabel}<ArrowRight className="size-4" /></Link>
-            </Card>
-          );
-        })}
+      <div className="overflow-hidden rounded-[1.35rem] border border-white/70 bg-white/80 shadow-[var(--shadow-soft)]">
+        <Table className="min-w-[86rem]">
+          <TableHeader><TableRow><TableHead className="px-5">文件</TableHead><TableHead>参与者</TableHead><TableHead>任务 / Session</TableHead><TableHead>传输 / Metadata / 匹配 / Review</TableHead><TableHead>大小 / 时间</TableHead><TableHead className="pr-5 text-right">操作</TableHead></TableRow></TableHeader>
+          <TableBody>
+            {result.items.map((upload) => {
+              const health = recordHealth(upload);
+              const finalSession = resolvedSessionForDisplay(upload.decisionType, upload.resolvedSessionPublicId);
+              const actionHref = upload.primaryReviewPublicId ? `/review/${upload.primaryReviewPublicId}` : `/uploads/${upload.publicId}`;
+              return (
+                <TableRow key={upload.publicId}>
+                  <TableCell className="max-w-sm whitespace-normal px-5 py-4"><Link href={`/uploads/${upload.publicId}`} className="break-all font-semibold underline decoration-[var(--signal)] underline-offset-4">{upload.originalFilename}</Link><p className="mt-1 break-all text-xs text-[var(--muted)]">{upload.publicId}</p><Badge className="mt-2" variant={health.tone === "attention" ? "destructive" : health.tone === "ready" ? "secondary" : "outline"}>{health.label}</Badge></TableCell>
+                  <TableCell className="max-w-xs whitespace-normal"><Link href={`/participants/${upload.participantPublicId}`} className="font-semibold underline decoration-[var(--signal)] underline-offset-4">{upload.participantAlias}</Link><p className="mt-1 break-all text-xs text-[var(--muted)]">{upload.participantPublicId}</p></TableCell>
+                  <TableCell className="max-w-sm whitespace-normal">{upload.taskPublicId ? <Link href={`/tasks/${upload.taskPublicId}`} className="font-semibold underline decoration-[var(--signal)] underline-offset-4">{upload.taskTitle ?? upload.taskPublicId}</Link> : <span className="font-semibold">任务待确定</span>}<p className="mt-1 text-xs text-[var(--muted)]">声明：<SessionLink value={upload.claimedSessionPublicId} empty="未声明" /></p><p className="mt-1 text-xs text-[var(--muted)]">最终：<SessionLink value={finalSession} empty={upload.decisionType === "rejected" ? "匹配已拒绝" : "待确认"} /></p></TableCell>
+                  <TableCell className="whitespace-normal"><StatusLine label="上传" value={transferStatusLabel(upload.transferStatus)} warning={isUnhealthyTransferStatus(upload.transferStatus)} /><StatusLine label="元数据" value={metadataStatusLabel(upload.metadataStatus)} warning={isUnhealthyMetadataStatus(upload.metadataStatus)} /><StatusLine label="匹配" value={matchDecisionLabel(upload.decisionType)} warning={!upload.decisionType || upload.decisionType === "unmatched" || upload.decisionType === "rejected"} /><StatusLine label="人工复核" value={upload.reviewCount > 0 ? `${upload.reviewCount} 项待处理` : "无需处理"} warning={upload.reviewCount > 0} /></TableCell>
+                  <TableCell className="text-xs text-[var(--muted)]"><p>{formatRecordBytes(upload.sizeBytes)}</p><time className="mt-1 block">{formatRecordDate(upload.createdAt)}</time></TableCell>
+                  <TableCell className="pr-5 text-right"><Link href={actionHref} className={buttonVariants({ size: "sm" })}>{upload.primaryReviewPublicId ? "处理异常" : "查看详情"}<ArrowRight aria-hidden="true" /></Link></TableCell>
+                </TableRow>
+              );
+            })}
+          </TableBody>
+        </Table>
       </div>
 
       {result.items.length === 0 ? (
@@ -88,15 +76,15 @@ export function VideoRecordsPanel({ query, result }: { query: VideoRecordsQuery;
         </div>
       ) : null}
 
-      {result.nextCursor ? <Link href={recordsHref(query, result.nextCursor)} className={buttonVariants({ variant: "outline" })}>下一页<ArrowRight className="size-4" /></Link> : null}
+      <TablePagination pathname="/records" query={query} pagination={result} />
     </section>
   );
 }
 
-function SessionValue({ label, value, empty }: { label: string; value: string | null; empty: string }) {
-  return <div><p className="text-xs font-semibold text-[var(--muted)]">{label}</p>{value ? <Link href={`/records?tab=sessions&search=${encodeURIComponent(value)}&status=all`} className="mt-1 block break-all font-semibold underline decoration-[var(--signal)] underline-offset-4">{value}</Link> : <p className="mt-1 font-semibold">{empty}</p>}</div>;
+function SessionLink({ value, empty }: { value: string | null; empty: string }) {
+  return value ? <Link href={`/records?tab=sessions&search=${encodeURIComponent(value)}&status=all`} className="break-all font-semibold underline decoration-[var(--signal)] underline-offset-4">{value}</Link> : <span>{empty}</span>;
 }
 
-function StatusItem({ label, value, warning }: { label: string; value: string; warning: boolean }) {
-  return <div className="rounded-xl border border-[var(--line)] bg-white/55 p-3"><dt className="text-[0.6875rem] font-semibold tracking-[0.06em] text-[var(--muted)]">{label}</dt><dd className={`mt-1 flex items-start gap-1.5 break-words text-sm font-semibold ${warning ? "text-[var(--destructive)]" : "text-[var(--ink)]"}`}>{warning ? <WarningCircle className="mt-0.5 size-4 shrink-0" weight="fill" aria-hidden="true" /> : <CheckCircle className="mt-0.5 size-4 shrink-0 text-[var(--signal-dark)]" weight="fill" aria-hidden="true" />}{value}</dd></div>;
+function StatusLine({ label, value, warning }: { label: string; value: string; warning: boolean }) {
+  return <p className={`leading-6 ${warning ? "font-semibold text-[var(--destructive)]" : "text-[var(--muted)]"}`}><span className="font-semibold text-[var(--ink)]">{label}：</span>{value}</p>;
 }

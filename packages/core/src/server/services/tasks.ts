@@ -11,6 +11,7 @@ import {
 import { DomainError } from "@egocapture/core/domain/errors";
 import { createPublicId } from "@egocapture/core/domain/public-id";
 import { isCanonicalLocale } from "@egocapture/core/domain/regional-preferences";
+import { createPageResult, pageNumberSchema, pageSizeSchema, resolvePage } from "@egocapture/core/pagination";
 import {
   taskContentHash,
   taskInstructionsSchema,
@@ -41,8 +42,8 @@ export const updateTaskSchema = z.object({
 export const taskListSchema = z.object({
   search: z.string().trim().max(160).optional(),
   lifecycle: z.enum(["draft", "active", "archived"]).optional(),
-  cursor: taskPublicIdSchema.optional(),
-  limit: z.coerce.number().int().min(1).max(50).default(25),
+  page: pageNumberSchema,
+  pageSize: pageSizeSchema(25, 50),
 });
 
 export const createAssignmentSchema = z.object({
@@ -93,8 +94,8 @@ export const assignmentListSchema = z.object({
     "assigned", "acknowledged", "session_created", "uploading", "submitted",
     "needs_review", "rework_required", "accepted", "expired", "missing_upload", "canceled",
   ]).optional(),
-  cursor: assignmentPublicIdSchema.optional(),
-  limit: z.coerce.number().int().min(1).max(50).default(25),
+  page: pageNumberSchema,
+  pageSize: pageSizeSchema(25, 50),
 });
 
 export const acknowledgeAssignmentSchema = z.object({
@@ -109,6 +110,18 @@ export const extendAssignmentSchema = assignmentReasonSchema.extend({
 
 export async function listTasks(_viewer: Viewer, input: z.infer<typeof taskListSchema>) {
   const db = database();
+  const filters = db`
+    where (${input.search ?? null}::text is null
+        or task.public_id ilike '%' || ${input.search ?? ""} || '%'
+        or task.title ilike '%' || ${input.search ?? ""} || '%')
+      and (${input.lifecycle ?? null}::text is null or task.lifecycle = ${input.lifecycle ?? ""})
+  `;
+  const [count] = await db<{ totalItems: number }[]>`
+    select count(*)::integer as total_items
+    from egocapture.tasks task
+    ${filters}
+  `;
+  const pagination = resolvePage(count?.totalItems ?? 0, input.page, input.pageSize);
   const rows = await db<{
     publicId: string;
     title: string;
@@ -177,16 +190,12 @@ export async function listTasks(_viewer: Viewer, input: z.infer<typeof taskListS
         and plan.removed_at is null
         and plan.assignment_id is null
     ) planned on true
-    where (${input.search ?? null}::text is null
-        or task.public_id ilike '%' || ${input.search ?? ""} || '%'
-        or task.title ilike '%' || ${input.search ?? ""} || '%')
-      and (${input.lifecycle ?? null}::text is null or task.lifecycle = ${input.lifecycle ?? ""})
-      and (${input.cursor ?? null}::text is null or task.public_id > ${input.cursor ?? ""})
+    ${filters}
     order by task.public_id
-    limit ${input.limit + 1}
+    limit ${pagination.pageSize}
+    offset ${pagination.offset}
   `;
-  const hasNext = rows.length > input.limit;
-  const items = rows.slice(0, input.limit).map((task) => ({
+  const items = rows.map((task) => ({
     ...task,
     operationalStatus: task.lifecycle === "archived"
       ? "archived"
@@ -200,7 +209,7 @@ export async function listTasks(_viewer: Viewer, input: z.infer<typeof taskListS
               ? "needs_attention"
               : "running",
   }));
-  return { items, nextCursor: hasNext ? items.at(-1)?.publicId ?? null : null };
+  return createPageResult(items, pagination);
 }
 
 export async function getTask(_viewer: Viewer, taskPublicId: string) {
@@ -795,6 +804,24 @@ export async function listAssignments(
   input: z.infer<typeof assignmentListSchema>,
 ) {
   const db = database();
+  const source = db`
+    from egocapture.assignments assignment
+    join egocapture.participants participant on participant.id = assignment.participant_id
+    join egocapture.task_versions version on version.id = assignment.task_version_id
+    join egocapture.tasks task on task.id = version.task_id
+    join egocapture.assignment_progress progress on progress.id = assignment.id
+    where (${input.search ?? null}::text is null
+        or assignment.public_id ilike '%' || ${input.search ?? ""} || '%'
+        or participant.public_id ilike '%' || ${input.search ?? ""} || '%'
+        or participant.display_alias ilike '%' || ${input.search ?? ""} || '%'
+        or task.title ilike '%' || ${input.search ?? ""} || '%')
+      and (${input.status ?? null}::text is null or assignment.status = ${input.status ?? ""})
+  `;
+  const [count] = await db<{ totalItems: number }[]>`
+    select count(*)::integer as total_items
+    ${source}
+  `;
+  const pagination = resolvePage(count?.totalItems ?? 0, input.page, input.pageSize);
   const rows = await db<{
     publicId: string;
     status: AssignmentStatus;
@@ -816,24 +843,12 @@ export async function listAssignments(
       version.instructions ->> 'title' as task_title,
       version.version as task_version,
       progress.is_missing
-    from egocapture.assignments assignment
-    join egocapture.participants participant on participant.id = assignment.participant_id
-    join egocapture.task_versions version on version.id = assignment.task_version_id
-    join egocapture.tasks task on task.id = version.task_id
-    join egocapture.assignment_progress progress on progress.id = assignment.id
-    where (${input.search ?? null}::text is null
-        or assignment.public_id ilike '%' || ${input.search ?? ""} || '%'
-        or participant.public_id ilike '%' || ${input.search ?? ""} || '%'
-        or participant.display_alias ilike '%' || ${input.search ?? ""} || '%'
-        or task.title ilike '%' || ${input.search ?? ""} || '%')
-      and (${input.status ?? null}::text is null or assignment.status = ${input.status ?? ""})
-      and (${input.cursor ?? null}::text is null or assignment.public_id > ${input.cursor ?? ""})
+    ${source}
     order by assignment.public_id
-    limit ${input.limit + 1}
+    limit ${pagination.pageSize}
+    offset ${pagination.offset}
   `;
-  const hasNext = rows.length > input.limit;
-  const items = rows.slice(0, input.limit);
-  return { items, nextCursor: hasNext ? items.at(-1)?.publicId ?? null : null };
+  return createPageResult(rows, pagination);
 }
 
 export async function createAssignment(

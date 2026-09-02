@@ -6,10 +6,7 @@ import { auditListSchema, listAuditEvents } from "@egocapture/core/server/servic
 export async function GET(request: Request) {
   return routeHandler(request, async (requestId) => {
     const viewer = await requireApiAdmin();
-    const params = new URL(request.url).searchParams;
-    return apiSuccess(await listAuditEvents(viewer, auditListSchema.parse({
-      cursor: params.get("cursor") || undefined,
-      limit: params.get("limit") || undefined,
-    })), requestId);
+    const input = auditListSchema.parse(Object.fromEntries(new URL(request.url).searchParams));
+    return apiSuccess(await listAuditEvents(viewer, input), requestId);
   });
 }

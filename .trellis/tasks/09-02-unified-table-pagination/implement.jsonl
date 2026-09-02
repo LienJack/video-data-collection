@@ -1,0 +1,7 @@
+{"file":".trellis/tasks/09-02-unified-table-pagination/prd.md","reason":"Authoritative approved scope, pagination behavior, table inventory, and acceptance criteria."}
+{"file":".trellis/tasks/09-02-unified-table-pagination/design.md","reason":"Page contract, query ordering, URL composition, table mapping, compatibility, and rollback design."}
+{"file":".trellis/tasks/09-02-participant-table-experience/prd.md","reason":"Parent integration constraints and parallel-task exclusions."}
+{"file":".trellis/spec/admin-web/frontend/index.md","reason":"Admin frontend package guidance index."}
+{"file":".trellis/spec/core/frontend/index.md","reason":"Core package guidance index for shared pagination contracts."}
+{"file":".trellis/spec/ui/frontend/index.md","reason":"UI package guidance index for semantic tables."}
+{"file":".trellis/spec/guides/code-reuse-thinking-guide.md","reason":"Shared pagination and URL helper reuse checklist."}

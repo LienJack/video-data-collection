@@ -11,11 +11,11 @@ test("管理员从任务进入人员与上传工作台", async ({ page }) => {
   await page.getByRole("button", { name: "进入管理控制台" }).click();
   await expect(page).toHaveURL(/\/dashboard$/);
 
-  await page.goto(`${adminOrigin}/tasks`);
+  await page.goto(`${adminOrigin}/tasks?search=TSK-23456784`);
   await expect(page.getByRole("heading", { name: "采集任务" })).toBeVisible();
-  const taskLink = page.getByRole("link").filter({ hasText: "TSK-23456784" });
-  await expect(taskLink).toContainText("整理桌面");
-  await taskLink.click();
+  const taskRow = page.getByRole("row").filter({ hasText: "TSK-23456784" });
+  await expect(taskRow).toContainText("整理桌面");
+  await taskRow.getByRole("link", { name: "整理桌面" }).click();
 
   await expect(page.getByRole("heading", { name: "整理桌面" })).toBeVisible();
   await expect(page.getByText("一个任务对应一组参与者。每个人拥有独立进度、Session 和视频，人员调整不会改写历史。"))
