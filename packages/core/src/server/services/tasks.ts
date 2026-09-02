@@ -10,6 +10,7 @@ import {
 } from "@egocapture/core/domain/assignment";
 import { DomainError } from "@egocapture/core/domain/errors";
 import { createPublicId } from "@egocapture/core/domain/public-id";
+import { isCanonicalLocale } from "@egocapture/core/domain/regional-preferences";
 import {
   taskContentHash,
   taskInstructionsSchema,
@@ -25,6 +26,9 @@ const taskPublicIdSchema = z.string().regex(/^TSK-[23456789ABCDEFGHJKLMNPQRSTUVW
 const participantPublicIdSchema = z.string().regex(/^PT-[23456789ABCDEFGHJKLMNPQRSTUVWXYZ]{6,16}$/);
 const devicePublicIdSchema = z.string().regex(/^DEV-[23456789ABCDEFGHJKLMNPQRSTUVWXYZ]{6,16}$/);
 const assignmentPublicIdSchema = z.string().regex(/^AS-[23456789ABCDEFGHJKLMNPQRSTUVWXYZ]{6,16}$/);
+const localeSchema = z.string().trim().min(2).max(20).refine(isCanonicalLocale, {
+  message: "Locale 必须是规范的 BCP 47 标识",
+});
 
 export const createTaskSchema = z.object({
   studyPublicId: studyPublicIdSchema,
@@ -49,7 +53,7 @@ export const createAssignmentSchema = z.object({
   taskPublicId: taskPublicIdSchema,
   taskVersion: z.number().int().positive(),
   dueAt: z.string().datetime({ offset: true }),
-  locale: z.string().trim().min(2).max(20).optional(),
+  locale: localeSchema.optional(),
   preferredDevicePublicId: devicePublicIdSchema.nullable().optional(),
   note: z.string().trim().max(500).nullable().optional(),
 });

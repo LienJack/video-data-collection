@@ -11,6 +11,11 @@ import {
 } from "@egocapture/core/domain/invitation";
 import { assertParticipantTransition, type ParticipantStatus } from "@egocapture/core/domain/participant";
 import { createPublicId } from "@egocapture/core/domain/public-id";
+import {
+  isCanonicalLocale,
+  isSupportedCountryCode,
+  isSupportedTimezone,
+} from "@egocapture/core/domain/regional-preferences";
 import { writeAudit } from "@egocapture/core/server/audit";
 import type { Viewer } from "@egocapture/core/server/auth";
 import { database } from "@egocapture/core/server/database";
@@ -18,13 +23,23 @@ import { serverEnvironment } from "@egocapture/core/server/env";
 import { withIdempotency } from "@egocapture/core/server/idempotency";
 import { createSupabaseAdminClient } from "@egocapture/core/server/supabase/admin";
 
+const localeSchema = z.string().trim().min(2).max(20).refine(isCanonicalLocale, {
+  message: "Locale 必须是规范的 BCP 47 标识",
+});
+const timezoneSchema = z.string().trim().min(3).max(64).refine(isSupportedTimezone, {
+  message: "Timezone 必须是受支持的 IANA 时区",
+});
+const countryRegionSchema = z.string().trim().length(2).refine(isSupportedCountryCode, {
+  message: "Country / Region 必须是受支持的 ISO 3166-1 alpha-2 代码",
+});
+
 export const createParticipantSchema = z.object({
   studyPublicId: z.string().regex(/^ST-[23456789ABCDEFGHJKLMNPQRSTUVWXYZ]{6,16}$/),
   displayAlias: z.string().trim().min(1).max(120),
   managementEmail: z.string().trim().email().max(254).nullable().optional(),
-  locale: z.string().trim().min(2).max(20).default("zh-CN"),
-  timezone: z.string().trim().min(3).max(64).default("Asia/Shanghai"),
-  countryRegion: z.string().trim().max(80).nullable().optional(),
+  locale: localeSchema.default("zh-CN"),
+  timezone: timezoneSchema.default("Asia/Shanghai"),
+  countryRegion: countryRegionSchema.nullable().optional(),
   consentVersion: z.string().trim().min(1).max(40),
   notes: z.string().trim().max(500).nullable().optional(),
 });
@@ -34,8 +49,8 @@ export const participantListSchema = z.object({
   status: z.enum(["draft", "invited", "expired", "active", "suspended", "withdrawn"]).optional(),
   consentStatus: z.enum(["pending", "valid", "expired", "withdrawn"]).optional(),
   studyPublicId: z.string().regex(/^ST-[23456789ABCDEFGHJKLMNPQRSTUVWXYZ]{6,16}$/).optional(),
-  locale: z.string().trim().min(2).max(20).optional(),
-  countryRegion: z.string().trim().max(80).optional(),
+  locale: localeSchema.optional(),
+  countryRegion: countryRegionSchema.optional(),
   missing: z.enum(["yes", "no"]).optional(),
   needsReview: z.enum(["yes", "no"]).optional(),
   cursor: z.string().regex(/^PT-[23456789ABCDEFGHJKLMNPQRSTUVWXYZ]{6,16}$/).optional(),
@@ -47,9 +62,9 @@ export const participantReasonSchema = z.object({ reason: z.string().trim().min(
 export const updateParticipantSchema = z.object({
   displayAlias: z.string().trim().min(1).max(120).optional(),
   managementEmail: z.string().trim().email().max(254).nullable().optional(),
-  locale: z.string().trim().min(2).max(20).optional(),
-  timezone: z.string().trim().min(3).max(64).optional(),
-  countryRegion: z.string().trim().max(80).nullable().optional(),
+  locale: localeSchema.optional(),
+  timezone: timezoneSchema.optional(),
+  countryRegion: countryRegionSchema.nullable().optional(),
   notes: z.string().trim().max(500).nullable().optional(),
   expectedUpdatedAt: z.string().datetime(),
 }).refine((value) => Object.keys(value).some((key) => key !== "expectedUpdatedAt"), {

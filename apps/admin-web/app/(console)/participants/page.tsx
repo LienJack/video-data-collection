@@ -3,6 +3,7 @@ import { MagnifyingGlass, Plus } from "@phosphor-icons/react/dist/ssr";
 import { requireAdmin } from "@/lib/auth";
 import { database } from "@egocapture/core/server/database";
 import { listParticipants, participantListSchema } from "@egocapture/core/server/services/participants";
+import { CountrySelect, LocaleSelect } from "@/app/_components/regional-preferences-fields";
 
 export const dynamic = "force-dynamic";
 
@@ -59,8 +60,8 @@ export default async function ParticipantsPage({ searchParams }: { searchParams:
         </select>
         <select name="consentStatus" aria-label="Consent" defaultValue={query.consentStatus ?? ""} className="border border-[var(--line)] bg-[var(--paper)] px-3"><option value="">全部 Consent</option>{["pending", "valid", "expired", "withdrawn"].map((value) => <option key={value} value={value}>{value}</option>)}</select>
         <select name="studyPublicId" aria-label="Study" defaultValue={query.studyPublicId ?? ""} className="border border-[var(--line)] bg-[var(--paper)] px-3"><option value="">全部 Study</option>{studies.map((study) => <option key={study.publicId} value={study.publicId}>{study.name} · {study.publicId}</option>)}</select>
-        <input name="locale" defaultValue={query.locale} placeholder="Locale，例如 zh-CN" className="border border-[var(--line)] bg-[var(--paper)] px-3 py-3" />
-        <input name="countryRegion" defaultValue={query.countryRegion} placeholder="Country / Region" className="border border-[var(--line)] bg-[var(--paper)] px-3 py-3" />
+        <LocaleSelect name="locale" defaultValue={query.locale} blankLabel="全部 Locale" aria-label="Locale" className="border border-[var(--line)] bg-[var(--paper)] px-3 py-3" />
+        <CountrySelect name="countryRegion" defaultValue={query.countryRegion} blankLabel="全部 Country / Region" aria-label="Country / Region" className="border border-[var(--line)] bg-[var(--paper)] px-3 py-3" />
         <select name="missing" aria-label="Missing" defaultValue={query.missing ?? ""} className="border border-[var(--line)] bg-[var(--paper)] px-3"><option value="">全部 Missing 状态</option><option value="yes">仅 Missing</option><option value="no">排除 Missing</option></select>
         <select name="needsReview" aria-label="Needs Review" defaultValue={query.needsReview ?? ""} className="border border-[var(--line)] bg-[var(--paper)] px-3"><option value="">全部 Review 状态</option><option value="yes">仅 Needs Review</option><option value="no">排除 Needs Review</option></select>
         <button className="primary-action">筛选</button>

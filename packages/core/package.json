@@ -9,6 +9,8 @@
   "dependencies": {
     "@supabase/ssr": "0.12.5",
     "@supabase/supabase-js": "2.112.4",
+    "countries-and-timezones": "3.10.0",
+    "countries-list": "3.4.1",
     "jose": "6.2.10",
     "mediainfo.js": "0.3.7",
     "mp4box": "2.4.1",

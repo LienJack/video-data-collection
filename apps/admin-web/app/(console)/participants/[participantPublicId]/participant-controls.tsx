@@ -2,6 +2,7 @@
 
 import { useRouter } from "next/navigation";
 import { useState, type FormEvent } from "react";
+import { RegionalPreferencesFields } from "@/app/_components/regional-preferences-fields";
 
 type Device = {
   publicId: string;
@@ -173,9 +174,13 @@ export function ParticipantControls({
         <form onSubmit={updateProfile} className="mt-5 grid gap-4 sm:grid-cols-2">
           <label className="text-xs font-bold uppercase tracking-[0.12em]">Display Alias<input name="displayAlias" required maxLength={120} defaultValue={profile.displayAlias} className={`mt-2 ${field}`} /></label>
           <label className="text-xs font-bold uppercase tracking-[0.12em]">Management Email<input name="managementEmail" type="email" defaultValue={profile.managementEmail ?? ""} className={`mt-2 ${field}`} /></label>
-          <label className="text-xs font-bold uppercase tracking-[0.12em]">Locale<input name="locale" required defaultValue={profile.locale} className={`mt-2 ${field}`} /></label>
-          <label className="text-xs font-bold uppercase tracking-[0.12em]">Timezone<input name="timezone" required defaultValue={profile.timezone} className={`mt-2 ${field}`} /></label>
-          <label className="text-xs font-bold uppercase tracking-[0.12em] sm:col-span-2">Country / Region<input name="countryRegion" maxLength={80} defaultValue={profile.countryRegion ?? ""} className={`mt-2 ${field}`} /></label>
+          <RegionalPreferencesFields
+            defaultCountry={profile.countryRegion}
+            defaultLocale={profile.locale}
+            defaultTimezone={profile.timezone}
+            fieldClassName={`mt-2 ${field}`}
+            labelClassName="text-xs font-bold uppercase tracking-[0.12em]"
+          />
           <label className="text-xs font-bold uppercase tracking-[0.12em] sm:col-span-2">Notes<textarea name="notes" maxLength={500} defaultValue={profile.notes ?? ""} className={`mt-2 min-h-24 ${field}`} /><span className="mt-1 block font-normal normal-case text-[var(--muted)]">最多 500 字；请勿写姓名、住址、证件号等敏感信息。</span></label>
           <button disabled={Boolean(busy) || fixtureProtected} className="bg-[var(--teal)] px-4 py-3 font-bold text-white sm:col-span-2">{busy === "profile" ? "保存中…" : "保存 Participant 资料"}</button>
         </form>

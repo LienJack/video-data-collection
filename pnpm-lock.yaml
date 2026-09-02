@@ -209,6 +209,12 @@ importers:
       '@supabase/supabase-js':
         specifier: 2.112.4
         version: 2.112.4
+      countries-and-timezones:
+        specifier: 3.10.0
+        version: 3.10.0
+      countries-list:
+        specifier: 3.4.1
+        version: 3.4.1
       jose:
         specifier: 6.2.10
         version: 6.2.10
@@ -1771,6 +1777,13 @@ packages:
   cookie@1.1.1:
     resolution: {integrity: sha512-ei8Aos7ja0weRpFzJnEA9UHJ/7XQmqglbRwnf2ATjcB9Wq874VKH9kfjjirM6UhU2/E5fFYadylyhFldcqSidQ==}
     engines: {node: '>=18'}
+
+  countries-and-timezones@3.10.0:
+    resolution: {integrity: sha512-HQ1GtXWNZy0r5MnZMLF9xmBmFNmtDVBeKQgX/5DY+RVmcZTODA+EPN/JLPCYRNP86nHG0QQrb1yJwGzXeqCCXw==}
+    engines: {node: '>=8.x', npm: '>=5.x'}
+
+  countries-list@3.4.1:
+    resolution: {integrity: sha512-sKLGAZD5EAdzQwQ19vOp/9u33MTjmZ0CkdXPYtp/An6cyIlJ/E8TwGf2FcPe1AnzHO+h7nbTfoHyXIi58Hpa+Q==}
 
   cross-spawn@7.0.6:
     resolution: {integrity: sha512-uV2QOWP2nWzsy2aMp8aRibhi9dlzF5Hgh5SHaB9OiTGEyDTiJJyx0uy51QXdyWbtAHNua4XJzUKca3OzKUd3vA==}
@@ -4702,6 +4715,10 @@ snapshots:
   convert-source-map@2.0.0: {}
 
   cookie@1.1.1: {}
+
+  countries-and-timezones@3.10.0: {}
+
+  countries-list@3.4.1: {}
 
   cross-spawn@7.0.6:
     dependencies:
