@@ -107,7 +107,7 @@ async function main() {
     const participantBody = {
       displayAlias: "Participant Check", managementEmail: null,
       locale: "zh-CN", timezone: "Asia/Shanghai", countryRegion: "CN",
-      consentVersion: "check-v1", notes: "Synthetic participant integration check",
+      notes: "Synthetic participant integration check",
     };
     const participantKey = randomUUID();
     const created = await api<{ data?: { participantPublicId: string } }>(env.adminSiteUrl, "/api/admin/participants", {

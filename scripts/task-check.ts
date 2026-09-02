@@ -54,35 +54,35 @@ async function main() {
     await db`
       insert into egocapture.participants (
         id, public_id, auth_user_id, display_alias, status, consent_status,
-        consent_version, is_fixture, created_by
+        is_fixture, created_by
       ) values (
         ${participantId}::uuid, ${participantPublicId}, ${participantUserId}::uuid,
-        'Task Integration Participant', 'active', 'valid', 'task-check-v1', true, ${adminProfile.id}::uuid
+        'Task Integration Participant', 'active', 'valid', true, ${adminProfile.id}::uuid
       )
     `;
     await db`
-      insert into egocapture.consent_records (participant_id, version, status, recorded_by, accepted_at)
-      values (${participantId}::uuid, 'task-check-v1', 'accepted', ${participantProfile.id}::uuid, now())
+      insert into egocapture.consent_records (participant_id, status, recorded_by, accepted_at)
+      values (${participantId}::uuid, 'accepted', ${participantProfile.id}::uuid, now())
     `;
     await db`
       insert into egocapture.participants (
         id, public_id, display_alias, status, consent_status,
-        consent_version, is_fixture, created_by
+        is_fixture, created_by
       ) values
         (
           ${secondaryParticipantId}::uuid, ${secondaryParticipantPublicId},
-          'Task Integration Secondary', 'active', 'valid', 'task-check-v1', true, ${adminProfile.id}::uuid
+          'Task Integration Secondary', 'active', 'valid', true, ${adminProfile.id}::uuid
         ),
         (
           ${replacementParticipantId}::uuid, ${replacementParticipantPublicId},
-          'Task Integration Replacement', 'active', 'valid', 'task-check-v1', true, ${adminProfile.id}::uuid
+          'Task Integration Replacement', 'active', 'valid', true, ${adminProfile.id}::uuid
         )
     `;
     await db`
-      insert into egocapture.consent_records (participant_id, version, status, recorded_by, accepted_at)
+      insert into egocapture.consent_records (participant_id, status, recorded_by, accepted_at)
       values
-        (${secondaryParticipantId}::uuid, 'task-check-v1', 'accepted', ${adminProfile.id}::uuid, now()),
-        (${replacementParticipantId}::uuid, 'task-check-v1', 'accepted', ${adminProfile.id}::uuid, now())
+        (${secondaryParticipantId}::uuid, 'accepted', ${adminProfile.id}::uuid, now()),
+        (${replacementParticipantId}::uuid, 'accepted', ${adminProfile.id}::uuid, now())
     `;
     await db`
       insert into egocapture.devices (

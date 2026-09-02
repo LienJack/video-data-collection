@@ -204,12 +204,12 @@ async function main() {
       await transaction`
         insert into egocapture.participants (
           id, public_id, auth_user_id, display_alias, locale, timezone,
-          country_region, status, consent_status, notes, is_fixture, created_by, consent_version
+          country_region, status, consent_status, notes, is_fixture, created_by
         ) values (
           ${ids.participant}::uuid, ${publicIds.participant},
           ${participantUser.id}::uuid, 'Participant Demo', 'zh-CN', 'Asia/Shanghai',
           'Demo Region', 'active', 'valid', 'Synthetic fixture. Do not enter PII.', true,
-          ${ids.adminProfile}::uuid, 'demo-consent-v1'
+          ${ids.adminProfile}::uuid
         )
         on conflict (id) do update set
           auth_user_id = excluded.auth_user_id, display_alias = excluded.display_alias,
@@ -218,9 +218,9 @@ async function main() {
       `;
       await transaction`
         insert into egocapture.consent_records (
-          id, participant_id, version, status, recorded_by, accepted_at
+          id, participant_id, status, recorded_by, accepted_at
         ) values (
-          ${ids.consent}::uuid, ${ids.participant}::uuid, 'demo-consent-v1', 'accepted',
+          ${ids.consent}::uuid, ${ids.participant}::uuid, 'accepted',
           ${ids.adminProfile}::uuid, '2026-09-01T00:00:00Z'
         ) on conflict (id) do nothing
       `;

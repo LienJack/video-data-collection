@@ -160,15 +160,15 @@ async function main() {
     await db`
       insert into egocapture.participants (
         id, public_id, auth_user_id, display_alias, status, consent_status,
-        consent_version, is_fixture
+        is_fixture
       ) values (
         ${participantId}::uuid, ${participantPublicId}, ${participantUserId}::uuid,
-        'TUS Upload Fixture', 'active', 'valid', 'upload-check-v1', true
+        'TUS Upload Fixture', 'active', 'valid', true
       )
     `;
     await db`
-      insert into egocapture.consent_records (participant_id, version, status, recorded_by, accepted_at)
-      values (${participantId}::uuid, 'upload-check-v1', 'accepted', ${participantProfile.id}::uuid, now())
+      insert into egocapture.consent_records (participant_id, status, recorded_by, accepted_at)
+      values (${participantId}::uuid, 'accepted', ${participantProfile.id}::uuid, now())
     `;
     await db`
       insert into egocapture.devices (

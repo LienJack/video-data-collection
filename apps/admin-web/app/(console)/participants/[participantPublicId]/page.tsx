@@ -23,7 +23,7 @@ export default async function ParticipantDetailPage({ params }: { params: Promis
       <div className="grid gap-8 py-8 xl:grid-cols-[0.8fr_1.2fr]">
         <Card className="h-fit space-y-3 p-6">
           {[
-            ["Status", participant.status], ["Consent", `${participant.consentStatus} · ${participant.consentVersion}`],
+            ["Status", participant.status], ["Consent", participant.consentStatus],
             ["Locale", `${participant.locale} · ${participant.timezone}`], ["Region", participant.countryRegion || "—"],
             ["Management email", participant.managementEmail || "—"], ["Default device", participant.defaultDevicePublicId || "—"],
           ].map(([label, value]) => <div key={label} className="grid grid-cols-[140px_1fr] border-b border-[var(--line)] py-3 text-sm"><span className="font-bold text-[var(--muted)]">{label}</span><span>{value}</span></div>)}

@@ -27,7 +27,6 @@ export function NewParticipantForm() {
         locale: form.get("locale"),
         timezone: form.get("timezone"),
         countryRegion: form.get("countryRegion") || null,
-        consentVersion: form.get("consentVersion"),
         notes: form.get("notes") || null,
       }),
     });
@@ -44,7 +43,6 @@ export function NewParticipantForm() {
     <form onSubmit={submit} className="mt-8 grid gap-6 border border-[var(--line)] bg-white/30 p-6 sm:grid-cols-2 sm:p-8">
       <Label className="text-sm font-semibold">Display Alias<Input name="displayAlias" maxLength={120} required className={inputClass} /></Label>
       <Label className="text-sm font-semibold">管理邮箱（不发送邮件）<Input name="managementEmail" type="email" maxLength={254} className={inputClass} /></Label>
-      <Label className="text-sm font-semibold">Consent Version<Input name="consentVersion" defaultValue="demo-consent-v1" maxLength={40} required className={inputClass} /></Label>
       <RegionalPreferencesFields fieldClassName={inputClass} labelClassName="text-sm font-semibold" />
       <Label className="text-sm font-semibold sm:col-span-2">Notes<Textarea name="notes" maxLength={500} rows={4} className={inputClass} /><span className="mt-2 block text-xs font-normal text-[var(--muted)]">最多 500 字，请勿填写姓名、电话等敏感信息。</span></Label>
       {error ? <Alert variant="destructive" className="sm:col-span-2"><AlertDescription>{error}</AlertDescription></Alert> : null}

@@ -58,7 +58,6 @@ test("Admin 建档到 Participant 上传与不可变纠正的完整闭环", asyn
 
     await page.goto(`${adminOrigin}/participants/new`);
     await page.getByLabel("Display Alias").fill(alias);
-    await page.getByLabel("Consent Version").fill("e2e-consent-v1");
     await page.getByLabel("Notes").fill("Synthetic Playwright acceptance identity without PII");
     await page.getByRole("button", { name: "创建 Draft Participant" }).click();
     await expect(page).toHaveURL(/\/participants\/PT-/);
@@ -73,7 +72,7 @@ test("Admin 建档到 Participant 上传与不可变纠正的完整闭环", asyn
     await logout(page);
     await page.goto(invitationUrl);
     await page.getByLabel("设置密码").fill(participantPassword);
-    await page.getByLabel("再次输入").fill(participantPassword);
+    await page.getByLabel("再次输入", { exact: true }).fill(participantPassword);
     await page.getByRole("button", { name: "接受邀请并进入任务" }).click();
     await expect(page).toHaveURL(/\/tasks$/);
 
@@ -109,7 +108,8 @@ test("Admin 建档到 Participant 上传与不可变纠正的完整闭环", asyn
     await expect(page).toHaveURL(/\/tasks\/TSK-/);
     taskPublicId = publicId(page.url(), "TSK");
     await page.getByRole("button", { name: "发布新版本" }).click();
-    await expect(page.getByText("Version 1", { exact: true })).toBeVisible();
+    await page.getByRole("link", { name: "任务说明" }).click();
+    await expect(page.getByText("版本 1", { exact: true })).toBeVisible();
 
     await page.goto(`${adminOrigin}/assignments/new`);
     await page.getByLabel("Participant").selectOption(participantPublicId);

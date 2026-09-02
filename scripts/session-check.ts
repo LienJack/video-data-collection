@@ -60,29 +60,29 @@ async function main() {
     await db`
       insert into egocapture.participants (
         id, public_id, auth_user_id, display_alias, status, consent_status,
-        consent_version, is_fixture, created_by
+        is_fixture, created_by
       ) values (
         ${participantId}::uuid, ${participantPublicId}, ${participantUserId}::uuid,
-        'Session Integration Participant', 'active', 'valid', 'session-check-v1', true, ${adminProfile.id}::uuid
+        'Session Integration Participant', 'active', 'valid', true, ${adminProfile.id}::uuid
       )
     `;
     await db`
-      insert into egocapture.consent_records (participant_id, version, status, recorded_by, accepted_at)
-      values (${participantId}::uuid, 'session-check-v1', 'accepted', ${participantProfile.id}::uuid, now())
+      insert into egocapture.consent_records (participant_id, status, recorded_by, accepted_at)
+      values (${participantId}::uuid, 'accepted', ${participantProfile.id}::uuid, now())
     `;
     await db`
       insert into egocapture.participants (
         id, public_id, display_alias, status, consent_status,
-        consent_version, is_fixture, created_by
+        is_fixture, created_by
       ) values (
         ${backupParticipantId}::uuid, ${backupParticipantPublicId},
         'Session Integration Backup Participant', 'active', 'valid',
-        'session-check-v1', true, ${adminProfile.id}::uuid
+        true, ${adminProfile.id}::uuid
       )
     `;
     await db`
-      insert into egocapture.consent_records (participant_id, version, status, recorded_by, accepted_at)
-      values (${backupParticipantId}::uuid, 'session-check-v1', 'accepted', ${adminProfile.id}::uuid, now())
+      insert into egocapture.consent_records (participant_id, status, recorded_by, accepted_at)
+      values (${backupParticipantId}::uuid, 'accepted', ${adminProfile.id}::uuid, now())
     `;
     await db`
       insert into egocapture.devices (

@@ -39,7 +39,6 @@ export const createParticipantSchema = z.object({
   locale: localeSchema.default("zh-CN"),
   timezone: timezoneSchema.default("Asia/Shanghai"),
   countryRegion: countryRegionSchema.nullable().optional(),
-  consentVersion: z.string().trim().min(1).max(40),
   notes: z.string().trim().max(500).nullable().optional(),
 });
 
@@ -93,7 +92,6 @@ type ParticipantRow = {
   publicId: string;
   status: ParticipantStatus;
   consentStatus: string;
-  consentVersion: string;
   displayAlias: string;
   isFixture: boolean;
 };
@@ -110,7 +108,6 @@ async function participantForAdmin(
       participant.public_id,
       participant.status,
       participant.consent_status,
-      participant.consent_version,
       participant.display_alias,
       participant.is_fixture
     from egocapture.participants participant
@@ -198,7 +195,6 @@ export async function getParticipant(viewer: Viewer, participantPublicId: string
     managementEmail: string | null;
     status: ParticipantStatus;
     consentStatus: string;
-    consentVersion: string;
     locale: string;
     timezone: string;
     countryRegion: string | null;
@@ -215,7 +211,6 @@ export async function getParticipant(viewer: Viewer, participantPublicId: string
       participant.management_email,
       participant.status,
       participant.consent_status,
-      participant.consent_version,
       participant.locale,
       participant.timezone,
       participant.country_region,
@@ -257,7 +252,7 @@ export async function updateParticipant(
     })[]>`
       select
         participant.id, participant.public_id, participant.status,
-        participant.consent_status, participant.consent_version, participant.display_alias,
+        participant.consent_status, participant.display_alias,
         participant.is_fixture, participant.updated_at, participant.management_email,
         participant.locale, participant.timezone, participant.country_region, participant.notes
       from egocapture.participants participant
@@ -340,10 +335,10 @@ export async function createParticipant(
       const [participant] = await transaction<{ id: string; publicId: string }[]>`
         insert into egocapture.participants (
           public_id, display_alias, management_email, locale, timezone,
-          country_region, consent_version, notes, created_by
+          country_region, notes, created_by
         ) values (
           ${publicId}, ${input.displayAlias}, ${input.managementEmail ?? null},
-          ${input.locale}, ${input.timezone}, ${input.countryRegion ?? null}, ${input.consentVersion},
+          ${input.locale}, ${input.timezone}, ${input.countryRegion ?? null},
           ${input.notes ?? null}, ${viewer.profileId}::uuid
         ) returning id, public_id
       `;
@@ -385,7 +380,7 @@ export async function generateInvitation(
       const [participant] = await transaction<ParticipantRow[]>`
         select
           participant.id, participant.public_id, participant.status,
-          participant.consent_status, participant.consent_version, participant.display_alias,
+          participant.consent_status, participant.display_alias,
           participant.is_fixture
         from egocapture.participants participant
         where participant.public_id = ${participantPublicId}
@@ -504,7 +499,7 @@ export async function revokeInvitation(
     const [participant] = await transaction<ParticipantRow[]>`
       select
         participant.id, participant.public_id, participant.status,
-        participant.consent_status, participant.consent_version, participant.display_alias,
+        participant.consent_status, participant.display_alias,
         participant.is_fixture
       from egocapture.participants participant
       where participant.public_id = ${participantPublicId}
@@ -555,7 +550,7 @@ export async function acceptInvitation(token: string, password: string, requestI
       const [invitation] = await transaction<ParticipantRow[]>`
         select
           participant.id, participant.public_id, participant.status,
-          participant.consent_status, participant.consent_version, participant.display_alias,
+          participant.consent_status, participant.display_alias,
           participant.is_fixture
         from egocapture.participant_invitations invitation
         join egocapture.participants participant on participant.id = invitation.participant_id
@@ -594,9 +589,9 @@ export async function acceptInvitation(token: string, password: string, requestI
       `;
       await transaction`
         insert into egocapture.consent_records (
-          participant_id, version, status, recorded_by, accepted_at
+          participant_id, status, recorded_by, accepted_at
         ) values (
-          ${invitation.id}::uuid, ${invitation.consentVersion}, 'accepted', ${profile.id}::uuid, now()
+          ${invitation.id}::uuid, 'accepted', ${profile.id}::uuid, now()
         )
       `;
       await writeAudit(transaction, {
@@ -629,7 +624,7 @@ export async function changeParticipantStatus(
     const [participant] = await transaction<ParticipantRow[]>`
       select
         participant.id, participant.public_id, participant.status,
-        participant.consent_status, participant.consent_version, participant.display_alias,
+        participant.consent_status, participant.display_alias,
         participant.is_fixture
       from egocapture.participants participant
       where participant.public_id = ${participantPublicId}
@@ -654,8 +649,8 @@ export async function changeParticipantStatus(
     `;
     if (targetStatus === "withdrawn") {
       await transaction`
-        insert into egocapture.consent_records (participant_id, version, status, recorded_by, reason)
-        values (${participant.id}::uuid, ${participant.consentVersion}, 'withdrawn', ${viewer.profileId}::uuid, ${reason})
+        insert into egocapture.consent_records (participant_id, status, recorded_by, reason)
+        values (${participant.id}::uuid, 'withdrawn', ${viewer.profileId}::uuid, ${reason})
       `;
     }
     await writeAudit(transaction, {
