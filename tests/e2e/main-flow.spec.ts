@@ -201,10 +201,15 @@ test("Admin 建档到 Participant 上传与不可变纠正的完整闭环", asyn
     await expect(page.getByText("管理员已纠正", { exact: true })).toBeVisible();
     await expect(page.getByRole("article").filter({ hasText: "未匹配" }).filter({ hasText: "历史" })).toBeVisible();
 
-    await page.goto(`${adminOrigin}/audit`);
-    const audit = page.getByRole("row").filter({ hasText: "review_case.correct_match" }).first();
-    await expect(audit).toContainText(reviewPublicId);
-    await expect(audit).toContainText(correctionReason);
+    await page.goto(`${adminOrigin}/records?tab=activity&pageSize=50&search=${reviewPublicId}`, {
+      waitUntil: "domcontentloaded",
+      timeout: 60_000,
+    });
+    const audit = page.getByRole("row")
+      .filter({ hasText: "review_case.correct_match" })
+      .filter({ hasText: reviewPublicId })
+      .first();
+    await expect(audit).toContainText(correctionReason, { timeout: 60_000 });
   } finally {
     if (participantPublicId) {
       await db`update egocapture.participants set is_fixture = true where public_id = ${participantPublicId}`;

@@ -54,10 +54,8 @@ export default async function RecordsPage({ searchParams }: { searchParams: Prom
     { value: "activity", label: i18n.t("adminUi.activityLog") },
   ] as const;
   const query = parseRecordsQuery(await searchParams);
-  const [summary, tab] = await Promise.all([
-    getAdminRecordSummary(viewer),
-    loadTab(viewer, query),
-  ]);
+  const summary = await getAdminRecordSummary(viewer);
+  const tab = await loadTab(viewer, query);
 
   const attentionItems = [
     { label: i18n.t("adminUi.missingUpload"), value: summary.attention.missingUploads, href: "/participants?missing=yes" },
