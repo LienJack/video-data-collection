@@ -1,6 +1,7 @@
 "use client";
 
 import {
+  BookOpenText,
   ClipboardText,
   Pulse,
   Scan,
@@ -21,6 +22,24 @@ const primaryNavigation = [
 function isCurrent(pathname: string, href: string) {
   if (href === "/records") return pathname === "/records" || pathname.startsWith("/uploads/");
   return pathname === href || pathname.startsWith(`${href}/`);
+}
+
+export function SystemGuideLink({ compact = false }: { compact?: boolean }) {
+  const pathname = usePathname();
+  const current = isCurrent(pathname, "/system-guide");
+  return (
+    <Link
+      href="/system-guide"
+      aria-current={current ? "page" : undefined}
+      aria-label={compact ? "系统说明" : undefined}
+      className={compact
+        ? `flex size-11 shrink-0 items-center justify-center rounded-full transition-[background-color,color,transform] ${current ? "bg-white/16 text-white" : "text-white/70 hover:bg-white/10 hover:text-white"}`
+        : `flex min-h-11 items-center gap-2 rounded-full border px-4 text-sm font-semibold shadow-sm outline-none transition-[background-color,border-color,color,transform] focus-visible:ring-2 focus-visible:ring-[var(--ring)] ${current ? "border-[var(--signal)]/20 bg-[var(--teal-soft)] text-[var(--signal-dark)]" : "border-white/80 bg-white/72 text-[var(--muted)] hover:bg-white hover:text-[var(--ink)]"}`}
+    >
+      <BookOpenText className={compact ? "size-5" : "size-[18px]"} weight={current ? "fill" : "duotone"} aria-hidden="true" />
+      {compact ? null : <span>系统说明</span>}
+    </Link>
+  );
 }
 
 export function DesktopNavigation() {

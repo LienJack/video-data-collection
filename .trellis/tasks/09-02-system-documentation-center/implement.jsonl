@@ -1,0 +1,12 @@
+{"file":".trellis/tasks/09-02-system-documentation-center/prd.md","reason":"Authoritative scope, Admin-only access decision, four article requirements, diagram requirements, and acceptance criteria."}
+{"file":".trellis/tasks/09-02-system-documentation-center/design.md","reason":"Protected route, entry placement, article structure, four-diagram contract, current/future truth boundaries, live reference architecture, verification, and rollback."}
+{"file":".trellis/spec/admin-web/frontend/index.md","reason":"Admin frontend guidance index for route, layout, and component conventions."}
+{"file":".trellis/spec/ui/frontend/index.md","reason":"Shared UI guidance index for visual tokens and reusable components."}
+{"file":".trellis/spec/guides/cross-layer-thinking-guide.md","reason":"Checklist for UI, static artifact, auth, and evidence boundary changes."}
+{"file":".trellis/tasks/09-02-system-documentation-center/research/repository-evidence.md","reason":"Portable repository facts and file anchors for Admin auth/navigation, current architecture, TUS behavior, Multipart reservation, and installed Next.js contracts."}
+{"file":".trellis/tasks/09-02-system-documentation-center/research/upload-live-evidence.md","reason":"Portable fixed research synthesis for current TUS, future S3 Multipart, AWS IVS auto-record to S3, authority boundaries, official references, and deferred validation."}
+{"file":"README.md","reason":"Current EgoCapture architecture, two-app topology, authority boundaries, local/public status, and validated product flow."}
+{"file":"docs/acceptance/2026-09-02-local-mvp.md","reason":"Fixed local acceptance evidence used to distinguish implemented behavior from future design."}
+{"file":"apps/admin-web/node_modules/next/dist/docs/01-app/03-api-reference/03-file-conventions/public-folder.md","reason":"Installed Next.js 16.3.4 contract for serving committed interactive HTML assets from public."}
+{"file":"apps/admin-web/node_modules/next/dist/docs/01-app/03-api-reference/03-file-conventions/route-groups.md","reason":"Installed Next.js 16.3.4 contract for adding the protected system-guide route inside the console group."}
+{"file":"apps/admin-web/node_modules/next/dist/docs/01-app/01-getting-started/04-linking-and-navigating.md","reason":"Installed Next.js 16.3.4 navigation behavior for the global guide Link and anchors."}
