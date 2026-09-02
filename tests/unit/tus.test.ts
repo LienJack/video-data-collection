@@ -88,4 +88,18 @@ describe("TUS resume", () => {
     expect(upload.resumeFromPreviousUpload).not.toHaveBeenCalled();
     expect(upload.start).toHaveBeenCalledOnce();
   });
+
+  it("does not start after the owning workflow has been canceled", async () => {
+    const upload = {
+      options: { endpoint: "https://storage.example/upload/resumable" },
+      findPreviousUploads: vi.fn().mockResolvedValue([]),
+      resumeFromPreviousUpload: vi.fn(),
+      start: vi.fn(),
+    } as unknown as Upload;
+
+    await expect(startOrResumeTus(upload, { shouldStart: () => false })).rejects.toThrow(
+      "TUS_START_CANCELED",
+    );
+    expect(upload.start).not.toHaveBeenCalled();
+  });
 });

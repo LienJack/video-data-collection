@@ -5,6 +5,11 @@ import type postgres from "postgres";
 import QRCode from "qrcode";
 import { z } from "zod";
 import { DomainError } from "@egocapture/core/domain/errors";
+import { type AssignmentStatus } from "@egocapture/core/domain/assignment";
+import {
+  assignmentMachine,
+  recordingSessionMachine,
+} from "@egocapture/core/domain/lifecycle-machines";
 import {
   createMarkerPayload,
   markerShortCode,
@@ -18,6 +23,7 @@ import type { Viewer } from "@egocapture/core/server/auth";
 import { database } from "@egocapture/core/server/database";
 import { serverEnvironment } from "@egocapture/core/server/env";
 import { withIdempotency } from "@egocapture/core/server/idempotency";
+import { resolveServiceTransition } from "@egocapture/core/server/state-transition";
 
 const assignmentPublicIdSchema = z.string().regex(/^AS-[23456789ABCDEFGHJKLMNPQRSTUVWXYZ]{6,16}$/);
 const devicePublicIdSchema = z.string().regex(/^DEV-[23456789ABCDEFGHJKLMNPQRSTUVWXYZ]{6,16}$/);
@@ -95,7 +101,7 @@ export async function createSession(
       const [authority] = await transaction<{
         assignmentId: string;
         assignmentPublicId: string;
-        assignmentStatus: string;
+        assignmentStatus: AssignmentStatus;
         participantId: string;
         participantStatus: string;
         consentStatus: string;
@@ -164,9 +170,15 @@ export async function createSession(
         )
       `;
       if (authority.assignmentStatus !== "session_created") {
+        const nextAssignmentStatus = resolveServiceTransition(
+          assignmentMachine,
+          authority.assignmentStatus,
+          "createSession",
+          "INVALID_ASSIGNMENT_STATE",
+        );
         await transaction`
-          update egocapture.assignments set status = 'session_created'
-          where id = ${authority.assignmentId}::uuid
+          update egocapture.assignments set status = ${nextAssignmentStatus}
+          where id = ${authority.assignmentId}::uuid and status = ${authority.assignmentStatus}
         `;
       }
       await writeAudit(transaction, {
@@ -467,10 +479,16 @@ export async function closeSession(
     `;
     if (!session) throw new DomainError("NOT_FOUND", "Recording Session 或资源不存在", 404);
     if (session.status === "closed") return { sessionPublicId, status: "closed" as const };
+    const closedStatus = resolveServiceTransition(
+      recordingSessionMachine,
+      session.status,
+      "close",
+      "INVALID_SESSION_STATE",
+    );
     await transaction`
       update egocapture.recording_sessions
-      set status = 'closed', closed_at = now(), close_reason = ${reason}
-      where id = ${session.id}::uuid
+      set status = ${closedStatus}, closed_at = now(), close_reason = ${reason}
+      where id = ${session.id}::uuid and status = ${session.status}
     `;
     await writeAudit(transaction, {
       actorProfileId: viewer.profileId,

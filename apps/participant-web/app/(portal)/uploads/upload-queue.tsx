@@ -10,6 +10,7 @@ import { Button } from "@egocapture/ui/components/button";
 import { Progress } from "@egocapture/ui/components/progress";
 import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
+import { useActorRef, useSelector } from "@xstate/react";
 import type { Upload } from "tus-js-client";
 import { MAX_FILE_SIZE_BYTES, MAX_FILES_PER_BATCH } from "@egocapture/core/domain/constants";
 import { fingerprintFile } from "@egocapture/core/upload/fingerprint";
@@ -28,6 +29,13 @@ import {
   startOrResumeTus,
   type TusCredential,
 } from "@egocapture/core/upload/tus";
+import {
+  patchUploadQueueItem,
+  uploadQueueItemCapabilities,
+  uploadQueueMachine,
+  type QueueItem,
+  type QueueStatus,
+} from "./upload-queue-machine";
 
 type SessionOption = {
   publicId: string;
@@ -36,39 +44,9 @@ type SessionOption = {
   deviceLabel: string;
 };
 
-type QueueStatus =
-  | "hashing"
-  | "ready"
-  | "preparing"
-  | "uploading"
-  | "paused"
-  | "reconciling"
-  | "verified"
-  | "failed"
-  | "aborted";
-
-type QueueItem = {
-  id: string;
-  file: File;
-  extension: "mp4" | "mov" | "insv";
-  contentType: "video/mp4" | "video/quicktime" | "application/octet-stream";
-  fingerprintV1: string | null;
-  sourceSha256: string | null;
-  sessionChoice: string;
-  note: string;
-  status: QueueStatus;
-  progress: number;
-  acceptedBytes: number;
-  uploadPublicId: string | null;
-  attemptPublicId: string | null;
-  error: string;
-  resourceExpired: boolean;
-  duplicateCandidate: boolean;
-  resumed: boolean;
-};
-
 type ApiPayload<T> = { data?: T; error?: { code?: string; message?: string } };
 type RestorableUpload = PersistedUpload & { attemptExpired: boolean };
+type UploadCredential = TusCredential & { duplicateCandidate?: boolean };
 
 class ApiClientError extends Error {
   constructor(readonly status: number, readonly code: string | undefined, message: string) {
@@ -104,7 +82,8 @@ export function UploadQueue({
   sessions: SessionOption[];
   lockedSessionPublicId?: string;
 }) {
-  const [items, setItems] = useState<QueueItem[]>([]);
+  const queue = useActorRef(uploadQueueMachine);
+  const items = useSelector(queue, (snapshot) => snapshot.context.items);
   const lockedSession = lockedSessionPublicId
     ? sessions.find((session) => session.publicId === lockedSessionPublicId)
     : undefined;
@@ -112,16 +91,26 @@ export function UploadQueue({
   const [restorableUploads, setRestorableUploads] = useState<RestorableUpload[]>([]);
   const [legacyRestorableCount, setLegacyRestorableCount] = useState(0);
   const uploads = useRef(new Map<string, Upload>());
+  const operationTokens = useRef(new Map<string, symbol>());
+  const mounted = useRef(false);
   const progressReports = useRef(new Map<string, Promise<void>>());
   const batchPublicId = useRef<string | null>(null);
   const batchPromise = useRef<Promise<string> | null>(null);
 
-  useEffect(() => () => {
-    for (const upload of uploads.current.values()) {
-      void Promise.resolve(upload.abort(false)).catch(() => undefined);
-    }
-    uploads.current.clear();
-    progressReports.current.clear();
+  useEffect(() => {
+    const activeOperations = operationTokens.current;
+    const activeUploads = uploads.current;
+    const activeProgressReports = progressReports.current;
+    mounted.current = true;
+    return () => {
+      mounted.current = false;
+      activeOperations.clear();
+      for (const upload of activeUploads.values()) {
+        void Promise.resolve(upload.abort(false)).catch(() => undefined);
+      }
+      activeUploads.clear();
+      activeProgressReports.clear();
+    };
   }, []);
 
   function restorableUploadsForContext() {
@@ -153,7 +142,34 @@ export function UploadQueue({
   }, [items]);
 
   function update(id: string, patch: Partial<QueueItem>) {
-    setItems((current) => current.map((item) => item.id === id ? { ...item, ...patch } : item));
+    patchUploadQueueItem(queue, id, patch);
+  }
+
+  function currentItem(id: string) {
+    return queue.getSnapshot().context.items.find((item) => item.id === id);
+  }
+
+  function itemHasStatus(id: string, statuses: QueueStatus[]) {
+    const status = currentItem(id)?.status;
+    return status !== undefined && statuses.includes(status);
+  }
+
+  function beginOperation(id: string) {
+    const token = Symbol(id);
+    operationTokens.current.set(id, token);
+    return token;
+  }
+
+  function isCurrentOperation(id: string, token: symbol) {
+    return mounted.current && operationTokens.current.get(id) === token;
+  }
+
+  async function abortCredential(credential: TusCredential) {
+    try {
+      await api(`/api/uploads/${credential.uploadPublicId}/abort`, { method: "POST" });
+    } catch {
+      // The server abort is idempotent; local cleanup must still finish.
+    }
   }
 
   function refreshRestorableUploads() {
@@ -278,7 +294,7 @@ export function UploadQueue({
       return;
     }
     const next = [...files].map(queueItemFor).filter((item): item is QueueItem => item !== null);
-    setItems((current) => [...current, ...next]);
+    queue.send({ type: "enqueue", items: next });
     await Promise.all(next.map((item) => hashQueueItem(item)));
   }
 
@@ -287,11 +303,11 @@ export function UploadQueue({
     setSelectionError("");
     const item = queueItemFor(file);
     if (!item) return;
-    setItems((current) => [...current, item]);
+    queue.send({ type: "enqueue", items: [item] });
     await hashQueueItem(item, saved);
   }
 
-  async function credentialFor(item: QueueItem, forceNew: boolean): Promise<TusCredential> {
+  async function credentialFor(item: QueueItem, forceNew: boolean): Promise<UploadCredential> {
     if (!item.fingerprintV1 || !item.sourceSha256) throw new Error("文件指纹尚未完成");
     const saved = persistedUpload(item.sourceSha256);
     if (saved && lockedSessionPublicId && (
@@ -314,10 +330,6 @@ export function UploadQueue({
               }),
             },
           );
-          update(item.id, {
-            uploadPublicId: credential.uploadPublicId,
-            attemptPublicId: credential.attemptPublicId,
-          });
           return credential;
         }
         removePersistedUpload(item.sourceSha256);
@@ -355,11 +367,6 @@ export function UploadQueue({
         participantNote: item.note.trim() || null,
       }),
     });
-    update(item.id, {
-      uploadPublicId: credential.uploadPublicId,
-      attemptPublicId: credential.attemptPublicId,
-      duplicateCandidate: credential.duplicateCandidate,
-    });
     return credential;
   }
 
@@ -389,25 +396,39 @@ export function UploadQueue({
   }
 
   async function start(item: QueueItem, forceNew = false) {
+    const capabilities = uploadQueueItemCapabilities(queue, item.id);
+    if (!(capabilities.canPrepare || capabilities.canRetry)) return;
     const sessionChoice = lockedSessionPublicId ?? item.sessionChoice;
     if (!sessionChoice) {
       update(item.id, { error: "请为这个文件选择 Recording Session 或 Unable to Determine" });
       return;
     }
+    const operationToken = beginOperation(item.id);
     update(item.id, { status: "preparing", error: "", resourceExpired: false });
+    let credential: UploadCredential | undefined;
     try {
       const sourceSha256 = item.sourceSha256!;
       const savedBefore = persistedUpload(sourceSha256);
-      const credential = await credentialFor(item, forceNew);
+      credential = await credentialFor(item, forceNew);
+      if (!isCurrentOperation(item.id, operationToken)) {
+        await abortCredential(credential);
+        return;
+      }
+      const activeCredential = credential;
+      update(item.id, {
+        uploadPublicId: activeCredential.uploadPublicId,
+        attemptPublicId: activeCredential.attemptPublicId,
+        duplicateCandidate: activeCredential.duplicateCandidate ?? item.duplicateCandidate,
+      });
       const fingerprint = item.fingerprintV1!;
-      const resumesSameAttempt = savedBefore?.uploadPublicId === credential.uploadPublicId
-        && savedBefore.attemptPublicId === credential.attemptPublicId;
+      const resumesSameAttempt = savedBefore?.uploadPublicId === activeCredential.uploadPublicId
+        && savedBefore.attemptPublicId === activeCredential.attemptPublicId;
       const acceptedBytes = resumesSameAttempt ? savedBefore.acceptedBytes : 0;
       persistUpload({
         version: 2,
-        uploadPublicId: credential.uploadPublicId,
-        attemptPublicId: credential.attemptPublicId,
-        objectKey: credential.objectKey,
+        uploadPublicId: activeCredential.uploadPublicId,
+        attemptPublicId: activeCredential.attemptPublicId,
+        objectKey: activeCredential.objectKey,
         originalFilename: item.file.name,
         sizeBytes: item.file.size,
         contentType: item.contentType,
@@ -418,16 +439,22 @@ export function UploadQueue({
         unableToDetermine: sessionChoice === "unable",
         acceptedBytes,
         status: "preparing",
-        attemptExpiresAt: credential.attemptExpiresAt,
+        attemptExpiresAt: activeCredential.attemptExpiresAt,
         savedAt: new Date().toISOString(),
       });
       update(item.id, { acceptedBytes });
-      const tus = createTusUpload(item.file, credential, fingerprint, item.contentType, {
-        onProgress: (uploaded, total) => update(item.id, {
-          status: "uploading",
-          progress: total > 0 ? Math.round((uploaded / total) * 1000) / 10 : 0,
-        }),
+      const tus = createTusUpload(item.file, activeCredential, fingerprint, item.contentType, {
+        onProgress: (uploaded, total) => {
+          if (!isCurrentOperation(item.id, operationToken)
+            || !itemHasStatus(item.id, ["preparing", "uploading"])) return;
+          update(item.id, {
+            status: "uploading",
+            progress: total > 0 ? Math.round((uploaded / total) * 1000) / 10 : 0,
+          });
+        },
         onChunkComplete: (_chunkSize, bytesAccepted, bytesTotal) => {
+          if (!isCurrentOperation(item.id, operationToken)
+            || !itemHasStatus(item.id, ["preparing", "uploading"])) return;
           update(item.id, {
             status: "uploading",
             acceptedBytes: bytesAccepted,
@@ -436,13 +463,14 @@ export function UploadQueue({
           updatePersistedUpload(sourceSha256, { acceptedBytes: bytesAccepted, status: "uploading" });
           void reportAttemptProgress(
             item.id,
-            credential.uploadPublicId,
-            credential.attemptPublicId,
+            activeCredential.uploadPublicId,
+            activeCredential.attemptPublicId,
             "uploading",
             bytesAccepted,
           );
         },
         onError: (error, resourceExpired) => {
+          if (!isCurrentOperation(item.id, operationToken)) return;
           updatePersistedUpload(sourceSha256, { status: "failed" });
           update(item.id, {
             status: "failed",
@@ -451,26 +479,35 @@ export function UploadQueue({
               : `上传失败：${error.message}`,
             resourceExpired,
           });
+          operationTokens.current.delete(item.id);
         },
         onSuccess: async () => {
+          if (!isCurrentOperation(item.id, operationToken)
+            || !itemHasStatus(item.id, ["uploading", "paused"])) return;
           update(item.id, { status: "reconciling", progress: 100 });
           try {
             await (progressReports.current.get(item.id) ?? Promise.resolve());
-            await api(`/api/uploads/${credential.uploadPublicId}/complete`, { method: "POST" });
+            if (!isCurrentOperation(item.id, operationToken)) return;
+            await api(`/api/uploads/${activeCredential.uploadPublicId}/complete`, { method: "POST" });
+            if (!isCurrentOperation(item.id, operationToken)) return;
             removePersistedUpload(sourceSha256);
             uploads.current.delete(item.id);
             progressReports.current.delete(item.id);
             update(item.id, { status: "verified", error: "" });
+            operationTokens.current.delete(item.id);
             try {
-              await api(`/api/uploads/${credential.uploadPublicId}/extract-metadata`, { method: "POST" });
+              await api(`/api/uploads/${activeCredential.uploadPublicId}/extract-metadata`, { method: "POST" });
             } catch (error) {
+              if (!mounted.current || !itemHasStatus(item.id, ["verified"])) return;
               update(item.id, {
                 status: "verified",
                 error: `视频已完成并通过对象对账；Metadata ${error instanceof Error ? error.message : "解析失败"}`,
               });
             }
           } catch (error) {
+            if (!isCurrentOperation(item.id, operationToken)) return;
             update(item.id, { status: "failed", error: error instanceof Error ? error.message : "对象对账失败" });
+            operationTokens.current.delete(item.id);
           }
         },
       });
@@ -478,9 +515,16 @@ export function UploadQueue({
       const resumed = await startOrResumeTus(tus, {
         requirePrevious: resumesSameAttempt,
         discardPrevious: Boolean(savedBefore && !resumesSameAttempt),
+        shouldStart: () => isCurrentOperation(item.id, operationToken),
       });
+      if (!isCurrentOperation(item.id, operationToken)) return;
       update(item.id, { status: "uploading", resumed });
     } catch (error) {
+      if (!isCurrentOperation(item.id, operationToken)) {
+        if (credential) await abortCredential(credential);
+        if (item.sourceSha256) removePersistedUpload(item.sourceSha256);
+        return;
+      }
       const missingSavedResource = error instanceof Error && error.message === "TUS_SAVED_RESOURCE_MISSING";
       if (item.sourceSha256) updatePersistedUpload(item.sourceSha256, { status: "failed" });
       update(item.id, {
@@ -490,10 +534,13 @@ export function UploadQueue({
           : error instanceof Error ? error.message : "上传准备失败",
         resourceExpired: missingSavedResource,
       });
+      operationTokens.current.delete(item.id);
     }
   }
 
   async function pause(item: QueueItem) {
+    if (!uploadQueueItemCapabilities(queue, item.id).canPause) return;
+    update(item.id, { status: "paused" });
     await uploads.current.get(item.id)?.abort(false);
     const acceptedBytes = item.sourceSha256
       ? persistedUpload(item.sourceSha256)?.acceptedBytes ?? item.acceptedBytes
@@ -502,7 +549,7 @@ export function UploadQueue({
     if (item.uploadPublicId && item.attemptPublicId) {
       await reportAttemptProgress(item.id, item.uploadPublicId, item.attemptPublicId, "paused", acceptedBytes);
     }
-    update(item.id, { status: "paused", acceptedBytes });
+    update(item.id, { acceptedBytes });
   }
 
   async function resume(item: QueueItem) {
@@ -518,14 +565,16 @@ export function UploadQueue({
   }
 
   async function cancel(item: QueueItem) {
+    operationTokens.current.delete(item.id);
+    const latest = currentItem(item.id) ?? item;
+    update(item.id, { status: "aborted", error: "" });
     try { await uploads.current.get(item.id)?.abort(true); } catch { /* Server state is still aborted below. */ }
-    if (item.uploadPublicId) {
-      try { await api(`/api/uploads/${item.uploadPublicId}/abort`, { method: "POST" }); } catch { /* Keep local terminal state. */ }
+    if (latest.uploadPublicId) {
+      try { await api(`/api/uploads/${latest.uploadPublicId}/abort`, { method: "POST" }); } catch { /* Keep local terminal state. */ }
     }
-    if (item.sourceSha256) removePersistedUpload(item.sourceSha256);
+    if (latest.sourceSha256) removePersistedUpload(latest.sourceSha256);
     uploads.current.delete(item.id);
     progressReports.current.delete(item.id);
-    update(item.id, { status: "aborted", error: "" });
   }
 
   return (
@@ -591,7 +640,9 @@ export function UploadQueue({
       ) : null}
       {selectionError ? <Alert role="alert" className="mt-4 border-l-4 border-[var(--signal)] px-4 py-3 text-sm"><AlertDescription>{selectionError}</AlertDescription></Alert> : null}
       <div className="mt-6 space-y-5">
-        {items.map((item) => (
+        {items.map((item) => {
+          const capabilities = uploadQueueItemCapabilities(queue, item.id);
+          return (
           <Card as="article" key={item.id} className="p-5 sm:p-6">
             <div className="flex flex-wrap items-start justify-between gap-3">
               <div><h2 className="font-bold break-all">{item.file.name}</h2><p className="mt-1 text-xs text-[var(--muted)]">{formatBytes(item.file.size)} · {item.contentType} · 修改于 {new Date(item.file.lastModified).toLocaleString("zh-CN")}</p></div>
@@ -620,15 +671,16 @@ export function UploadQueue({
             {item.duplicateCandidate ? <p className="mt-3 border-l-4 border-[var(--yellow)] px-3 text-xs">Duplicate Candidate：仅进入人工复核，不会自动删除或拒绝。</p> : null}
             {item.error ? <Alert role="alert" className="mt-3 border-l-4 border-[var(--signal)] px-3 text-sm"><AlertDescription>{item.error}</AlertDescription></Alert> : null}
             <div className="mt-5 flex flex-wrap gap-2">
-              {item.status === "ready" ? <Button onClick={() => void start(item)}>开始直传 Storage</Button> : null}
-              {item.status === "uploading" ? <Button variant="outline" onClick={() => void pause(item)} className="border-[var(--ink)] px-4 py-3 text-sm font-bold">暂停</Button> : null}
-              {item.status === "paused" ? <Button onClick={() => void resume(item)}>继续</Button> : null}
-              {item.status === "failed" && item.uploadPublicId ? <Button onClick={() => void start(item, item.resourceExpired)} className="bg-[var(--signal)] px-4 py-3 text-sm font-bold text-white">{item.resourceExpired ? "创建新 Attempt 并重试" : "恢复并重试"}</Button> : null}
-              {["preparing", "uploading", "paused", "failed"].includes(item.status) ? <Button variant="outline" onClick={() => void cancel(item)} className="border-[var(--signal)] px-4 py-3 text-sm font-bold text-[var(--signal)]">取消</Button> : null}
+              {capabilities.canPrepare ? <Button onClick={() => void start(item)}>开始直传 Storage</Button> : null}
+              {capabilities.canPause ? <Button variant="outline" onClick={() => void pause(item)} className="border-[var(--ink)] px-4 py-3 text-sm font-bold">暂停</Button> : null}
+              {capabilities.canResume ? <Button onClick={() => void resume(item)}>继续</Button> : null}
+              {capabilities.canRetry && item.uploadPublicId ? <Button onClick={() => void start(item, item.resourceExpired)} className="bg-[var(--signal)] px-4 py-3 text-sm font-bold text-white">{item.resourceExpired ? "创建新 Attempt 并重试" : "恢复并重试"}</Button> : null}
+              {capabilities.canAbort ? <Button variant="outline" onClick={() => void cancel(item)} className="border-[var(--signal)] px-4 py-3 text-sm font-bold text-[var(--signal)]">取消</Button> : null}
               {item.uploadPublicId ? <Link href={`/uploads/${item.uploadPublicId}`} className="border border-[var(--line)] px-4 py-3 text-sm font-bold">查看服务端状态</Link> : null}
             </div>
           </Card>
-        ))}
+          );
+        })}
       </div>
     </section>
   );

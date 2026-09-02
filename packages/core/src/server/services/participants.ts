@@ -4,12 +4,18 @@ import { createHash, createHmac, randomUUID } from "node:crypto";
 import { z } from "zod";
 import { DomainError } from "@egocapture/core/domain/errors";
 import {
+  consentProjectionMachine,
+  deviceMachine,
+  invitationMachine,
+  participantMachine,
+} from "@egocapture/core/domain/lifecycle-machines";
+import {
   createInvitationToken,
   hashInvitationToken,
   internalParticipantEmail,
   invitationExpiresAt,
 } from "@egocapture/core/domain/invitation";
-import { assertParticipantTransition, type ParticipantStatus } from "@egocapture/core/domain/participant";
+import type { ParticipantStatus } from "@egocapture/core/domain/participant";
 import {
   createParticipantPassword,
   participantCredentialCanLogin,
@@ -28,6 +34,10 @@ import type { Viewer } from "@egocapture/core/server/auth";
 import { database } from "@egocapture/core/server/database";
 import { serverEnvironment } from "@egocapture/core/server/env";
 import { withIdempotency } from "@egocapture/core/server/idempotency";
+import {
+  assertServiceTransitionSet,
+  resolveServiceTransition,
+} from "@egocapture/core/server/state-transition";
 import { createSupabaseAdminClient } from "@egocapture/core/server/supabase/admin";
 
 const localeSchema = z.string().trim().min(2).max(20).refine(isCanonicalLocale, {
@@ -98,7 +108,7 @@ type ParticipantRow = {
   id: string;
   publicId: string;
   status: ParticipantStatus;
-  consentStatus: string;
+  consentStatus: "pending" | "valid" | "expired" | "withdrawn";
   displayAlias: string;
   isFixture: boolean;
 };
@@ -489,9 +499,21 @@ export async function generateInvitation(
       }
       const invitation = createInvitationToken();
       const expiresAt = invitationExpiresAt();
+      assertServiceTransitionSet(
+        invitationMachine,
+        ["generated", "opened"],
+        "revoke",
+        "INVALID_INVITATION_STATE",
+      );
+      const revokedInvitationStatus = resolveServiceTransition(
+        invitationMachine,
+        "generated",
+        "revoke",
+        "INVALID_INVITATION_STATE",
+      );
       await transaction`
         update egocapture.participant_invitations
-        set status = 'revoked', revoked_at = now()
+        set status = ${revokedInvitationStatus}, revoked_at = now()
         where participant_id = ${participant.id}::uuid and status in ('generated', 'opened')
       `;
       await transaction`
@@ -502,8 +524,15 @@ export async function generateInvitation(
         )
       `;
       if (participant.status !== "invited") {
+        const nextStatus = resolveServiceTransition(
+          participantMachine,
+          participant.status,
+          "invite",
+          "INVALID_PARTICIPANT_STATE",
+        );
         await transaction`
-          update egocapture.participants set status = 'invited' where id = ${participant.id}::uuid
+          update egocapture.participants set status = ${nextStatus}
+          where id = ${participant.id}::uuid and status = ${participant.status}
         `;
       }
       await writeAudit(transaction, {
@@ -534,7 +563,7 @@ export async function openInvitation(token: string) {
       participantId: string;
       participantPublicId: string;
       participantStatus: ParticipantStatus;
-      status: string;
+      status: "generated" | "opened";
       expiresAt: Date;
     }[]>`
       select
@@ -551,15 +580,27 @@ export async function openInvitation(token: string) {
     `;
     if (!invitation || !["generated", "opened"].includes(invitation.status)) return false;
     if (invitation.expiresAt <= new Date()) {
+      const expiredInvitationStatus = resolveServiceTransition(
+        invitationMachine,
+        invitation.status,
+        "expire",
+        "INVALID_INVITATION_STATE",
+      );
       await transaction`
         update egocapture.participant_invitations
-        set status = 'expired'
-        where id = ${invitation.id}::uuid
+        set status = ${expiredInvitationStatus}
+        where id = ${invitation.id}::uuid and status = ${invitation.status}
       `;
       if (invitation.participantStatus === "invited") {
+        const expiredParticipantStatus = resolveServiceTransition(
+          participantMachine,
+          invitation.participantStatus,
+          "expireInvitation",
+          "INVALID_PARTICIPANT_STATE",
+        );
         await transaction`
-          update egocapture.participants set status = 'expired'
-          where id = ${invitation.participantId}::uuid
+          update egocapture.participants set status = ${expiredParticipantStatus}
+          where id = ${invitation.participantId}::uuid and status = ${invitation.participantStatus}
         `;
       }
       await writeAudit(transaction, {
@@ -575,10 +616,13 @@ export async function openInvitation(token: string) {
       });
       return false;
     }
+    const openedStatus = invitation.status === "generated"
+      ? resolveServiceTransition(invitationMachine, invitation.status, "open", "INVALID_INVITATION_STATE")
+      : invitation.status;
     await transaction`
       update egocapture.participant_invitations
-      set opened_at = coalesce(opened_at, now()), status = 'opened'
-      where id = ${invitation.id}::uuid
+      set opened_at = coalesce(opened_at, now()), status = ${openedStatus}
+      where id = ${invitation.id}::uuid and status = ${invitation.status}
     `;
     return true;
   });
@@ -603,9 +647,21 @@ export async function revokeInvitation(
     `;
     if (!participant) throw new DomainError("NOT_FOUND", "Participant 或资源不存在", 404);
     protectFixture(viewer, participant);
+    assertServiceTransitionSet(
+      invitationMachine,
+      ["generated", "opened"],
+      "revoke",
+      "INVALID_INVITATION_STATE",
+    );
+    const revokedInvitationStatus = resolveServiceTransition(
+      invitationMachine,
+      "generated",
+      "revoke",
+      "INVALID_INVITATION_STATE",
+    );
     const revoked = await transaction`
       update egocapture.participant_invitations
-      set status = 'revoked', revoked_at = now()
+      set status = ${revokedInvitationStatus}, revoked_at = now()
       where participant_id = ${participant.id}::uuid and status in ('generated', 'opened')
       returning id
     `;
@@ -614,9 +670,15 @@ export async function revokeInvitation(
     }
     const nextStatus = participant.status === "invited" ? "expired" : participant.status;
     if (nextStatus !== participant.status) {
+      resolveServiceTransition(
+        participantMachine,
+        participant.status,
+        "expireInvitation",
+        "INVALID_PARTICIPANT_STATE",
+      );
       await transaction`
         update egocapture.participants set status = ${nextStatus}
-        where id = ${participant.id}::uuid
+        where id = ${participant.id}::uuid and status = ${participant.status}
       `;
     }
     await writeAudit(transaction, {
@@ -643,11 +705,13 @@ export async function acceptInvitation(token: string, requestId: string) {
   let createdAuthUserId: string | undefined;
   try {
     return await db.begin(async (transaction) => {
-      const [invitation] = await transaction<ParticipantRow[]>`
+      const [invitation] = await transaction<(ParticipantRow & {
+        invitationStatus: "generated" | "opened";
+      })[]>`
         select
           participant.id, participant.public_id, participant.status,
           participant.consent_status, participant.display_alias,
-          participant.is_fixture
+          participant.is_fixture, invitation.status as invitation_status
         from egocapture.participant_invitations invitation
         join egocapture.participants participant on participant.id = invitation.participant_id
         where invitation.token_hash = ${hashInvitationToken(token)}
@@ -658,6 +722,24 @@ export async function acceptInvitation(token: string, requestId: string) {
       if (!invitation || invitation.status !== "invited") {
         throw new DomainError("INVITATION_INVALID_OR_EXPIRED", "邀请无效或已过期", 400);
       }
+      const activeStatus = resolveServiceTransition(
+        participantMachine,
+        invitation.status,
+        "acceptInvitation",
+        "INVALID_PARTICIPANT_STATE",
+      );
+      const validConsentStatus = resolveServiceTransition(
+        consentProjectionMachine,
+        invitation.consentStatus,
+        "accept",
+        "INVALID_CONSENT_STATE",
+      );
+      const acceptedInvitationStatus = resolveServiceTransition(
+        invitationMachine,
+        invitation.invitationStatus,
+        "accept",
+        "INVALID_INVITATION_STATE",
+      );
       const [storedCredential] = await transaction<{
         loginPassword: string;
         loginCredentialVersion: number;
@@ -691,9 +773,9 @@ export async function acceptInvitation(token: string, requestId: string) {
       await transaction`
         update egocapture.participants
         set auth_user_id = ${createdAuthUserId}::uuid,
-            status = 'active',
-            consent_status = 'valid'
-        where id = ${invitation.id}::uuid
+            status = ${activeStatus},
+            consent_status = ${validConsentStatus}
+        where id = ${invitation.id}::uuid and status = ${invitation.status}
       `;
       await transaction`
         insert into egocapture.participant_login_credentials (
@@ -710,8 +792,8 @@ export async function acceptInvitation(token: string, requestId: string) {
       `;
       await transaction`
         update egocapture.participant_invitations
-        set status = 'accepted', accepted_at = now(), opened_at = coalesce(opened_at, now())
-        where token_hash = ${hashInvitationToken(token)}
+        set status = ${acceptedInvitationStatus}, accepted_at = now(), opened_at = coalesce(opened_at, now())
+        where token_hash = ${hashInvitationToken(token)} and status = ${invitation.invitationStatus}
       `;
       await transaction`
         insert into egocapture.consent_records (
@@ -1056,20 +1138,32 @@ export async function changeParticipantStatus(
     `;
     if (!participant) throw new DomainError("NOT_FOUND", "Participant 或资源不存在", 404);
     protectFixture(viewer, participant);
-    try {
-      assertParticipantTransition(participant.status, targetStatus);
-    } catch {
-      throw new DomainError("INVALID_PARTICIPANT_STATE", "Participant 状态不允许该操作", 409);
-    }
     if (targetStatus === "active" && participant.consentStatus !== "valid") {
       throw new DomainError("CONSENT_REQUIRED", "Consent 无效，不能恢复 Participant", 422);
     }
+    const event = targetStatus === "suspended" ? "suspend"
+      : targetStatus === "active" ? "resume"
+        : "withdraw";
+    const nextStatus = resolveServiceTransition(
+      participantMachine,
+      participant.status,
+      event,
+      "INVALID_PARTICIPANT_STATE",
+    );
+    const nextConsentStatus = targetStatus === "withdrawn"
+      ? resolveServiceTransition(
+          consentProjectionMachine,
+          participant.consentStatus,
+          "withdraw",
+          "INVALID_CONSENT_STATE",
+        )
+      : participant.consentStatus;
     await transaction`
       update egocapture.participants
-      set status = ${targetStatus},
-          consent_status = case when ${targetStatus} = 'withdrawn' then 'withdrawn' else consent_status end,
+      set status = ${nextStatus},
+          consent_status = ${nextConsentStatus},
           withdrawn_at = case when ${targetStatus} = 'withdrawn' then now() else null end
-      where id = ${participant.id}::uuid
+      where id = ${participant.id}::uuid and status = ${participant.status}
     `;
     if (targetStatus === "withdrawn") {
       await transaction`
@@ -1087,11 +1181,11 @@ export async function changeParticipantStatus(
       requestId,
       beforeValues: { status: participant.status, consentStatus: participant.consentStatus },
       afterValues: {
-        status: targetStatus,
-        consentStatus: targetStatus === "withdrawn" ? "withdrawn" : participant.consentStatus,
+        status: nextStatus,
+        consentStatus: nextConsentStatus,
       },
     });
-    return { participantPublicId: participant.publicId, status: targetStatus };
+    return { participantPublicId: participant.publicId, status: nextStatus };
   });
 }
 
@@ -1225,13 +1319,20 @@ export async function updateDevice(
       throw new DomainError("INVALID_DEVICE_STATE", "Retired Device 不能恢复", 409);
     }
     const nextStatus = input.status ?? device.status;
+    if (nextStatus !== device.status) {
+      const event = nextStatus === "active" ? "activate"
+        : nextStatus === "lost" ? "markLost"
+          : nextStatus === "shared" ? "share"
+            : "retire";
+      resolveServiceTransition(deviceMachine, device.status, event, "INVALID_DEVICE_STATE");
+    }
     const nextFirmware = input.firmwareVersion === undefined ? device.firmwareVersion : input.firmwareVersion;
     const [updated] = await transaction<{ updatedAt: Date }[]>`
       update egocapture.devices
       set status = ${nextStatus},
           firmware_version = ${nextFirmware},
           retired_at = case when ${nextStatus} = 'retired' then coalesce(retired_at, now()) else null end
-      where id = ${device.id}::uuid
+      where id = ${device.id}::uuid and status = ${device.status}
       returning updated_at
     `;
     await writeAudit(transaction, {

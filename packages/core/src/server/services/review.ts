@@ -4,12 +4,23 @@ import { randomUUID } from "node:crypto";
 import { z } from "zod";
 import { STORAGE_BUCKET } from "@egocapture/core/domain/constants";
 import { DomainError } from "@egocapture/core/domain/errors";
+import {
+  assignmentMachine,
+  participantMachine,
+  recordingSessionMachine,
+  reviewCaseMachine,
+  videoAssetMachine,
+} from "@egocapture/core/domain/lifecycle-machines";
 import { compareDeviceConsistency } from "@egocapture/core/metadata/device-consistency";
 import { createPageResult, pageNumberSchema, pageSizeSchema, resolvePage } from "@egocapture/core/pagination";
 import { writeAudit } from "@egocapture/core/server/audit";
 import type { Viewer } from "@egocapture/core/server/auth";
 import { database } from "@egocapture/core/server/database";
 import { withIdempotency } from "@egocapture/core/server/idempotency";
+import {
+  assertServiceTransitionSet,
+  resolveServiceTransition,
+} from "@egocapture/core/server/state-transition";
 import { createSupabaseAdminClient } from "@egocapture/core/server/supabase/admin";
 
 const reviewPublicIdSchema = z.string().regex(/^RV-[23456789ABCDEFGHJKLMNPQRSTUVWXYZ]{6,16}$/);
@@ -54,6 +65,10 @@ export const reviewDecisionSchema = z.object({
 });
 
 type ReviewDecisionInput = z.infer<typeof reviewDecisionSchema>;
+type AssignmentStatus = (typeof assignmentMachine.definition.states)[number];
+type ParticipantStatus = (typeof participantMachine.definition.states)[number];
+type ReviewCaseStatus = (typeof reviewCaseMachine.definition.states)[number];
+type VideoAssetStatus = (typeof videoAssetMachine.definition.states)[number];
 
 export async function listReviewCases(viewer: Viewer, input: z.infer<typeof reviewListSchema>) {
   const db = database();
@@ -242,17 +257,17 @@ export async function getReviewCase(viewer: Viewer, reviewPublicId: string) {
 type LockedReview = {
   id: string;
   publicId: string;
-  status: string;
+  status: ReviewCaseStatus;
   caseType: string;
   videoAssetId: string | null;
   videoAssetPublicId: string | null;
   participantId: string | null;
   participantPublicId: string | null;
   participantIsFixture: boolean | null;
-  participantStatus: string | null;
+  participantStatus: ParticipantStatus | null;
   assignmentId: string | null;
   assignmentPublicId: string | null;
-  assignmentStatus: string | null;
+  assignmentStatus: AssignmentStatus | null;
   assignmentDueAt: Date | null;
   currentDecisionId: string | null;
   currentDecisionType: string | null;
@@ -260,6 +275,7 @@ type LockedReview = {
   currentSessionPublicId: string | null;
   currentDeviceId: string | null;
   currentDevicePublicId: string | null;
+  assetStatus: VideoAssetStatus | null;
 };
 
 async function lockReview(
@@ -288,7 +304,8 @@ async function lockReview(
       decision.resolved_session_id as current_session_id,
       session.public_id as current_session_public_id,
       decision.resolved_device_id as current_device_id,
-      device.public_id as current_device_public_id
+      device.public_id as current_device_public_id,
+      asset.status as asset_status
     from egocapture.review_cases review
     left join egocapture.video_assets asset on asset.id = review.video_asset_id
     left join egocapture.current_match_decisions decision on decision.video_asset_id = asset.id
@@ -318,11 +335,13 @@ async function resolveSession(
     publicId: string;
     assignmentId: string;
     assignmentPublicId: string;
+    assignmentStatus: AssignmentStatus;
     declaredDeviceId: string;
     declaredDevicePublicId: string;
   }[]>`
     select session.id, session.public_id, session.assignment_id,
       assignment.public_id as assignment_public_id,
+      assignment.status as assignment_status,
       session.declared_device_id, device.public_id as declared_device_public_id
     from egocapture.recording_sessions session
     join egocapture.assignments assignment on assignment.id = session.assignment_id
@@ -330,6 +349,7 @@ async function resolveSession(
     where session.public_id = ${publicId}
       and session.participant_id = ${review.participantId}::uuid
     limit 1
+    for update of session, assignment
   `;
   if (!session) throw new DomainError("SESSION_NOT_AVAILABLE", "Recording Session 不属于该 Participant", 422);
   return session;
@@ -434,23 +454,39 @@ export async function decideReviewCase(
 
       if (input.action === "confirm_match" || input.action === "correct_match") {
         session = await resolveSession(transaction as ReturnType<typeof database>, review, input);
-        if (review.assignmentStatus === "canceled") {
-          throw new DomainError("INVALID_ASSIGNMENT_STATE", "Canceled Assignment 不能接受 Match", 409);
-        }
         device = await resolveDevice(transaction as ReturnType<typeof database>, review, session, input);
         nextDecisionId = await supersedeMatchDecision(
           transaction as ReturnType<typeof database>, viewer, review, input,
           input.action === "confirm_match" ? "admin_confirmed" : "admin_corrected",
           session, device,
         );
-        nextAssignmentStatus = "accepted";
-        await transaction`
-          update egocapture.assignments set status = 'accepted'
-          where id = ${session.assignmentId}::uuid and status <> 'canceled'
-        `;
+        nextAssignmentStatus = session.assignmentStatus === "accepted"
+          ? "accepted"
+          : resolveServiceTransition(
+              assignmentMachine,
+              session.assignmentStatus,
+              "accept",
+              "INVALID_ASSIGNMENT_STATE",
+            );
+        if (nextAssignmentStatus !== session.assignmentStatus) {
+          const acceptedAssignments = await transaction`
+            update egocapture.assignments set status = ${nextAssignmentStatus}
+            where id = ${session.assignmentId}::uuid and status = ${session.assignmentStatus}
+            returning id
+          `;
+          if (acceptedAssignments.length === 0) {
+            throw new DomainError("STALE_ASSIGNMENT_STATE", "Assignment 状态已变化，请刷新后重试", 409);
+          }
+        }
+        const closedSessionStatus = resolveServiceTransition(
+          recordingSessionMachine,
+          "open",
+          "close",
+          "INVALID_SESSION_STATE",
+        );
         await transaction`
           update egocapture.recording_sessions
-          set status = 'closed', closed_at = now(), close_reason = ${input.reason}
+          set status = ${closedSessionStatus}, closed_at = now(), close_reason = ${input.reason}
           where assignment_id = ${session.assignmentId}::uuid and status = 'open'
         `;
         const [metadata] = await transaction<{
@@ -476,44 +512,109 @@ export async function decideReviewCase(
           transaction as ReturnType<typeof database>, viewer, review, input,
           "rejected", null, null,
         );
-        await transaction`update egocapture.video_assets set status = 'rejected' where id = ${review.videoAssetId}::uuid`;
+        if (!review.videoAssetId || !review.assetStatus) {
+          throw new DomainError("VIDEO_ASSET_REQUIRED", "该 ReviewCase 没有关联 VideoAsset", 409);
+        }
+        const rejectedAssetStatus = resolveServiceTransition(
+          videoAssetMachine,
+          review.assetStatus,
+          "reject",
+          "INVALID_VIDEO_ASSET_STATE",
+        );
+        const rejectedAssets = await transaction`
+          update egocapture.video_assets set status = ${rejectedAssetStatus}
+          where id = ${review.videoAssetId}::uuid and status = ${review.assetStatus}
+          returning id
+        `;
+        if (rejectedAssets.length === 0) {
+          throw new DomainError("STALE_VIDEO_ASSET_STATE", "VideoAsset 状态已变化，请刷新后重试", 409);
+        }
         if (review.assignmentId) {
-          nextAssignmentStatus = "rework_required";
-          await transaction`
-            update egocapture.assignments set status = 'rework_required'
-            where id = ${review.assignmentId}::uuid and status <> 'canceled'
+          if (!review.assignmentStatus) {
+            throw new DomainError("ASSIGNMENT_REQUIRED", "该 ReviewCase 没有关联 Assignment", 409);
+          }
+          nextAssignmentStatus = resolveServiceTransition(
+            assignmentMachine,
+            review.assignmentStatus,
+            "requestRework",
+            "INVALID_ASSIGNMENT_STATE",
+          );
+          const reworkAssignments = await transaction`
+            update egocapture.assignments set status = ${nextAssignmentStatus}
+            where id = ${review.assignmentId}::uuid and status = ${review.assignmentStatus}
+            returning id
           `;
+          if (reworkAssignments.length === 0) {
+            throw new DomainError("STALE_ASSIGNMENT_STATE", "Assignment 状态已变化，请刷新后重试", 409);
+          }
+          const closedSessionStatus = resolveServiceTransition(
+            recordingSessionMachine,
+            "open",
+            "close",
+            "INVALID_SESSION_STATE",
+          );
           await transaction`
             update egocapture.recording_sessions
-            set status = 'closed', closed_at = now(), close_reason = ${input.reason}
+            set status = ${closedSessionStatus}, closed_at = now(), close_reason = ${input.reason}
             where assignment_id = ${review.assignmentId}::uuid and status = 'open'
           `;
         }
       } else if (input.action === "request_rerecord") {
-        if (!review.assignmentId) throw new DomainError("ASSIGNMENT_REQUIRED", "该 ReviewCase 没有关联 Assignment", 409);
-        nextAssignmentStatus = "rework_required";
-        await transaction`
-          update egocapture.assignments set status = 'rework_required'
-          where id = ${review.assignmentId}::uuid and status <> 'canceled'
+        if (!review.assignmentId || !review.assignmentStatus) {
+          throw new DomainError("ASSIGNMENT_REQUIRED", "该 ReviewCase 没有关联 Assignment", 409);
+        }
+        nextAssignmentStatus = resolveServiceTransition(
+          assignmentMachine,
+          review.assignmentStatus,
+          "requestRework",
+          "INVALID_ASSIGNMENT_STATE",
+        );
+        const reworkAssignments = await transaction`
+          update egocapture.assignments set status = ${nextAssignmentStatus}
+          where id = ${review.assignmentId}::uuid and status = ${review.assignmentStatus}
+          returning id
         `;
+        if (reworkAssignments.length === 0) {
+          throw new DomainError("STALE_ASSIGNMENT_STATE", "Assignment 状态已变化，请刷新后重试", 409);
+        }
+        const closedSessionStatus = resolveServiceTransition(
+          recordingSessionMachine,
+          "open",
+          "close",
+          "INVALID_SESSION_STATE",
+        );
         await transaction`
           update egocapture.recording_sessions
-          set status = 'closed', closed_at = now(), close_reason = ${input.reason}
+          set status = ${closedSessionStatus}, closed_at = now(), close_reason = ${input.reason}
           where assignment_id = ${review.assignmentId}::uuid and status = 'open'
         `;
       } else if (input.action === "extend_assignment") {
-        if (!review.assignmentId || !input.dueAt) throw new DomainError("ASSIGNMENT_REQUIRED", "该 ReviewCase 没有关联 Assignment", 409);
+        if (!review.assignmentId || !review.assignmentStatus || !input.dueAt) {
+          throw new DomainError("ASSIGNMENT_REQUIRED", "该 ReviewCase 没有关联 Assignment", 409);
+        }
         if (["accepted", "canceled"].includes(review.assignmentStatus ?? "")) {
           throw new DomainError("INVALID_ASSIGNMENT_STATE", "当前 Assignment 不能延期", 409);
         }
         const dueAt = new Date(input.dueAt);
         if (dueAt <= new Date()) throw new DomainError("DUE_AT_IN_PAST", "Due At 必须晚于当前时间", 422);
-        await transaction`
+        nextAssignmentStatus = ["expired", "missing_upload"].includes(review.assignmentStatus)
+          ? resolveServiceTransition(
+              assignmentMachine,
+              review.assignmentStatus as "expired" | "missing_upload",
+              "extendUnacknowledged",
+              "INVALID_ASSIGNMENT_STATE",
+            )
+          : review.assignmentStatus;
+        const extendedAssignments = await transaction`
           update egocapture.assignments
           set due_at = ${dueAt},
-            status = case when status in ('expired', 'missing_upload') then 'assigned' else status end
-          where id = ${review.assignmentId}::uuid
+            status = ${nextAssignmentStatus}
+          where id = ${review.assignmentId}::uuid and status = ${review.assignmentStatus}
+          returning id
         `;
+        if (extendedAssignments.length === 0) {
+          throw new DomainError("STALE_ASSIGNMENT_STATE", "Assignment 状态已变化，请刷新后重试", 409);
+        }
       } else if (input.action === "suspend_participant") {
         if (!review.participantId) throw new DomainError("PARTICIPANT_REQUIRED", "该 ReviewCase 没有关联 Participant", 409);
         if (viewer.isDemoAdmin && review.participantIsFixture) {
@@ -522,19 +623,45 @@ export async function decideReviewCase(
         if (review.participantStatus !== "active") {
           throw new DomainError("INVALID_PARTICIPANT_STATE", "只有 Active Participant 可以暂停", 409);
         }
-        await transaction`
-          update egocapture.participants set status = 'suspended'
-          where id = ${review.participantId}::uuid
+        const suspendedStatus = resolveServiceTransition(
+          participantMachine,
+          review.participantStatus,
+          "suspend",
+          "INVALID_PARTICIPANT_STATE",
+        );
+        const suspendedParticipants = await transaction`
+          update egocapture.participants set status = ${suspendedStatus}
+          where id = ${review.participantId}::uuid and status = ${review.participantStatus}
+          returning id
         `;
+        if (suspendedParticipants.length === 0) {
+          throw new DomainError("STALE_PARTICIPANT_STATE", "Participant 状态已变化，请刷新后重试", 409);
+        }
       }
 
-      const nextReviewStatus = input.action === "dismiss_case" ? "dismissed" : "resolved";
-      await transaction`
+      const reviewEvent = input.action === "dismiss_case" ? "dismiss" : "resolve";
+      const nextReviewStatus = resolveServiceTransition(
+        reviewCaseMachine,
+        review.status,
+        reviewEvent,
+        "INVALID_REVIEW_CASE_STATE",
+      );
+      const resolvedReviews = await transaction`
         update egocapture.review_cases
         set status = ${nextReviewStatus}, resolution_reason = ${input.reason}, resolved_at = now()
-        where id = ${review.id}::uuid
+        where id = ${review.id}::uuid and status = ${review.status}
+        returning id
       `;
+      if (resolvedReviews.length === 0) {
+        throw new DomainError("STALE_REVIEW_CASE_STATE", "ReviewCase 状态已变化，请刷新后重试", 409);
+      }
       if (review.videoAssetId && ["confirm_match", "correct_match", "reject_upload"].includes(input.action)) {
+        assertServiceTransitionSet(
+          reviewCaseMachine,
+          ["open", "in_review"],
+          reviewEvent,
+          "INVALID_REVIEW_CASE_STATE",
+        );
         await transaction`
           update egocapture.review_cases
           set status = ${nextReviewStatus}, resolution_reason = ${input.reason}, resolved_at = now()

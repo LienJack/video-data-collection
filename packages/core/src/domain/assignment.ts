@@ -13,13 +13,15 @@ export const assignmentStatuses = [
 ] as const;
 
 export type AssignmentStatus = (typeof assignmentStatuses)[number];
+import { assignmentMachine } from "./lifecycle-machines";
+import { canTransitionLifecycle, transitionLifecycle } from "./state-machine";
 
 export function canAcknowledgeAssignment(status: AssignmentStatus) {
-  return status === "assigned";
+  return canTransitionLifecycle(assignmentMachine, status, "acknowledge");
 }
 
 export function canCancelAssignment(status: AssignmentStatus) {
-  return !["accepted", "canceled"].includes(status);
+  return canTransitionLifecycle(assignmentMachine, status, "cancel");
 }
 
 export function statusAfterExtension(
@@ -27,5 +29,9 @@ export function statusAfterExtension(
   acknowledgedAt: Date | null,
 ): AssignmentStatus {
   if (!["expired", "missing_upload"].includes(status)) return status;
-  return acknowledgedAt ? "acknowledged" : "assigned";
+  return transitionLifecycle(
+    assignmentMachine,
+    status,
+    acknowledgedAt ? "extendAcknowledged" : "extendUnacknowledged",
+  );
 }

@@ -4,6 +4,10 @@ import { readFileSync } from "node:fs";
 import path from "node:path";
 import process from "node:process";
 import postgres from "postgres";
+import {
+  allLifecycleEdges,
+  lifecycleMachines,
+} from "@egocapture/core/domain/lifecycle-machines";
 
 type Migration = {
   version: string;
@@ -160,6 +164,80 @@ async function reportStatus(db: postgres.Sql, files: Migration[], requireCurrent
   }
 }
 
+async function verifyStateMachineGuards(db: postgres.Sql) {
+  const [guard] = await db<{ fixtureRefreshFunction: string | null; hasFixtureBypass: boolean }[]>`
+    select
+      to_regprocedure('egocapture.refresh_demo_fixture_lifecycles()')::text as "fixtureRefreshFunction",
+      position(
+        'egocapture.scoped_fixture_refresh'
+        in pg_get_functiondef('egocapture.enforce_state_machine_transition()'::regprocedure)
+      ) > 0 as "hasFixtureBypass"
+  `;
+  if (guard.fixtureRefreshFunction || guard.hasFixtureBypass) {
+    throw new Error("状态机 Trigger 仍包含 fixture 逆向迁移旁路");
+  }
+  const registryEdges = await db<{ machine: string; fromState: string; toState: string }[]>`
+    select machine, from_state as "fromState", to_state as "toState"
+    from egocapture.state_machine_transitions
+    order by machine, from_state, to_state
+  `;
+  const edgeKey = (edge: { machine: string; from: string; to: string }) =>
+    `${edge.machine}:${edge.from}:${edge.to}`;
+  const expectedEdges = new Set(allLifecycleEdges.map(edgeKey));
+  const actualEdges = new Set(registryEdges.map((edge) => edgeKey({
+    machine: edge.machine,
+    from: edge.fromState,
+    to: edge.toState,
+  })));
+  const missingEdges = [...expectedEdges].filter((edge) => !actualEdges.has(edge));
+  const unexpectedEdges = [...actualEdges].filter((edge) => !expectedEdges.has(edge));
+  if (missingEdges.length > 0 || unexpectedEdges.length > 0) {
+    throw new Error(
+      `状态机 registry 与 TypeScript 图不一致；missing=${missingEdges.join(",") || "none"}; unexpected=${unexpectedEdges.join(",") || "none"}`,
+    );
+  }
+  const expectedMachineCount = Object.values(lifecycleMachines)
+    .filter((machine) => Object.keys(machine.definition.transitions).length > 0)
+    .length;
+  const actualMachineCount = new Set(registryEdges.map((edge) => edge.machine)).size;
+  if (actualMachineCount !== expectedMachineCount) {
+    throw new Error(`状态机 registry 机器数量不一致：${actualMachineCount}/${expectedMachineCount}`);
+  }
+  const [triggers] = await db<{ triggerCount: number }[]>`
+    select count(*)::integer as "triggerCount"
+    from pg_trigger trigger
+    join pg_proc procedure on procedure.oid = trigger.tgfoid
+    join pg_namespace namespace on namespace.oid = procedure.pronamespace
+    where namespace.nspname = 'egocapture'
+      and procedure.proname = 'enforce_state_machine_transition'
+      and not trigger.tgisinternal
+  `;
+  if (triggers.triggerCount !== 15) {
+    throw new Error(`状态机 Trigger 不完整：${triggers.triggerCount}/15`);
+  }
+  await db.unsafe(`
+    do $state_machine_probe$
+    declare
+      probe_id uuid := gen_random_uuid();
+    begin
+      insert into egocapture.participants (id, public_id, display_alias, is_fixture)
+      values (probe_id, 'PT-STATECHK', 'State guard probe', true);
+      begin
+        update egocapture.participants set status = 'active' where id = probe_id;
+        raise exception 'STATE_MACHINE_GUARD_DID_NOT_REJECT';
+      exception
+        when check_violation then
+          if SQLERRM not like 'INVALID_STATE_TRANSITION:%' then
+            raise;
+          end if;
+      end;
+      delete from egocapture.participants where id = probe_id;
+    end
+    $state_machine_probe$;
+  `);
+  console.log(`verified lifecycle guards ${actualMachineCount} machines / ${actualEdges.size} edges / ${triggers.triggerCount} triggers`);
+}
+
 async function main() {
   const command = process.argv[2] || "status";
   const files = await migrations();
@@ -172,7 +250,10 @@ async function main() {
   try {
     if (command === "migrate") return await migrate(db, files);
     if (command === "status") return await reportStatus(db, files);
-    if (command === "verify") return await reportStatus(db, files, true);
+    if (command === "verify") {
+      await reportStatus(db, files, true);
+      return await verifyStateMachineGuards(db);
+    }
     throw new Error(`未知数据库命令：${command}`);
   } finally {
     await db.end({ timeout: 2 });

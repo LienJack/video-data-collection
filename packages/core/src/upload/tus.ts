@@ -60,13 +60,18 @@ export function createTusUpload(
 
 export async function startOrResumeTus(
   upload: Upload,
-  options: { requirePrevious?: boolean; discardPrevious?: boolean } = {},
+  options: {
+    requirePrevious?: boolean;
+    discardPrevious?: boolean;
+    shouldStart?: () => boolean;
+  } = {},
 ) {
   const previousUploads = await upload.findPreviousUploads();
   if (options.discardPrevious && previousUploads.length > 0) {
     const storage = upload.options.urlStorage;
     if (!storage) throw new Error("TUS_URL_STORAGE_UNAVAILABLE");
     await Promise.all(previousUploads.map((previous) => storage.removeUpload(previous.urlStorageKey)));
+    if (options.shouldStart && !options.shouldStart()) throw new Error("TUS_START_CANCELED");
     upload.start();
     return false;
   }
@@ -79,6 +84,7 @@ export async function startOrResumeTus(
     // may silently POST a replacement resource under the old UploadAttempt.
     upload.options.endpoint = null;
   }
+  if (options.shouldStart && !options.shouldStart()) throw new Error("TUS_START_CANCELED");
   upload.start();
   return previousUploads.length > 0;
 }

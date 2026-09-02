@@ -11,6 +11,12 @@ import {
   TUS_CHUNK_SIZE_BYTES,
 } from "@egocapture/core/domain/constants";
 import { DomainError } from "@egocapture/core/domain/errors";
+import {
+  assignmentMachine,
+  uploadAttemptMachine,
+  uploadBatchMachine,
+  uploadTransferMachine,
+} from "@egocapture/core/domain/lifecycle-machines";
 import { createPublicId } from "@egocapture/core/domain/public-id";
 import {
   advanceUploadAttemptProgress,
@@ -24,6 +30,10 @@ import type { Viewer } from "@egocapture/core/server/auth";
 import { database } from "@egocapture/core/server/database";
 import { serverEnvironment } from "@egocapture/core/server/env";
 import { withIdempotency } from "@egocapture/core/server/idempotency";
+import {
+  assertServiceTransitionSet,
+  resolveServiceTransition,
+} from "@egocapture/core/server/state-transition";
 import { createSupabaseAdminClient } from "@egocapture/core/server/supabase/admin";
 
 const uploadPublicIdSchema = z.string().regex(/^UP-[23456789ABCDEFGHJKLMNPQRSTUVWXYZ]{6,16}$/);
@@ -49,8 +59,8 @@ type UploadAuthority = {
   contentType: string;
   extension: string;
   originalFilename: string;
-  transferStatus: string;
-  metadataStatus: string;
+  transferStatus: "created" | "uploading" | "reconciling" | "verified" | "failed" | "aborted" | "expired";
+  metadataStatus: "pending" | "processing" | "extracted" | "partial" | "unsupported" | "failed";
   claimedSessionId: string | null;
   unableToDetermine: boolean;
   fingerprintV1: string;
@@ -250,7 +260,7 @@ export async function createUploadIntent(
         [claimedSession] = await transaction<{
           id: string;
           assignmentId: string;
-          assignmentStatus: string;
+          assignmentStatus: "assigned" | "acknowledged" | "session_created" | "uploading" | "submitted" | "needs_review" | "rework_required" | "accepted" | "expired" | "missing_upload" | "canceled";
         }[]>`
           select session.id, session.assignment_id, assignment.status as assignment_status
           from egocapture.recording_sessions session
@@ -275,6 +285,18 @@ export async function createUploadIntent(
         uploadId,
         extension: input.extension,
       });
+      const uploadingTransferStatus = resolveServiceTransition(
+        uploadTransferMachine,
+        "created",
+        "start",
+        "INVALID_UPLOAD_STATE",
+      );
+      const uploadingAttemptStatus = resolveServiceTransition(
+        uploadAttemptMachine,
+        "created",
+        "start",
+        "INVALID_UPLOAD_ATTEMPT_STATE",
+      );
       await transaction`
         insert into egocapture.upload_intents (
           id, public_id, batch_id, participant_id, original_filename,
@@ -286,19 +308,25 @@ export async function createUploadIntent(
           ${batch.participantId}::uuid, ${sanitizeOriginalFilename(input.originalFilename)},
           ${input.sizeBytes}, ${input.contentType}, ${input.extension}, ${input.localModifiedAt},
           ${objectKey}, ${claimedSession?.id ?? null}::uuid, ${input.unableToDetermine},
-          ${input.participantNote ?? null}, ${input.fingerprintV1}, 'uploading', ${attemptExpiresAt}
+          ${input.participantNote ?? null}, ${input.fingerprintV1}, ${uploadingTransferStatus}, ${attemptExpiresAt}
         )
       `;
       await transaction`
         insert into egocapture.upload_attempts (
           public_id, upload_intent_id, attempt_number, status, expires_at, started_at
-        ) values (${attemptPublicId}, ${uploadId}::uuid, 1, 'uploading', ${attemptExpiresAt}, now())
+        ) values (${attemptPublicId}, ${uploadId}::uuid, 1, ${uploadingAttemptStatus}, ${attemptExpiresAt}, now())
       `;
-      if (claimedSession) {
+      if (claimedSession && ["acknowledged", "session_created", "rework_required"].includes(claimedSession.assignmentStatus)) {
+        const uploadingAssignmentStatus = resolveServiceTransition(
+          assignmentMachine,
+          claimedSession.assignmentStatus,
+          "startUpload",
+          "INVALID_ASSIGNMENT_STATE",
+        );
         await transaction`
-          update egocapture.assignments set status = 'uploading'
+          update egocapture.assignments set status = ${uploadingAssignmentStatus}
           where id = ${claimedSession.assignmentId}::uuid
-            and status in ('acknowledged', 'session_created', 'rework_required')
+            and status = ${claimedSession.assignmentStatus}
         `;
       }
       const [duplicate] = await transaction<{ exists: boolean }[]>`
@@ -363,7 +391,7 @@ export async function createOrResumeAttempt(
       participantStatus: string;
       consentStatus: string;
       objectKey: string;
-      transferStatus: string;
+      transferStatus: UploadAuthority["transferStatus"];
     }[]>`
       select intent.id, intent.public_id, intent.participant_id,
         participant.status as participant_status, participant.consent_status,
@@ -386,7 +414,7 @@ export async function createOrResumeAttempt(
       id: string;
       publicId: string;
       attemptNumber: number;
-      status: string;
+      status: "created" | "uploading" | "paused" | "completed" | "failed" | "aborted" | "expired";
       expiresAt: Date | null;
     }[]>`
       select id, public_id, attempt_number, status, expires_at
@@ -412,28 +440,48 @@ export async function createOrResumeAttempt(
     if (latest) {
       const expired = input.reasonCode === "tus_expired"
         || Boolean(latest.expiresAt && latest.expiresAt.getTime() <= Date.now());
+      const closedAttemptStatus = resolveServiceTransition(
+        uploadAttemptMachine,
+        latest.status,
+        expired ? "expire" : "fail",
+        "INVALID_UPLOAD_ATTEMPT_STATE",
+      );
       await transaction`
         update egocapture.upload_attempts
-        set status = ${expired ? "expired" : "failed"},
+        set status = ${closedAttemptStatus},
           error_code = ${input.reasonCode}
-        where id = ${latest.id}::uuid
+        where id = ${latest.id}::uuid and status = ${latest.status}
       `;
     }
     const attemptNumber = (latest?.attemptNumber ?? 0) + 1;
     if (attemptNumber > 10) throw new DomainError("UPLOAD_ATTEMPT_LIMIT", "该文件已达到重试次数上限", 429);
     const attemptPublicId = createPublicId("UA");
     const attemptExpiresAt = new Date(Date.now() + TUS_RESOURCE_TTL_SECONDS * 1000);
+    const uploadingAttemptStatus = resolveServiceTransition(
+      uploadAttemptMachine,
+      "created",
+      "start",
+      "INVALID_UPLOAD_ATTEMPT_STATE",
+    );
     await transaction`
       insert into egocapture.upload_attempts (
         public_id, upload_intent_id, attempt_number, status, expires_at, started_at
       ) values (
-        ${attemptPublicId}, ${upload.id}::uuid, ${attemptNumber}, 'uploading', ${attemptExpiresAt}, now()
+        ${attemptPublicId}, ${upload.id}::uuid, ${attemptNumber}, ${uploadingAttemptStatus}, ${attemptExpiresAt}, now()
       )
     `;
+    const uploadingTransferStatus = upload.transferStatus === "uploading"
+      ? upload.transferStatus
+      : resolveServiceTransition(
+          uploadTransferMachine,
+          upload.transferStatus,
+          "start",
+          "INVALID_UPLOAD_STATE",
+        );
     await transaction`
       update egocapture.upload_intents
-      set transfer_status = 'uploading', failure_code = null, expected_expires_at = ${attemptExpiresAt}
-      where id = ${upload.id}::uuid
+      set transfer_status = ${uploadingTransferStatus}, failure_code = null, expected_expires_at = ${attemptExpiresAt}
+      where id = ${upload.id}::uuid and transfer_status = ${upload.transferStatus}
     `;
     await writeAudit(transaction, {
       actorProfileId: viewer.profileId,
@@ -478,10 +526,10 @@ export async function updateUploadAttemptProgress(
       uploadId: string;
       participantStatus: string;
       consentStatus: string;
-      transferStatus: string;
+      transferStatus: UploadAuthority["transferStatus"];
       sizeBytes: string;
       attemptId: string;
-      attemptStatus: string;
+      attemptStatus: "created" | "uploading" | "paused" | "completed" | "failed" | "aborted" | "expired";
       bytesUploaded: string;
       expiresAt: Date | null;
     }[]>`
@@ -527,15 +575,23 @@ export async function updateUploadAttemptProgress(
       throw new DomainError("UPLOAD_PROGRESS_INVALID", "服务端上传进度无效", 500);
     }
     const bytesUploaded = advanceUploadAttemptProgress(currentBytes, input.bytesUploaded, sizeBytes);
+    const nextAttemptStatus = input.status === authority.attemptStatus
+      ? authority.attemptStatus
+      : resolveServiceTransition(
+          uploadAttemptMachine,
+          authority.attemptStatus,
+          input.status === "paused" ? "pause" : "start",
+          "INVALID_UPLOAD_ATTEMPT_STATE",
+        );
     const [updated] = await transaction<{
       status: string;
       bytesUploaded: string;
       updatedAt: Date;
     }[]>`
       update egocapture.upload_attempts
-      set status = ${input.status}, bytes_uploaded = ${bytesUploaded},
+      set status = ${nextAttemptStatus}, bytes_uploaded = ${bytesUploaded},
         started_at = coalesce(started_at, now())
-      where id = ${authority.attemptId}::uuid
+      where id = ${authority.attemptId}::uuid and status = ${authority.attemptStatus}
       returning status, bytes_uploaded::text, updated_at
     `;
     return {
@@ -555,18 +611,51 @@ async function recordUploadFailure(
   requestId: string,
 ) {
   const db = database();
-  await db.begin(async (transaction) => {
-    await transaction`
-      update egocapture.upload_intents
-      set transfer_status = 'failed', failure_code = ${failureCode}
-      where id = ${upload.id}::uuid and transfer_status <> 'verified'
+  return await db.begin(async (transaction) => {
+    const [locked] = await transaction<{
+      transferStatus: UploadAuthority["transferStatus"];
+    }[]>`
+      select transfer_status
+      from egocapture.upload_intents
+      where id = ${upload.id}::uuid
+      for update
     `;
+    if (!locked || ["verified", "aborted", "expired"].includes(locked.transferStatus)) {
+      return false;
+    }
+    const failedTransferStatus = resolveServiceTransition(
+      uploadTransferMachine,
+      locked.transferStatus,
+      "fail",
+      "INVALID_UPLOAD_STATE",
+    );
+    assertServiceTransitionSet(
+      uploadAttemptMachine,
+      ["created", "uploading", "paused"],
+      "fail",
+      "INVALID_UPLOAD_ATTEMPT_STATE",
+    );
+    const failedAttemptStatus = resolveServiceTransition(
+      uploadAttemptMachine,
+      "created",
+      "fail",
+      "INVALID_UPLOAD_ATTEMPT_STATE",
+    );
+    const failedUploads = await transaction`
+      update egocapture.upload_intents
+      set transfer_status = ${failedTransferStatus}, failure_code = ${failureCode}
+      where id = ${upload.id}::uuid and transfer_status = ${locked.transferStatus}
+      returning id
+    `;
+    if (failedUploads.length === 0) {
+      throw new DomainError("STALE_UPLOAD_STATE", "Upload 状态已变化，请刷新后重试", 409);
+    }
     await transaction`
       update egocapture.upload_attempts
-      set status = 'failed', error_code = ${failureCode}
+      set status = ${failedAttemptStatus}, error_code = ${failureCode}
       where upload_intent_id = ${upload.id}::uuid
         and attempt_number = (select max(attempt_number) from egocapture.upload_attempts where upload_intent_id = ${upload.id}::uuid)
-        and status <> 'completed'
+        and status in ('created', 'uploading', 'paused', 'failed')
     `;
     await transaction`
       insert into egocapture.review_cases (
@@ -588,6 +677,7 @@ async function recordUploadFailure(
       requestId,
       afterValues: { failureCode, expectedSizeBytes: upload.sizeBytes },
     });
+    return true;
   });
 }
 
@@ -607,13 +697,43 @@ export async function completeUpload(viewer: Viewer, uploadPublicId: string, req
     throw new DomainError("UPLOAD_TERMINAL", "该 Upload 已终结", 409);
   }
   const db = database();
-  await db`update egocapture.upload_intents set transfer_status = 'reconciling' where id = ${upload.id}::uuid and transfer_status <> 'verified'`;
-  upload = { ...upload, transferStatus: "reconciling" };
+  if (upload.transferStatus !== "reconciling") {
+    const reconcilingStatus = resolveServiceTransition(
+      uploadTransferMachine,
+      upload.transferStatus,
+      "reconcile",
+      "INVALID_UPLOAD_STATE",
+    );
+    const transitioned = await db<{ transferStatus: UploadAuthority["transferStatus"] }[]>`
+      update egocapture.upload_intents set transfer_status = ${reconcilingStatus}
+      where id = ${upload.id}::uuid and transfer_status = ${upload.transferStatus}
+      returning transfer_status
+    `;
+    if (transitioned.length === 0) {
+      const current = await ownUploadAuthority(viewer, uploadPublicId);
+      if (current.transferStatus === "verified") {
+        const completed = await getParticipantUpload(viewer, uploadPublicId);
+        return {
+          uploadPublicId,
+          transferStatus: "verified",
+          metadataStatus: completed.metadataStatus,
+          videoAssetPublicId: completed.asset?.publicId,
+        };
+      }
+      if (current.transferStatus !== "reconciling") {
+        throw new DomainError("STALE_UPLOAD_STATE", "Upload 状态已变化，请刷新后重试", 409);
+      }
+      upload = current;
+    } else {
+      upload = { ...upload, transferStatus: transitioned[0].transferStatus };
+    }
+  }
 
   const supabase = createSupabaseAdminClient();
   const { data: objectInfo, error } = await supabase.storage.from(STORAGE_BUCKET).info(upload.objectKey);
   if (error || !objectInfo) {
-    await recordUploadFailure(viewer, upload, "storage_missing", requestId);
+    const recorded = await recordUploadFailure(viewer, upload, "storage_missing", requestId);
+    if (!recorded) throw new DomainError("STALE_UPLOAD_STATE", "Upload 状态已变化，请刷新后重试", 409);
     throw new DomainError("STORAGE_MISSING", "Storage 中尚未找到完整对象", 409);
   }
   const info = objectInfo as unknown as {
@@ -623,15 +743,17 @@ export async function completeUpload(viewer: Viewer, uploadPublicId: string, req
   };
   const actualSize = Number(info.size ?? info.metadata?.size ?? 0);
   if (!Number.isSafeInteger(actualSize) || actualSize !== upload.sizeBytes) {
-    await recordUploadFailure(viewer, upload, "size_mismatch", requestId);
+    const recorded = await recordUploadFailure(viewer, upload, "size_mismatch", requestId);
+    if (!recorded) throw new DomainError("STALE_UPLOAD_STATE", "Upload 状态已变化，请刷新后重试", 409);
     throw new DomainError("SIZE_MISMATCH", "Storage 对象大小与声明不一致", 409);
   }
 
   const result = await db.begin(async (transaction) => {
-    const [locked] = await transaction<{ transferStatus: string }[]>`
+    const [locked] = await transaction<{ transferStatus: UploadAuthority["transferStatus"] }[]>`
       select transfer_status from egocapture.upload_intents
       where id = ${upload.id}::uuid for update
     `;
+    if (!locked) throw new DomainError("NOT_FOUND", "Upload 或资源不存在", 404);
     if (locked.transferStatus === "verified") {
       const [existing] = await transaction<{ videoAssetPublicId: string }[]>`
         select asset.public_id as video_asset_public_id
@@ -639,6 +761,31 @@ export async function completeUpload(viewer: Viewer, uploadPublicId: string, req
       `;
       return { videoAssetPublicId: existing.videoAssetPublicId };
     }
+    if (locked.transferStatus !== "reconciling") {
+      throw new DomainError("STALE_UPLOAD_STATE", "Upload 状态已变化，请刷新后重试", 409);
+    }
+    const [latestAttempt] = await transaction<{
+      id: string;
+      status: "created" | "uploading" | "paused" | "completed" | "failed" | "aborted" | "expired";
+    }[]>`
+      select id, status
+      from egocapture.upload_attempts
+      where upload_intent_id = ${upload.id}::uuid
+      order by attempt_number desc
+      limit 1
+      for update
+    `;
+    if (!latestAttempt) {
+      throw new DomainError("UPLOAD_ATTEMPT_REQUIRED", "Upload 缺少可对账的 Attempt", 409);
+    }
+    const completedAttemptStatus = latestAttempt.status === "completed"
+      ? latestAttempt.status
+      : resolveServiceTransition(
+          uploadAttemptMachine,
+          latestAttempt.status,
+          "complete",
+          "INVALID_UPLOAD_ATTEMPT_STATE",
+        );
     const [stored] = await transaction<{ id: string }[]>`
       insert into egocapture.stored_objects (
         upload_intent_id, provider, bucket, object_key, size_bytes, etag, verified_at
@@ -661,9 +808,12 @@ export async function completeUpload(viewer: Viewer, uploadPublicId: string, req
       values (${asset.id}::uuid, ${stored.id}::uuid)
     `;
     const [session] = upload.claimedSessionId
-      ? await transaction<{ assignmentId: string; declaredDeviceId: string }[]>`
-          select assignment_id, declared_device_id
-          from egocapture.recording_sessions where id = ${upload.claimedSessionId}::uuid
+      ? await transaction<{ assignmentId: string; assignmentStatus: "assigned" | "acknowledged" | "session_created" | "uploading" | "submitted" | "needs_review" | "rework_required" | "accepted" | "expired" | "missing_upload" | "canceled"; declaredDeviceId: string }[]>`
+          select session.assignment_id, session.declared_device_id, assignment.status as assignment_status
+          from egocapture.recording_sessions session
+          join egocapture.assignments assignment on assignment.id = session.assignment_id
+          where session.id = ${upload.claimedSessionId}::uuid
+          for update of assignment
         `
       : [];
     await transaction`
@@ -707,28 +857,52 @@ export async function completeUpload(viewer: Viewer, uploadPublicId: string, req
         )
       `;
     }
+    const verifiedStatus = resolveServiceTransition(
+      uploadTransferMachine,
+      locked.transferStatus,
+      "verify",
+      "INVALID_UPLOAD_STATE",
+    );
     await transaction`
       update egocapture.upload_intents
-      set transfer_status = 'verified', failure_code = null, verified_at = now(), metadata_status = 'pending'
-      where id = ${upload.id}::uuid
+      set transfer_status = ${verifiedStatus}, failure_code = null, verified_at = now()
+      where id = ${upload.id}::uuid and transfer_status = ${locked.transferStatus}
     `;
-    await transaction`
-      update egocapture.upload_attempts
-      set status = 'completed', bytes_uploaded = ${actualSize}, completed_at = now(), error_code = null
-      where upload_intent_id = ${upload.id}::uuid
-        and attempt_number = (select max(attempt_number) from egocapture.upload_attempts where upload_intent_id = ${upload.id}::uuid)
-    `;
-    if (session) {
+    if (latestAttempt.status !== "completed") {
+      const completedAttempts = await transaction`
+        update egocapture.upload_attempts
+        set status = ${completedAttemptStatus}, bytes_uploaded = ${actualSize}, completed_at = now(), error_code = null
+        where id = ${latestAttempt.id}::uuid and status = ${latestAttempt.status}
+        returning id
+      `;
+      if (completedAttempts.length === 0) {
+        throw new DomainError("STALE_UPLOAD_ATTEMPT_STATE", "UploadAttempt 状态已变化，请刷新后重试", 409);
+      }
+    }
+    if (session && ["acknowledged", "session_created", "uploading", "rework_required"].includes(session.assignmentStatus)) {
+      const submittedStatus = resolveServiceTransition(
+        assignmentMachine,
+        session.assignmentStatus,
+        "submit",
+        "INVALID_ASSIGNMENT_STATE",
+      );
       await transaction`
-        update egocapture.assignments set status = 'submitted'
+        update egocapture.assignments set status = ${submittedStatus}
         where id = ${session.assignmentId}::uuid
-          and status in ('acknowledged', 'session_created', 'uploading', 'rework_required')
+          and status = ${session.assignmentStatus}
       `;
     }
+    const completedBatchStatus = resolveServiceTransition(
+      uploadBatchMachine,
+      "open",
+      "complete",
+      "INVALID_UPLOAD_BATCH_STATE",
+    );
     await transaction`
       update egocapture.upload_batches batch
-      set status = 'completed', completed_at = now()
+      set status = ${completedBatchStatus}, completed_at = now()
       where batch.id = ${upload.batchId}::uuid
+        and batch.status = 'open'
         and not exists (
           select 1 from egocapture.upload_intents pending
           where pending.batch_id = batch.id
@@ -762,15 +936,56 @@ export async function completeUpload(viewer: Viewer, uploadPublicId: string, req
 
 export async function abortUpload(viewer: Viewer, uploadPublicId: string, requestId: string) {
   uploadPublicIdSchema.parse(uploadPublicId);
-  const upload = await ownUploadAuthority(viewer, uploadPublicId);
-  if (upload.transferStatus === "verified") throw new DomainError("UPLOAD_TERMINAL", "已验证对象不能取消", 409);
-  if (upload.transferStatus === "aborted") return { uploadPublicId, transferStatus: "aborted" };
+  assertServiceTransitionSet(
+    uploadAttemptMachine,
+    ["created", "uploading", "paused", "failed"],
+    "abort",
+    "INVALID_UPLOAD_ATTEMPT_STATE",
+  );
+  const abortedAttemptStatus = resolveServiceTransition(
+    uploadAttemptMachine,
+    "created",
+    "abort",
+    "INVALID_UPLOAD_ATTEMPT_STATE",
+  );
   const db = database();
-  await db.begin(async (transaction) => {
-    await transaction`update egocapture.upload_intents set transfer_status = 'aborted', failure_code = null where id = ${upload.id}::uuid`;
+  return await db.begin(async (transaction) => {
+    const [upload] = await transaction<{
+      id: string;
+      publicId: string;
+      transferStatus: UploadAuthority["transferStatus"];
+    }[]>`
+      select intent.id, intent.public_id, intent.transfer_status
+      from egocapture.upload_intents intent
+      join egocapture.participants participant on participant.id = intent.participant_id
+      where intent.public_id = ${uploadPublicId}
+        and participant.auth_user_id = ${viewer.authUserId}::uuid
+      for update of intent
+    `;
+    if (!upload) throw new DomainError("NOT_FOUND", "Upload 或资源不存在", 404);
+    if (upload.transferStatus === "verified") {
+      throw new DomainError("UPLOAD_TERMINAL", "已验证对象不能取消", 409);
+    }
+    if (upload.transferStatus === "aborted") {
+      return { uploadPublicId, transferStatus: "aborted" as const };
+    }
+    const abortedTransferStatus = resolveServiceTransition(
+      uploadTransferMachine,
+      upload.transferStatus,
+      "abort",
+      "INVALID_UPLOAD_STATE",
+    );
+    const abortedUploads = await transaction`
+      update egocapture.upload_intents set transfer_status = ${abortedTransferStatus}, failure_code = null
+      where id = ${upload.id}::uuid and transfer_status = ${upload.transferStatus}
+      returning id
+    `;
+    if (abortedUploads.length === 0) {
+      throw new DomainError("STALE_UPLOAD_STATE", "Upload 状态已变化，请刷新后重试", 409);
+    }
     await transaction`
-      update egocapture.upload_attempts set status = 'aborted', error_code = 'participant_canceled'
-      where upload_intent_id = ${upload.id}::uuid and status <> 'completed'
+      update egocapture.upload_attempts set status = ${abortedAttemptStatus}, error_code = 'participant_canceled'
+      where upload_intent_id = ${upload.id}::uuid and status in ('created', 'uploading', 'paused', 'failed')
     `;
     await writeAudit(transaction, {
       actorProfileId: viewer.profileId,
@@ -781,8 +996,8 @@ export async function abortUpload(viewer: Viewer, uploadPublicId: string, reques
       requestId,
       afterValues: { transferStatus: "aborted" },
     });
+    return { uploadPublicId, transferStatus: "aborted" as const };
   });
-  return { uploadPublicId, transferStatus: "aborted" };
 }
 
 export async function getParticipantUpload(viewer: Viewer, uploadPublicId: string) {

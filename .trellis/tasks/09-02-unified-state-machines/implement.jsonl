@@ -1,0 +1,6 @@
+{"file":".trellis/spec/core/frontend/index.md","reason":"Core package conventions and active contracts."}
+{"file":".trellis/spec/core/frontend/lifecycle-state-machine-contract.md","reason":"Executable XState, PostgreSQL, service transaction and upload actor contract."}
+{"file":".trellis/spec/guides/cross-layer-thinking-guide.md","reason":"State changes cross domain, service, database, API and UI layers."}
+{"file":".trellis/spec/guides/code-reuse-thinking-guide.md","reason":"Transition maps and reducers need one owner."}
+{"file":".trellis/tasks/09-02-unified-state-machines/research/state-inventory.md","reason":"Observed fields, write clusters and non-machine boundary."}
+{"file":".trellis/tasks/09-02-unified-state-machines/research/state-machine-library-evaluation.md","reason":"Selected XState v5 versions, dependency boundaries, server/client usage and rollback gate."}

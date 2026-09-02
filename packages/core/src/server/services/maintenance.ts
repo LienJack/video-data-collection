@@ -2,27 +2,28 @@ import "server-only";
 
 import { randomUUID } from "node:crypto";
 import { STORAGE_BUCKET } from "@egocapture/core/domain/constants";
+import {
+  metadataAttemptMachine,
+  reviewCaseMachine,
+  uploadAttemptMachine,
+  uploadMetadataMachine,
+  uploadTransferMachine,
+  videoAssetMachine,
+} from "@egocapture/core/domain/lifecycle-machines";
 import { createPublicId } from "@egocapture/core/domain/public-id";
 import { writeAudit } from "@egocapture/core/server/audit";
 import type { Viewer } from "@egocapture/core/server/auth";
 import { database } from "@egocapture/core/server/database";
 import { extractUploadMetadata } from "@egocapture/core/server/services/metadata";
 import { completeUpload } from "@egocapture/core/server/services/uploads";
+import {
+  assertServiceTransitionSet,
+  resolveServiceTransition,
+} from "@egocapture/core/server/state-transition";
 import { createSupabaseAdminClient } from "@egocapture/core/server/supabase/admin";
 
 const MAX_CRON_ITEMS = 10;
-const FIXTURE_ASSET_ID = "74000000-0000-4000-8000-000000000001";
 const FIXTURE_STORED_OBJECT_ID = "73000000-0000-4000-8000-000000000001";
-const FIXTURE_REVIEW_IDS = [
-  "RV-23456782",
-  "RV-23456783",
-  "RV-23456784",
-  "RV-23456785",
-  "RV-23456786",
-  "RV-23456787",
-  "RV-23456788",
-];
-
 type MaintenanceViewer = Viewer & { uploadPublicId: string };
 
 async function expireUploadIntents(limit: number) {
@@ -33,8 +34,9 @@ async function expireUploadIntents(limit: number) {
       id: string;
       publicId: string;
       isFixture: boolean;
+      transferStatus: "created" | "uploading";
     }[]>`
-      select intent.id, intent.public_id, participant.is_fixture
+      select intent.id, intent.public_id, participant.is_fixture, intent.transfer_status
       from egocapture.upload_intents intent
       join egocapture.participants participant on participant.id = intent.participant_id
       where intent.transfer_status in ('created', 'uploading')
@@ -43,15 +45,33 @@ async function expireUploadIntents(limit: number) {
       for update of intent skip locked
       limit ${limit}
     `;
+    const expiredAttemptStatus = resolveServiceTransition(
+      uploadAttemptMachine,
+      "created",
+      "expire",
+      "INVALID_UPLOAD_ATTEMPT_STATE",
+    );
+    assertServiceTransitionSet(
+      uploadAttemptMachine,
+      ["created", "uploading", "paused"],
+      "expire",
+      "INVALID_UPLOAD_ATTEMPT_STATE",
+    );
     for (const upload of uploads) {
+      const expiredTransferStatus = resolveServiceTransition(
+        uploadTransferMachine,
+        upload.transferStatus,
+        "expire",
+        "INVALID_UPLOAD_STATE",
+      );
       await transaction`
         update egocapture.upload_intents
-        set transfer_status = 'expired', failure_code = 'upload_intent_expired'
-        where id = ${upload.id}::uuid
+        set transfer_status = ${expiredTransferStatus}, failure_code = 'upload_intent_expired'
+        where id = ${upload.id}::uuid and transfer_status = ${upload.transferStatus}
       `;
       await transaction`
         update egocapture.upload_attempts
-        set status = 'expired', error_code = 'upload_intent_expired'
+        set status = ${expiredAttemptStatus}, error_code = 'upload_intent_expired'
         where upload_intent_id = ${upload.id}::uuid
           and status in ('created', 'uploading', 'paused')
       `;
@@ -119,9 +139,21 @@ async function metadataViewers(limit: number): Promise<MaintenanceViewer[]> {
   const stuckIds = viewers.map((viewer) => viewer.uploadPublicId);
   if (stuckIds.length > 0) {
     await db.begin(async (transaction) => {
+      const failedAttemptStatus = resolveServiceTransition(
+        metadataAttemptMachine,
+        "processing",
+        "fail",
+        "INVALID_METADATA_ATTEMPT_STATE",
+      );
+      const pendingMetadataStatus = resolveServiceTransition(
+        uploadMetadataMachine,
+        "processing",
+        "retry",
+        "INVALID_METADATA_STATE",
+      );
       await transaction`
         update egocapture.metadata_attempts attempt
-        set status = 'failed', completed_at = now(), error_code = 'cron_stuck_processing'
+        set status = ${failedAttemptStatus}, completed_at = now(), error_code = 'cron_stuck_processing'
         from egocapture.video_assets asset
         join egocapture.upload_intents intent on intent.id = asset.upload_intent_id
         where attempt.video_asset_id = asset.id and attempt.status = 'processing'
@@ -131,7 +163,7 @@ async function metadataViewers(limit: number): Promise<MaintenanceViewer[]> {
       `;
       await transaction`
         update egocapture.upload_intents
-        set metadata_status = 'pending'
+        set metadata_status = ${pendingMetadataStatus}
         where public_id = any(${stuckIds}) and metadata_status = 'processing'
           and updated_at < now() - interval '30 minutes'
       `;
@@ -167,6 +199,34 @@ async function cleanExpiredDemoObjects() {
     const { error } = await supabase.storage.from(STORAGE_BUCKET).remove([object.objectKey]);
     if (error) continue;
     await db.begin(async (transaction) => {
+      const [asset] = await transaction<{
+        status: "active" | "rejected" | "deleted";
+      }[]>`
+        select status from egocapture.video_assets
+        where id = ${object.assetId}::uuid
+        for update
+      `;
+      if (!asset) return;
+      const deletedAssetStatus = asset.status === "deleted"
+        ? asset.status
+        : resolveServiceTransition(
+            videoAssetMachine,
+            asset.status,
+            "delete",
+            "INVALID_VIDEO_ASSET_STATE",
+          );
+      assertServiceTransitionSet(
+        reviewCaseMachine,
+        ["open", "in_review"],
+        "dismiss",
+        "INVALID_REVIEW_CASE_STATE",
+      );
+      const dismissedReviewStatus = resolveServiceTransition(
+        reviewCaseMachine,
+        "open",
+        "dismiss",
+        "INVALID_REVIEW_CASE_STATE",
+      );
       const updated = await transaction`
         update egocapture.stored_objects
         set deleted_at = now(), delete_reason = 'demo_retention_7d'
@@ -174,13 +234,19 @@ async function cleanExpiredDemoObjects() {
         returning id
       `;
       if (updated.length === 0) return;
-      await transaction`
-        update egocapture.video_assets set status = 'deleted'
-        where id = ${object.assetId}::uuid
-      `;
+      if (asset.status !== "deleted") {
+        const deletedAssets = await transaction`
+          update egocapture.video_assets set status = ${deletedAssetStatus}
+          where id = ${object.assetId}::uuid and status = ${asset.status}
+          returning id
+        `;
+        if (deletedAssets.length === 0) {
+          throw new Error("STALE_VIDEO_ASSET_STATE");
+        }
+      }
       await transaction`
         update egocapture.review_cases
-        set status = 'dismissed', resolution_reason = 'Demo retention period elapsed', resolved_at = now()
+        set status = ${dismissedReviewStatus}, resolution_reason = 'Demo retention period elapsed', resolved_at = now()
         where video_asset_id = ${object.assetId}::uuid and status in ('open', 'in_review')
       `;
       await writeAudit(transaction, {
@@ -199,88 +265,6 @@ async function cleanExpiredDemoObjects() {
     });
   }
   return deleted;
-}
-
-async function repairDemoBaseline() {
-  const db = database();
-  return await db.begin(async (transaction) => {
-    const [participant] = await transaction<{ id: string }[]>`
-      select id from egocapture.participants
-      where id = '30000000-0000-4000-8000-000000000001'::uuid and is_fixture
-      for update
-    `;
-    if (!participant) return false;
-    await transaction`
-      update egocapture.participants
-      set status = 'active', consent_status = 'valid', withdrawn_at = null
-      where id = '30000000-0000-4000-8000-000000000001'::uuid and is_fixture
-    `;
-    await transaction`
-      update egocapture.assignments assignment
-      set status = expected.status, acknowledged_at = null,
-        acknowledged_content_hash = null, canceled_at = null
-      from (values
-        ('60000000-0000-4000-8000-000000000001'::uuid, 'assigned'::text),
-        ('60000000-0000-4000-8000-000000000002'::uuid, 'assigned'::text),
-        ('60000000-0000-4000-8000-000000000003'::uuid, 'needs_review'::text),
-        ('60000000-0000-4000-8000-000000000004'::uuid, 'assigned'::text)
-      ) expected(id, status)
-      where assignment.id = expected.id
-    `;
-    await transaction`
-      update egocapture.recording_sessions
-      set status = 'open', closed_at = null, close_reason = null
-      where id = '61000000-0000-4000-8000-000000000001'::uuid
-    `;
-    await transaction`
-      update egocapture.video_assets set status = 'active'
-      where id = ${FIXTURE_ASSET_ID}::uuid and is_fixture
-    `;
-    await transaction`
-      update egocapture.review_cases
-      set status = 'open', resolution_reason = null, resolved_at = null
-      where public_id = any(${FIXTURE_REVIEW_IDS}) and is_fixture
-    `;
-    const [current] = await transaction<{
-      id: string;
-      decisionType: string;
-      resolvedSessionId: string | null;
-    }[]>`
-      select id, decision_type, resolved_session_id
-      from egocapture.match_decisions
-      where video_asset_id = ${FIXTURE_ASSET_ID}::uuid and superseded_by is null
-      for update
-    `;
-    if (!current) {
-      await transaction`
-        insert into egocapture.match_decisions (video_asset_id, decision_type)
-        values (${FIXTURE_ASSET_ID}::uuid, 'unmatched')
-      `;
-    } else if (current.decisionType !== 'unmatched' || current.resolvedSessionId) {
-      const nextId = randomUUID();
-      await transaction`set constraints all deferred`;
-      await transaction`
-        update egocapture.match_decisions set superseded_by = ${nextId}::uuid
-        where id = ${current.id}::uuid
-      `;
-      await transaction`
-        insert into egocapture.match_decisions (
-          id, video_asset_id, decision_type, supersedes_decision_id
-        ) values (${nextId}::uuid, ${FIXTURE_ASSET_ID}::uuid, 'unmatched', ${current.id}::uuid)
-      `;
-    }
-    await writeAudit(transaction, {
-      actorProfileId: null,
-      actorAuthUserId: null,
-      action: "demo.baseline_repaired",
-      entityType: "participant",
-      entityPublicId: "PT-23456789",
-      requestId: randomUUID(),
-      afterValues: { fixtureReviewCases: 7, currentDecision: "unmatched" },
-      metadata: { source: "daily_cron" },
-    });
-    return true;
-  });
 }
 
 export async function runDailyReconciliation() {
@@ -313,7 +297,6 @@ export async function runDailyReconciliation() {
   }
 
   const demoObjectsDeleted = await cleanExpiredDemoObjects();
-  const demoBaselineRepaired = await repairDemoBaseline();
   return {
     limit: MAX_CRON_ITEMS,
     expired,
@@ -322,6 +305,5 @@ export async function runDailyReconciliation() {
     metadataProcessed,
     metadataFailures,
     demoObjectsDeleted,
-    demoBaselineRepaired,
   };
 }

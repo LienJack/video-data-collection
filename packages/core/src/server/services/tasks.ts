@@ -9,6 +9,11 @@ import {
   type AssignmentStatus,
 } from "@egocapture/core/domain/assignment";
 import { DomainError } from "@egocapture/core/domain/errors";
+import {
+  assignmentMachine,
+  recordingSessionMachine,
+  taskMachine,
+} from "@egocapture/core/domain/lifecycle-machines";
 import { createPublicId } from "@egocapture/core/domain/public-id";
 import { isCanonicalLocale } from "@egocapture/core/domain/regional-preferences";
 import { createPageResult, pageNumberSchema, pageSizeSchema, resolvePage } from "@egocapture/core/pagination";
@@ -21,6 +26,7 @@ import { writeAudit } from "@egocapture/core/server/audit";
 import type { Viewer } from "@egocapture/core/server/auth";
 import { database } from "@egocapture/core/server/database";
 import { withIdempotency } from "@egocapture/core/server/idempotency";
+import { resolveServiceTransition } from "@egocapture/core/server/state-transition";
 
 const taskPublicIdSchema = z.string().regex(/^TSK-[23456789ABCDEFGHJKLMNPQRSTUVWXYZ]{6,16}$/);
 const participantPublicIdSchema = z.string().regex(/^PT-[23456789ABCDEFGHJKLMNPQRSTUVWXYZ]{6,16}$/);
@@ -647,7 +653,7 @@ export async function publishTask(
         id: string;
         publicId: string;
         draftInstructions: TaskInstructions;
-        lifecycle: string;
+        lifecycle: "draft" | "active" | "archived";
         isFixture: boolean;
       }[]>`
         select task.id, task.public_id, task.draft_instructions,
@@ -661,6 +667,9 @@ export async function publishTask(
         throw new DomainError("FIXTURE_PROTECTED", "公开 Demo 的系统 Task 不可发布", 403);
       }
       if (task.lifecycle === "archived") throw new DomainError("TASK_ARCHIVED", "Archived Task 不可发布", 409);
+      const publishedLifecycle = task.lifecycle === "draft"
+        ? resolveServiceTransition(taskMachine, task.lifecycle, "publish", "INVALID_TASK_STATE")
+        : task.lifecycle;
       const instructions = taskInstructionsSchema.parse(task.draftInstructions);
       const contentHash = taskContentHash(instructions);
       const [next] = await transaction<{ version: number }[]>`
@@ -771,7 +780,8 @@ export async function publishTask(
         });
       }
       const [updated] = await transaction<{ updatedAt: Date }[]>`
-        update egocapture.tasks set lifecycle = 'active' where id = ${task.id}::uuid
+        update egocapture.tasks set lifecycle = ${publishedLifecycle}
+        where id = ${task.id}::uuid and lifecycle = ${task.lifecycle}
         returning updated_at
       `;
       await writeAudit(transaction, {
@@ -1263,6 +1273,12 @@ export async function replaceTaskParticipant(
       if (["accepted", "canceled"].includes(original.status)) {
         throw new DomainError("INVALID_ASSIGNMENT_STATE", "已完成或已停止的参与者不能替换", 409);
       }
+      const canceledOriginalStatus = resolveServiceTransition(
+        assignmentMachine,
+        original.status,
+        "cancel",
+        "INVALID_ASSIGNMENT_STATE",
+      );
       if (original.participantPublicId === input.participantPublicId) {
         throw new DomainError("SAME_PARTICIPANT", "请选择另一名参与者", 422);
       }
@@ -1306,12 +1322,18 @@ export async function replaceTaskParticipant(
 
       await transaction`
         update egocapture.assignments
-        set status = 'canceled', canceled_at = now()
-        where id = ${original.id}::uuid
+        set status = ${canceledOriginalStatus}, canceled_at = now()
+        where id = ${original.id}::uuid and status = ${original.status}
       `;
+      const closedSessionStatus = resolveServiceTransition(
+        recordingSessionMachine,
+        "open",
+        "close",
+        "INVALID_SESSION_STATE",
+      );
       const closedSessions = await transaction`
         update egocapture.recording_sessions
-        set status = 'closed', closed_at = now(), close_reason = ${input.reason}
+        set status = ${closedSessionStatus}, closed_at = now(), close_reason = ${input.reason}
         where assignment_id = ${original.id}::uuid and status = 'open'
         returning id
       `;
@@ -1460,10 +1482,16 @@ export async function acknowledgeAssignment(
     if (!canAcknowledgeAssignment(assignment.status)) {
       throw new DomainError("INVALID_ASSIGNMENT_STATE", "当前 Assignment 状态不能确认", 409);
     }
+    const acknowledgedStatus = resolveServiceTransition(
+      assignmentMachine,
+      assignment.status,
+      "acknowledge",
+      "INVALID_ASSIGNMENT_STATE",
+    );
     await transaction`
       update egocapture.assignments
-      set status = 'acknowledged', acknowledged_at = now(), acknowledged_content_hash = ${input.contentHash}
-      where id = ${assignment.id}::uuid
+      set status = ${acknowledgedStatus}, acknowledged_at = now(), acknowledged_content_hash = ${input.contentHash}
+      where id = ${assignment.id}::uuid and status = ${assignment.status}
     `;
     await writeAudit(transaction, {
       actorProfileId: viewer.profileId,
@@ -1519,6 +1547,12 @@ export async function cancelAssignment(
     if (!canCancelAssignment(assignment.status)) {
       throw new DomainError("INVALID_ASSIGNMENT_STATE", "当前 Assignment 状态不能取消", 409);
     }
+    const canceledStatus = resolveServiceTransition(
+      assignmentMachine,
+      assignment.status,
+      "cancel",
+      "INVALID_ASSIGNMENT_STATE",
+    );
     await transaction`
       select id from egocapture.tasks
       where id = ${assignment.taskId}::uuid
@@ -1534,12 +1568,18 @@ export async function cancelAssignment(
     }
     await transaction`
       update egocapture.assignments
-      set status = 'canceled', canceled_at = now()
-      where id = ${assignment.id}::uuid
+      set status = ${canceledStatus}, canceled_at = now()
+      where id = ${assignment.id}::uuid and status = ${assignment.status}
     `;
+    const closedSessionStatus = resolveServiceTransition(
+      recordingSessionMachine,
+      "open",
+      "close",
+      "INVALID_SESSION_STATE",
+    );
     const closedSessions = await transaction`
       update egocapture.recording_sessions
-      set status = 'closed', closed_at = now(), close_reason = ${reason}
+      set status = ${closedSessionStatus}, closed_at = now(), close_reason = ${reason}
       where assignment_id = ${assignment.id}::uuid and status = 'open'
       returning id
     `;
@@ -1576,7 +1616,7 @@ export async function extendAssignment(
     await transaction`
       update egocapture.assignments
       set due_at = ${dueAt}, status = ${nextStatus}
-      where id = ${assignment.id}::uuid
+      where id = ${assignment.id}::uuid and status = ${assignment.status}
     `;
     await writeAudit(transaction, {
       actorProfileId: viewer.profileId,

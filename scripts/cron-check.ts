@@ -56,20 +56,6 @@ async function main() {
           id, public_id, upload_intent_id, attempt_number, status, started_at
         ) values (${attemptId}::uuid, ${createPublicId("UA")}, ${expiredId}::uuid, 1, 'uploading', now() - interval '2 hours')
       `;
-      await transaction`
-        update egocapture.assignments set status = 'session_created'
-        where id = '60000000-0000-4000-8000-000000000001'::uuid
-      `;
-      await transaction`
-        update egocapture.recording_sessions
-        set status = 'closed', closed_at = now(), close_reason = 'Cron baseline test mutation'
-        where id = '61000000-0000-4000-8000-000000000001'::uuid
-      `;
-      await transaction`
-        update egocapture.review_cases
-        set status = 'resolved', resolution_reason = 'Cron baseline test mutation', resolved_at = now()
-        where public_id = 'RV-23456782' and is_fixture
-      `;
     });
 
     const unauthorized = await api<{ error?: { code: string } }>(env.adminSiteUrl, "/api/cron/reconcile");
@@ -78,14 +64,12 @@ async function main() {
     const authorized = await api<{ data?: {
       expired: number;
       reconciliationFailures: number;
-      demoBaselineRepaired: boolean;
     } }>(env.adminSiteUrl, "/api/cron/reconcile", {
       headers: { authorization: `Bearer ${env.cronSecret}` },
     });
     assert(authorized.response.ok, "Authorized Cron request failed");
     assert((authorized.payload.data?.expired ?? 0) >= 1, "Cron did not expire the stale UploadIntent");
     assert((authorized.payload.data?.reconciliationFailures ?? 0) >= 1, "Cron did not reconcile the missing Storage object");
-    assert(authorized.payload.data?.demoBaselineRepaired === true, "Cron did not repair the Demo baseline");
 
     const [result] = await db<{
       expiredStatus: string;
@@ -93,26 +77,19 @@ async function main() {
       reconcilingStatus: string;
       expiredReviewCount: number;
       reconcilingReviewCount: number;
-      assignmentStatus: string;
-      sessionStatus: string;
-      reviewStatus: string;
     }[]>`
       select
         (select transfer_status from egocapture.upload_intents where id = ${expiredId}::uuid) as expired_status,
         (select status from egocapture.upload_attempts where id = ${attemptId}::uuid) as expired_attempt_status,
         (select transfer_status from egocapture.upload_intents where id = ${reconcilingId}::uuid) as reconciling_status,
         (select count(*)::int from egocapture.review_cases where upload_intent_id = ${expiredId}::uuid and case_type = 'upload_failed') as expired_review_count,
-        (select count(*)::int from egocapture.review_cases where upload_intent_id = ${reconcilingId}::uuid and case_type = 'upload_failed') as reconciling_review_count,
-        (select status from egocapture.assignments where id = '60000000-0000-4000-8000-000000000001'::uuid) as assignment_status,
-        (select status from egocapture.recording_sessions where id = '61000000-0000-4000-8000-000000000001'::uuid) as session_status,
-        (select status from egocapture.review_cases where public_id = 'RV-23456782') as review_status
+        (select count(*)::int from egocapture.review_cases where upload_intent_id = ${reconcilingId}::uuid and case_type = 'upload_failed') as reconciling_review_count
     `;
     assert(result.expiredStatus === "expired" && result.expiredAttemptStatus === "expired", "Expired UploadIntent layers are inconsistent");
     assert(result.reconcilingStatus === "failed", "Missing object did not become transfer failed");
     assert(result.expiredReviewCount === 1 && result.reconcilingReviewCount === 1, "Cron must open one Upload Failed case per stale upload");
-    assert(result.assignmentStatus === "assigned" && result.sessionStatus === "open" && result.reviewStatus === "open", "Demo baseline was not restored");
 
-    console.log(`Cron 验证通过：unauthorized=401, expired=${expiredPublicId}, reconciled=${reconcilingPublicId}, Demo baseline restored`);
+    console.log(`Cron 验证通过：unauthorized=401, expired=${expiredPublicId}, reconciled=${reconcilingPublicId}`);
   } finally {
     await db.begin(async (transaction) => {
       await transaction`delete from egocapture.review_cases where upload_intent_id in (${expiredId}::uuid, ${reconcilingId}::uuid)`;

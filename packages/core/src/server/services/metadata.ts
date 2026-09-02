@@ -3,6 +3,11 @@ import "server-only";
 import { z } from "zod";
 import { STORAGE_BUCKET } from "@egocapture/core/domain/constants";
 import { DomainError } from "@egocapture/core/domain/errors";
+import {
+  metadataAttemptMachine,
+  reviewCaseMachine,
+  uploadMetadataMachine,
+} from "@egocapture/core/domain/lifecycle-machines";
 import { compareDeviceConsistency } from "@egocapture/core/metadata/device-consistency";
 import { parseMetadata } from "@egocapture/core/metadata/parser";
 import { BudgetedRangeReader, MetadataRangeError } from "@egocapture/core/metadata/range-reader";
@@ -12,6 +17,10 @@ import type { Viewer } from "@egocapture/core/server/auth";
 import { database } from "@egocapture/core/server/database";
 import { serverEnvironment } from "@egocapture/core/server/env";
 import { createPublicId } from "@egocapture/core/domain/public-id";
+import {
+  assertServiceTransitionSet,
+  resolveServiceTransition,
+} from "@egocapture/core/server/state-transition";
 import { createSupabaseAdminClient } from "@egocapture/core/server/supabase/admin";
 
 const uploadPublicIdSchema = z.string().regex(/^UP-[23456789ABCDEFGHJKLMNPQRSTUVWXYZ]{6,16}$/);
@@ -19,6 +28,9 @@ const EXTRACTION_TIMEOUT_MS = 25_000;
 const SIGNED_READ_TTL_SECONDS = 5 * 60;
 const MAX_EXTRACTION_ATTEMPTS = 3;
 const RETRY_COOLDOWN_MS = 30_000;
+
+type UploadMetadataStatus = (typeof uploadMetadataMachine.definition.states)[number];
+type MetadataAttemptStatus = (typeof metadataAttemptMachine.definition.states)[number];
 
 type MetadataAuthority = {
   uploadIntentId: string;
@@ -32,7 +44,7 @@ type MetadataAuthority = {
   extension: "mp4" | "mov" | "insv";
   localModifiedAt: Date | null;
   transferStatus: string;
-  metadataStatus: string;
+  metadataStatus: UploadMetadataStatus;
   declaredManufacturer: string | null;
   declaredModel: string | null;
   declaredSerialHmac: string | null;
@@ -132,19 +144,29 @@ async function summary(videoAssetId: string, status: string): Promise<MetadataSu
   return row;
 }
 
-async function beginAttempt(authority: MetadataAuthority): Promise<{ attemptId: string; attemptNumber: number } | null> {
+type BeginAttemptResult =
+  | { kind: "terminal"; status: "extracted" | "partial" | "unsupported" }
+  | { kind: "started"; attemptId: string; attemptNumber: number };
+
+async function beginAttempt(authority: MetadataAuthority): Promise<BeginAttemptResult> {
   const db = database();
   return await db.begin(async (transaction) => {
-    const [locked] = await transaction<{ metadataStatus: string }[]>`
+    const [locked] = await transaction<{ metadataStatus: UploadMetadataStatus }[]>`
       select metadata_status from egocapture.upload_intents
       where id = ${authority.uploadIntentId}::uuid
       for update
     `;
-    if (locked.metadataStatus === "extracted") return null;
+    if (!locked) throw new DomainError("NOT_FOUND", "Upload 或资源不存在", 404);
+    if (["extracted", "partial", "unsupported"].includes(locked.metadataStatus)) {
+      return {
+        kind: "terminal",
+        status: locked.metadataStatus as "extracted" | "partial" | "unsupported",
+      };
+    }
     const [latest] = await transaction<{
       id: string;
       attemptNumber: number;
-      status: string;
+      status: MetadataAttemptStatus;
       startedAt: Date;
       completedAt: Date | null;
     }[]>`
@@ -166,10 +188,36 @@ async function beginAttempt(authority: MetadataAuthority): Promise<{ attemptId: 
       throw new DomainError("METADATA_ATTEMPT_LIMIT", "Metadata 已达到最多 3 次解析尝试", 429);
     }
     if (latest?.status === "processing") {
+      const timedOutStatus = resolveServiceTransition(
+        metadataAttemptMachine,
+        latest.status,
+        "fail",
+        "INVALID_METADATA_ATTEMPT_STATE",
+      );
       await transaction`
         update egocapture.metadata_attempts
-        set status = 'failed', completed_at = now(), error_code = 'processing_timeout'
-        where id = ${latest.id}::uuid
+        set status = ${timedOutStatus}, completed_at = now(), error_code = 'processing_timeout'
+        where id = ${latest.id}::uuid and status = ${latest.status}
+      `;
+    }
+    const retryStatus = locked.metadataStatus === "processing"
+      ? resolveServiceTransition(
+          uploadMetadataMachine,
+          locked.metadataStatus,
+          "retry",
+          "INVALID_METADATA_STATE",
+        )
+      : locked.metadataStatus;
+    const processingStatus = resolveServiceTransition(
+      uploadMetadataMachine,
+      retryStatus,
+      "start",
+      "INVALID_METADATA_STATE",
+    );
+    if (retryStatus !== locked.metadataStatus) {
+      await transaction`
+        update egocapture.upload_intents set metadata_status = ${retryStatus}
+        where id = ${authority.uploadIntentId}::uuid and metadata_status = ${locked.metadataStatus}
       `;
     }
     const [attempt] = await transaction<{ id: string }[]>`
@@ -181,11 +229,43 @@ async function beginAttempt(authority: MetadataAuthority): Promise<{ attemptId: 
       ) returning id
     `;
     await transaction`
-      update egocapture.upload_intents set metadata_status = 'processing'
-      where id = ${authority.uploadIntentId}::uuid
+      update egocapture.upload_intents set metadata_status = ${processingStatus}
+      where id = ${authority.uploadIntentId}::uuid and metadata_status = ${retryStatus}
     `;
-    return { attemptId: attempt.id, attemptNumber };
+    return { kind: "started", attemptId: attempt.id, attemptNumber };
   });
+}
+
+async function lockMetadataCompletion(
+  transaction: ReturnType<typeof database>,
+  authority: MetadataAuthority,
+  attemptId: string,
+) {
+  const [intent] = await transaction<{ metadataStatus: UploadMetadataStatus }[]>`
+    select metadata_status from egocapture.upload_intents
+    where id = ${authority.uploadIntentId}::uuid
+    for update
+  `;
+  const [attempt] = await transaction<{ status: MetadataAttemptStatus; isLatest: boolean }[]>`
+    select attempt.status,
+      attempt.id = (
+        select candidate.id from egocapture.metadata_attempts candidate
+        where candidate.video_asset_id = attempt.video_asset_id
+        order by candidate.attempt_number desc limit 1
+      ) as is_latest
+    from egocapture.metadata_attempts attempt
+    where attempt.id = ${attemptId}::uuid
+    for update
+  `;
+  if (!intent || !attempt || !attempt.isLatest
+      || intent.metadataStatus !== "processing" || attempt.status !== "processing") {
+    throw new DomainError(
+      "METADATA_ATTEMPT_STALE",
+      "Metadata 解析结果已过期，请读取最新状态",
+      409,
+    );
+  }
+  return { intent, attempt };
 }
 
 async function saveEvidence(
@@ -237,6 +317,24 @@ async function finishSuccess(input: {
   );
   const db = database();
   await db.begin(async (transaction) => {
+    const current = await lockMetadataCompletion(
+      transaction as ReturnType<typeof database>,
+      input.authority,
+      input.attemptId,
+    );
+    const event = input.status === "extracted" ? "extract" : "partial";
+    const nextAttemptStatus = resolveServiceTransition(
+      metadataAttemptMachine,
+      current.attempt.status,
+      event,
+      "INVALID_METADATA_ATTEMPT_STATE",
+    );
+    const nextMetadataStatus = resolveServiceTransition(
+      uploadMetadataMachine,
+      current.intent.metadataStatus,
+      event,
+      "INVALID_METADATA_STATE",
+    );
     await transaction`
       insert into egocapture.video_file_metadata (
         video_asset_id, parser_name, parser_version, container_format, duration_ms,
@@ -286,16 +384,29 @@ async function finishSuccess(input: {
     await saveEvidence(transaction as ReturnType<typeof database>, input.authority.videoAssetId, input.parserName, input.evidence);
     await transaction`
       update egocapture.metadata_attempts
-      set parser_version = ${input.parserVersion}, status = ${input.status},
+      set parser_version = ${input.parserVersion}, status = ${nextAttemptStatus},
         range_request_count = ${input.reader.rangeRequestCount}, bytes_read = ${input.reader.bytesRead},
         completed_at = now(), error_code = ${input.warningCode}
-      where id = ${input.attemptId}::uuid and status = 'processing'
+      where id = ${input.attemptId}::uuid and status = ${current.attempt.status}
     `;
     await transaction`
-      update egocapture.upload_intents set metadata_status = ${input.status}
+      update egocapture.upload_intents set metadata_status = ${nextMetadataStatus}
       where id = ${input.authority.uploadIntentId}::uuid
+        and metadata_status = ${current.intent.metadataStatus}
     `;
     const mismatch = ["model_mismatch", "serial_mismatch", "metadata_conflict"].includes(consistency);
+    const resolvedReviewStatus = resolveServiceTransition(
+      reviewCaseMachine,
+      "open",
+      "resolve",
+      "INVALID_REVIEW_CASE_STATE",
+    );
+    assertServiceTransitionSet(
+      reviewCaseMachine,
+      ["open", "in_review"],
+      "resolve",
+      "INVALID_REVIEW_CASE_STATE",
+    );
     if (mismatch) {
       await transaction`
         insert into egocapture.review_cases (
@@ -313,14 +424,14 @@ async function finishSuccess(input: {
     } else {
       await transaction`
         update egocapture.review_cases
-        set status = 'resolved', resolution_reason = 'metadata_reextraction_removed_mismatch', resolved_at = now()
+        set status = ${resolvedReviewStatus}, resolution_reason = 'metadata_reextraction_removed_mismatch', resolved_at = now()
         where video_asset_id = ${input.authority.videoAssetId}::uuid
           and case_type = 'device_mismatch' and status in ('open', 'in_review')
       `;
     }
     await transaction`
       update egocapture.review_cases
-      set status = 'resolved', resolution_reason = 'metadata_retry_completed_successfully', resolved_at = now()
+      set status = ${resolvedReviewStatus}, resolution_reason = 'metadata_retry_completed_successfully', resolved_at = now()
       where video_asset_id = ${input.authority.videoAssetId}::uuid
         and case_type = 'metadata_failed' and status in ('open', 'in_review')
     `;
@@ -371,15 +482,34 @@ async function finishFailure(input: {
   const failure = safeFailure(input.error, input.authority.extension);
   const db = database();
   await db.begin(async (transaction) => {
+    const current = await lockMetadataCompletion(
+      transaction as ReturnType<typeof database>,
+      input.authority,
+      input.attemptId,
+    );
+    const event = failure.status === "unsupported" ? "markUnsupported" : "fail";
+    const nextAttemptStatus = resolveServiceTransition(
+      metadataAttemptMachine,
+      current.attempt.status,
+      event,
+      "INVALID_METADATA_ATTEMPT_STATE",
+    );
+    const nextMetadataStatus = resolveServiceTransition(
+      uploadMetadataMachine,
+      current.intent.metadataStatus,
+      event,
+      "INVALID_METADATA_STATE",
+    );
     await transaction`
       update egocapture.metadata_attempts
-      set status = ${failure.status}, range_request_count = ${input.reader?.rangeRequestCount ?? 0},
+      set status = ${nextAttemptStatus}, range_request_count = ${input.reader?.rangeRequestCount ?? 0},
         bytes_read = ${input.reader?.bytesRead ?? 0}, completed_at = now(), error_code = ${failure.code}
-      where id = ${input.attemptId}::uuid and status = 'processing'
+      where id = ${input.attemptId}::uuid and status = ${current.attempt.status}
     `;
     await transaction`
-      update egocapture.upload_intents set metadata_status = ${failure.status}
+      update egocapture.upload_intents set metadata_status = ${nextMetadataStatus}
       where id = ${input.authority.uploadIntentId}::uuid
+        and metadata_status = ${current.intent.metadataStatus}
     `;
     if (failure.status === "failed") {
       await transaction`
@@ -427,7 +557,7 @@ export async function extractUploadMetadata(viewer: Viewer, uploadPublicId: stri
     throw new DomainError("UPLOAD_NOT_VERIFIED", "必须先完成 Storage 对账", 409);
   }
   const attempt = await beginAttempt(authority);
-  if (!attempt) return await summary(authority.videoAssetId, "extracted");
+  if (attempt.kind === "terminal") return await summary(authority.videoAssetId, attempt.status);
 
   let reader: BudgetedRangeReader | null = null;
   const controller = new AbortController();
