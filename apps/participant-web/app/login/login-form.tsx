@@ -4,9 +4,11 @@ import { Label } from "@egocapture/ui/components/label";
 import { Alert, AlertDescription } from "@egocapture/ui/components/alert";
 import { Input } from "@egocapture/ui/components/input";
 import { Button } from "@egocapture/ui/components/button";
+import { useI18n } from "@egocapture/ui/lib/i18n";
 import { useState, type FormEvent } from "react";
 
 export function LoginForm() {
+  const i18n = useI18n();
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
 
@@ -24,15 +26,15 @@ export function LoginForm() {
       });
       const payload = await response.json() as {
         data?: { redirectTo?: string };
-        error?: { message?: string };
+        error?: { code?: string };
       };
       if (!response.ok || !payload.data?.redirectTo) {
-        setError(payload.error?.message || "登录失败，请稍后再试");
+        setError(payload.error?.code ? i18n.error(payload.error.code) : i18n.t("auth.loginFailed"));
         return;
       }
       window.location.assign(payload.data.redirectTo);
     } catch {
-      setError("无法连接服务，请检查网络后重试");
+      setError(i18n.t("auth.networkFailed"));
     } finally {
       setBusy(false);
     }
@@ -41,7 +43,7 @@ export function LoginForm() {
   return (
     <form className="space-y-5" onSubmit={submit}>
         <Label className="block">
-          <span className="mb-2 block text-xs font-bold uppercase tracking-[0.16em]">Participant ID</span>
+          <span className="mb-2 block text-xs font-bold uppercase tracking-[0.16em]">{i18n.t("auth.participantId")}</span>
           <Input
             name="identity"
             className="w-full border border-[var(--line)] bg-white/70 px-4 py-3.5 outline-none transition"
@@ -53,12 +55,12 @@ export function LoginForm() {
           />
         </Label>
         <Label className="block">
-          <span className="mb-2 block text-xs font-bold uppercase tracking-[0.16em]">Password</span>
+          <span className="mb-2 block text-xs font-bold uppercase tracking-[0.16em]">{i18n.t("auth.password")}</span>
           <Input
             name="password"
             className="w-full border border-[var(--line)] bg-white/70 px-4 py-3.5 outline-none transition"
             type="password"
-            placeholder="至少 10 位"
+            placeholder={i18n.t("auth.passwordHint")}
             minLength={10}
             maxLength={128}
             autoComplete="current-password"
@@ -71,7 +73,7 @@ export function LoginForm() {
           className=" w-full disabled:cursor-wait disabled:opacity-60"
           disabled={busy}
         >
-          {busy ? "正在验证…" : "进入我的任务"}
+          {busy ? i18n.t("auth.verifying") : i18n.t("auth.enterParticipant")}
         </Button>
       </form>
   );

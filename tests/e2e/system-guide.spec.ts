@@ -14,8 +14,8 @@ const articleIds = [
 async function loginAdmin(page: Page) {
   const env = integrationEnvironment();
   await page.goto(`${adminOrigin}/login`);
-  await page.getByLabel("Admin Account").fill(env.demoAdminUsername);
-  await page.getByLabel("Password").fill(env.demoAdminPassword);
+  await page.getByLabel("管理员账号").fill(env.demoAdminUsername);
+  await page.getByLabel("密码").fill(env.demoAdminPassword);
   await page.getByRole("button", { name: "进入管理控制台" }).click();
   await expect(page).toHaveURL(/\/dashboard$/);
 }
@@ -23,7 +23,7 @@ async function loginAdmin(page: Page) {
 test("系统说明直达地址继承 Admin 登录保护", async ({ page }) => {
   await page.goto(`${adminOrigin}/system-guide`);
   await expect(page).toHaveURL(/\/login$/);
-  await expect(page.getByLabel("Admin Account")).toBeVisible();
+  await expect(page.getByLabel("管理员账号")).toBeVisible();
 });
 
 test("Admin 右上角入口打开包含四篇文章与四张交互图的说明中心", async ({ page }) => {
@@ -54,18 +54,17 @@ test("Admin 右上角入口打开包含四篇文章与四张交互图的说明�
   }
 
   const workflowArticle = page.locator("article#system-workflow");
-  await expect(workflowArticle).toContainText("一次采集完成不等于上传进度达到 100%");
-  await expect(workflowArticle).toContainText("管理员准备并发起");
+  await expect(workflowArticle).toContainText("上传进度达到 100% 不等于采集完成");
+  await expect(workflowArticle).toContainText("管理员准备并发布");
   await expect(workflowArticle).toContainText("参与者理解并准备");
-  await expect(workflowArticle).toContainText("管理员复核并收口");
+  await expect(workflowArticle).toContainText("管理员复核收口");
   await expect(workflowArticle.getByText("当前已实现", { exact: true })).toBeVisible();
 
   const uploadArticle = page.locator("article#resumable-upload");
-  await expect(uploadArticle).toContainText("刷新或第二天重开后重新选择原文件");
-  await expect(uploadArticle).toContainText("只补传缺失分片");
-  await expect(uploadArticle).toContainText("当前 MVP：TUS 受限恢复");
-  await expect(uploadArticle).toContainText("未来生产设计：持久化 Multipart");
-  await expect(uploadArticle).toContainText("当前没有运行中的 S3 Multipart");
+  await expect(uploadArticle).toContainText("刷新后重新选择原文件");
+  await expect(uploadArticle).toContainText("远端对账后继续");
+  await expect(uploadArticle).toContainText("当前 TUS");
+  await expect(uploadArticle).toContainText("未来 Multipart");
   await expect(uploadArticle.getByText("当前已实现", { exact: true })).toBeVisible();
   await expect(uploadArticle.getByText("未来方案", { exact: true })).toBeVisible();
   await expect(uploadArticle.getByText("能力边界", { exact: true })).toBeVisible();
@@ -122,8 +121,8 @@ test("移动端保留独立说明入口且不改变五项主导航", async ({ pa
 test("Participant 登录后的产品界面不暴露系统说明入口", async ({ page }) => {
   const env = integrationEnvironment();
   await page.goto(`${participantOrigin}/login`);
-  await page.getByLabel("Participant ID").fill("PT-23456789");
-  await page.getByLabel("Password").fill(env.demoParticipantPassword);
+  await page.getByLabel("参与者 ID").fill("PT-23456789");
+  await page.getByLabel("密码").fill(env.demoParticipantPassword);
   await page.getByRole("button", { name: "进入我的任务" }).click();
   await expect(page).toHaveURL(/\/tasks$/);
   await expect(page.getByRole("link", { name: "系统说明" })).toHaveCount(0);

@@ -3,7 +3,7 @@
   "name": "zh-en-ja-i18n",
   "title": "中英日国际化",
   "description": "为 Admin 与 Participant 两个 Next.js 应用提供中文、英文、日语翻译与语言持久化",
-  "status": "planning",
+  "status": "in_progress",
   "dev_type": null,
   "scope": null,
   "package": "core",

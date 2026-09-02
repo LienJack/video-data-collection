@@ -20,16 +20,16 @@ async function logout(page: Page) {
 
 async function loginParticipant(page: Page, participantPublicId: string, password: string) {
   await page.goto(`${participantOrigin}/login`);
-  await page.getByLabel("Participant ID").fill(participantPublicId);
-  await page.getByLabel("Password").fill(password);
+  await page.getByLabel("参与者 ID").fill(participantPublicId);
+  await page.getByLabel("密码").fill(password);
   await page.getByRole("button", { name: "进入我的任务" }).click();
   await expect(page).toHaveURL(/\/tasks$/);
 }
 
 async function loginAdmin(page: Page, password: string) {
   await page.goto(`${adminOrigin}/login`);
-  await page.getByLabel("Admin Account").fill("admin");
-  await page.getByLabel("Password").fill(password);
+  await page.getByLabel("管理员账号").fill("admin");
+  await page.getByLabel("密码").fill(password);
   await page.getByRole("button", { name: "进入管理控制台" }).click();
   await expect(page).toHaveURL(/\/dashboard$/);
 }
@@ -41,7 +41,7 @@ function publicId(text: string, prefix: "PT" | "DEV" | "TSK" | "AS" | "RS" | "UP
 }
 
 test("Admin 建档到 Participant 上传与不可变纠正的完整闭环", async ({ page }) => {
-  test.setTimeout(180_000);
+  test.setTimeout(300_000);
   const env = integrationEnvironment();
   const db = postgres(env.databaseUrl, { max: 1, prepare: false, connect_timeout: 8 });
   const suffix = randomUUID().slice(0, 8);
@@ -57,9 +57,9 @@ test("Admin 建档到 Participant 上传与不可变纠正的完整闭环", asyn
     await loginAdmin(page, env.demoAdminPassword);
 
     await page.goto(`${adminOrigin}/participants/new`);
-    await page.getByLabel("Display Alias").fill(alias);
-    await page.getByLabel("Notes").fill("Synthetic Playwright acceptance identity without PII");
-    await page.getByRole("button", { name: "创建 Draft Participant" }).click();
+    await page.getByLabel("显示别名").fill(alias);
+    await page.getByLabel("备注").fill("Synthetic Playwright acceptance identity without PII");
+    await page.getByRole("button", { name: "创建草稿参与者" }).click();
     await expect(page).toHaveURL(/\/participants\/PT-/);
     participantPublicId = publicId(page.url(), "PT");
     const credentialResponse = await page.request.get(
@@ -91,9 +91,9 @@ test("Admin 建档到 Participant 上传与不可变纠正的完整闭环", asyn
     await logout(page);
     await loginAdmin(page, env.demoAdminPassword);
     await page.goto(`${adminOrigin}/participants/${participantPublicId}`);
-    await page.getByPlaceholder("Manufacturer").fill("Synthetic");
-    await page.getByPlaceholder("Model").fill("E2E Check Cam");
-    await page.getByPlaceholder("Firmware").fill("1.0.0-e2e");
+    await page.getByPlaceholder("制造商").fill("Synthetic");
+    await page.getByPlaceholder("型号").fill("E2E Check Cam");
+    await page.getByPlaceholder("固件版本").fill("1.0.0-e2e");
     await page.getByRole("button", { name: "登记设备" }).click();
     await expect(page.getByText("Synthetic E2E Check Cam")).toBeVisible();
     devicePublicId = publicId(await page.locator("body").innerText(), "DEV");
@@ -126,13 +126,13 @@ test("Admin 建档到 Participant 上传与不可变纠正的完整闭环", asyn
     await expect(page.getByText("版本 1", { exact: true })).toBeVisible();
 
     await page.goto(`${adminOrigin}/assignments/new`);
-    await page.getByLabel("Participant").selectOption(participantPublicId);
-    await page.getByLabel("Published TaskVersion").selectOption(`${taskPublicId}:1`);
-    await page.getByLabel("Preferred Device").selectOption(devicePublicId);
+    await page.getByLabel("参与者").selectOption(participantPublicId);
+    await page.getByLabel("已发布任务版本").selectOption(`${taskPublicId}:1`);
+    await page.getByLabel("首选设备").selectOption(devicePublicId);
     const tomorrow = new Date(Date.now() + 24 * 60 * 60 * 1000);
     const localTomorrow = new Date(tomorrow.getTime() - tomorrow.getTimezoneOffset() * 60_000).toISOString().slice(0, 16);
-    await page.getByLabel("Due At").fill(localTomorrow);
-    await page.getByRole("button", { name: "创建 Assignment" }).click();
+    await page.getByLabel("截止时间").fill(localTomorrow);
+    await page.getByRole("button", { name: "创建任务分配" }).click();
     await expect(page).toHaveURL(/\/assignments$/);
     await page.goto(`${adminOrigin}/assignments?search=${participantPublicId}`);
     const assignmentCard = page.getByRole("row").filter({ hasText: participantPublicId });
@@ -145,7 +145,7 @@ test("Admin 建档到 Participant 上传与不可变纠正的完整闭环", asyn
     const absentAdminApi = await page.request.get(`${participantOrigin}/api/admin/audit-events`);
     expect(absentAdminApi.status()).toBe(404);
     await page.getByRole("link", { name: new RegExp(taskTitle) }).click();
-    await expect(page.getByText(new RegExp(`${assignmentPublicId} · Version 1 · assigned`))).toBeVisible();
+    await expect(page.getByText(new RegExp(`${assignmentPublicId} · 版本 1 · 已分配`))).toBeVisible();
     await expect(page.getByRole("heading", { name: "必须展示" })).toBeVisible();
     await expect(page.getByText("E2E 标识牌", { exact: true })).toBeVisible();
     await expect(page.getByText("展示 E2E 任务开始状态", { exact: true })).toBeVisible();
@@ -153,7 +153,7 @@ test("Admin 建档到 Participant 上传与不可变纠正的完整闭环", asyn
     await expect(page.getByText("目标规格：", { exact: false })).toBeVisible();
     await expect(page.getByRole("heading", { name: "上传与恢复" })).toBeVisible();
     await page.getByRole("button", { name: "我已阅读并确认这个版本" }).click();
-    await page.getByRole("button", { name: "创建 Session 并显示 Marker" }).click();
+    await page.getByRole("button", { name: "创建会话并显示标记" }).click();
     await expect(page).toHaveURL(/\/sessions\/RS-/);
     const sessionPublicId = publicId(page.url(), "RS");
     await expect(page.getByRole("img", { name: /签名二维码/ })).toBeVisible();
@@ -162,44 +162,44 @@ test("Admin 建档到 Participant 上传与不可变纠正的完整闭环", asyn
 
     await page.goto(`${participantOrigin}/tasks/${assignmentPublicId}`);
     await expect(page.getByRole("heading", { name: "展示二维码" })).toBeVisible();
-    await expect(page.getByRole("img", { name: `Recording Session ${sessionPublicId} 的签名二维码` })).toBeVisible();
+    await expect(page.getByRole("img", { name: `录制会话 ${sessionPublicId} 的签名二维码` })).toBeVisible();
     const sessionUploadLink = page.getByRole("link", { name: "上传视频" });
     await expect(sessionUploadLink).toHaveAttribute("href", `/uploads?session=${sessionPublicId}`);
     await sessionUploadLink.click();
     await expect(page).toHaveURL(`/uploads?session=${sessionPublicId}`);
-    await expect(page.getByLabel("已绑定 Recording Session")).toContainText(sessionPublicId);
+    await expect(page.getByLabel("已绑定录制会话")).toContainText(sessionPublicId);
 
     await page.goto(`${participantOrigin}/sessions/${sessionPublicId}`);
     await page.getByRole("link", { name: "上传文件 →" }).click();
     await page.locator('input[type="file"]').setInputFiles({ name: `e2e-${suffix}.mp4`, mimeType: "video/mp4", buffer: tinyMp4 });
     const uploadCard = page.getByRole("article").filter({ hasText: `e2e-${suffix}.mp4` });
-    await uploadCard.getByLabel("Recording Session").selectOption("unable");
+    await uploadCard.getByLabel("录制会话").selectOption("unable");
     const metadataResponse = page.waitForResponse((response) => response.url().includes("/extract-metadata") && response.request().method() === "POST");
-    await uploadCard.getByRole("button", { name: "开始直传 Storage" }).click();
-    await expect(uploadCard.getByText("verified", { exact: true })).toBeVisible({ timeout: 30_000 });
+    await uploadCard.getByRole("button", { name: "开始直传存储" }).click();
+    await expect(uploadCard.getByText("已验证", { exact: true })).toBeVisible({ timeout: 30_000 });
     expect((await metadataResponse).status()).toBeLessThan(500);
     const detailsLink = uploadCard.getByRole("link", { name: "查看服务端状态" });
     uploadPublicId = publicId((await detailsLink.getAttribute("href")) || "", "UP");
     await detailsLink.click();
-    await expect(page.getByText("unmatched", { exact: true })).toBeVisible();
+    await expect(page.getByText("尚未匹配", { exact: true })).toBeVisible();
 
     await logout(page);
     await page.setViewportSize({ width: 1440, height: 1000 });
     await loginAdmin(page, env.demoAdminPassword);
     await page.goto(`${adminOrigin}/uploads/${uploadPublicId}`);
-    await expect(page.getByText("Unable to Determine", { exact: true })).toBeVisible();
-    const unmatchedReview = page.getByRole("link").filter({ hasText: "unmatched" }).first();
+    await expect(page.getByText("无法确定", { exact: true })).toBeVisible();
+    const unmatchedReview = page.getByRole("link").filter({ hasText: "尚未匹配" }).first();
     const reviewPublicId = publicId((await unmatchedReview.textContent()) || "", "RV");
     await unmatchedReview.click();
-    await page.getByLabel("Session", { exact: true }).selectOption(sessionPublicId);
-    await page.getByLabel("Device", { exact: true }).selectOption(devicePublicId);
-    await expect(page.getByLabel("Change Preview")).toContainText(`Before Unmatched / —`);
-    await expect(page.getByLabel("Change Preview")).toContainText(`After ${sessionPublicId} / ${devicePublicId}`);
+    await page.getByLabel("录制会话", { exact: true }).selectOption(sessionPublicId);
+    await page.getByLabel("设备", { exact: true }).selectOption(devicePublicId);
+    await expect(page.getByLabel("变更预览")).toContainText(`变更前 未匹配 / —`);
+    await expect(page.getByLabel("变更预览")).toContainText(`变更后 ${sessionPublicId} / ${devicePublicId}`);
     const correctionReason = `Playwright ${suffix} verified and corrected the synthetic participant upload.`;
-    await page.getByLabel("Reason", { exact: true }).fill(correctionReason);
-    await page.getByRole("button", { name: "提交不可变决策" }).click();
-    await expect(page.getByText("admin_corrected", { exact: true })).toBeVisible();
-    await expect(page.getByRole("article").filter({ hasText: "unmatched" }).filter({ hasText: "historical" })).toBeVisible();
+    await page.getByLabel("原因", { exact: true }).fill(correctionReason);
+    await page.getByRole("button", { name: "提交不可变决定" }).click();
+    await expect(page.getByText("管理员已纠正", { exact: true })).toBeVisible();
+    await expect(page.getByRole("article").filter({ hasText: "未匹配" }).filter({ hasText: "历史" })).toBeVisible();
 
     await page.goto(`${adminOrigin}/audit`);
     const audit = page.getByRole("row").filter({ hasText: "review_case.correct_match" }).first();

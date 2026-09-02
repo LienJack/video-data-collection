@@ -10,6 +10,7 @@ import { Button } from "@egocapture/ui/components/button";
 import { Progress } from "@egocapture/ui/components/progress";
 import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
+import { useI18n } from "@egocapture/ui/lib/i18n";
 import { useActorRef, useSelector } from "@xstate/react";
 import type { Upload } from "tus-js-client";
 import { MAX_FILE_SIZE_BYTES, MAX_FILES_PER_BATCH } from "@egocapture/core/domain/constants";
@@ -64,15 +65,9 @@ async function api<T>(path: string, init?: RequestInit): Promise<T> {
   const response = await fetch(path, init);
   const payload = await response.json() as ApiPayload<T>;
   if (!response.ok || !payload.data) {
-    throw new ApiClientError(response.status, payload.error?.code, payload.error?.message || "请求失败");
+    throw new ApiClientError(response.status, payload.error?.code, payload.error?.message || "REQUEST_FAILED");
   }
   return payload.data;
-}
-
-function formatBytes(value: number) {
-  return value < 1024 * 1024
-    ? `${(value / 1024).toFixed(1)} KiB`
-    : `${(value / 1024 / 1024).toFixed(1)} MiB`;
 }
 
 export function UploadQueue({
@@ -82,6 +77,7 @@ export function UploadQueue({
   sessions: SessionOption[];
   lockedSessionPublicId?: string;
 }) {
+  const i18n = useI18n();
   const queue = useActorRef(uploadQueueMachine);
   const items = useSelector(queue, (snapshot) => snapshot.context.items);
   const lockedSession = lockedSessionPublicId
@@ -191,16 +187,16 @@ export function UploadQueue({
   function queueItemFor(file: File): QueueItem | null {
     const extension = file.name.split(".").at(-1)?.toLowerCase() ?? "";
     if (!(extension in expectedFileType)) {
-      setSelectionError(`${file.name} 不是 MP4、MOV 或 INSV`);
+      setSelectionError(i18n.t("participantUi.queue.invalidType", { file: file.name }));
       return null;
     }
     if (file.size < 1 || file.size > MAX_FILE_SIZE_BYTES) {
-      setSelectionError(`${file.name} 超过 50,000,000 bytes 或为空文件`);
+      setSelectionError(i18n.t("participantUi.queue.invalidSize", { file: file.name }));
       return null;
     }
     const expected = expectedFileType[extension];
     if (file.type && file.type !== expected && !(extension === "insv" && file.type === "")) {
-      setSelectionError(`${file.name} 的浏览器 MIME 与扩展名不匹配`);
+      setSelectionError(i18n.t("participantUi.queue.mimeMismatch", { file: file.name }));
       return null;
     }
     return {
@@ -251,7 +247,7 @@ export function UploadQueue({
           fingerprintV1: fingerprints.fingerprintV1,
           sourceSha256: fingerprints.sourceSha256,
           status: "failed",
-          error: "该文件已有绑定其他 Session 的待恢复上传，请从通用上传页恢复或选择其他文件",
+          error: i18n.t("participantUi.queue.boundElsewhere"),
         });
         return;
       }
@@ -260,7 +256,7 @@ export function UploadQueue({
           fingerprintV1: fingerprints.fingerprintV1,
           sourceSha256: fingerprints.sourceSha256,
           status: "failed",
-          error: "所选文件与待恢复任务的原始文件不一致，请重新选择",
+          error: i18n.t("participantUi.queue.restoreMismatch"),
         });
         return;
       }
@@ -282,7 +278,7 @@ export function UploadQueue({
         setRestorableUploads((current) => current.filter((upload) => upload.sourceSha256 !== saved.sourceSha256));
       }
     } catch {
-      update(item.id, { status: "failed", error: "无法计算完整文件 SHA-256" });
+      update(item.id, { status: "failed", error: i18n.t("participantUi.queue.hashFailed") });
     }
   }
 
@@ -290,7 +286,7 @@ export function UploadQueue({
     if (!files) return;
     setSelectionError("");
     if (files.length > MAX_FILES_PER_BATCH) {
-      setSelectionError(`每批最多选择 ${MAX_FILES_PER_BATCH} 个文件`);
+      setSelectionError(i18n.t("participantUi.queue.batchLimit", { count: MAX_FILES_PER_BATCH }));
       return;
     }
     const next = [...files].map(queueItemFor).filter((item): item is QueueItem => item !== null);
@@ -308,12 +304,12 @@ export function UploadQueue({
   }
 
   async function credentialFor(item: QueueItem, forceNew: boolean): Promise<UploadCredential> {
-    if (!item.fingerprintV1 || !item.sourceSha256) throw new Error("文件指纹尚未完成");
+    if (!item.fingerprintV1 || !item.sourceSha256) throw new Error(i18n.t("participantUi.queue.hashingPending"));
     const saved = persistedUpload(item.sourceSha256);
     if (saved && lockedSessionPublicId && (
       saved.unableToDetermine || saved.claimedSessionPublicId !== lockedSessionPublicId
     )) {
-      throw new Error("该文件已有绑定其他 Session 的待恢复上传，请从通用上传页恢复或选择其他文件");
+      throw new Error(i18n.t("participantUi.queue.boundElsewhere"));
     }
     if (saved && saved.sizeBytes === item.file.size && saved.originalFilename === item.file.name) {
       try {
@@ -400,7 +396,7 @@ export function UploadQueue({
     if (!(capabilities.canPrepare || capabilities.canRetry)) return;
     const sessionChoice = lockedSessionPublicId ?? item.sessionChoice;
     if (!sessionChoice) {
-      update(item.id, { error: "请为这个文件选择 Recording Session 或 Unable to Determine" });
+      update(item.id, { error: i18n.t("participantUi.queue.chooseSession") });
       return;
     }
     const operationToken = beginOperation(item.id);
@@ -475,8 +471,8 @@ export function UploadQueue({
           update(item.id, {
             status: "failed",
             error: resourceExpired
-              ? "TUS 资源已过期；重试会创建新的 UploadAttempt"
-              : `上传失败：${error.message}`,
+              ? i18n.t("participantUi.queue.resourceExpired")
+              : i18n.t("participantUi.queue.uploadFailed", { message: i18n.t("participantUi.queue.requestFailed") }),
             resourceExpired,
           });
           operationTokens.current.delete(item.id);
@@ -501,12 +497,12 @@ export function UploadQueue({
               if (!mounted.current || !itemHasStatus(item.id, ["verified"])) return;
               update(item.id, {
                 status: "verified",
-                error: `视频已完成并通过对象对账；Metadata ${error instanceof Error ? error.message : "解析失败"}`,
+                error: i18n.t("participantUi.queue.metadataFailed", { message: error instanceof ApiClientError && error.code ? i18n.error(error.code) : i18n.t("participantUi.queue.parseFailed") }),
               });
             }
           } catch (error) {
             if (!isCurrentOperation(item.id, operationToken)) return;
-            update(item.id, { status: "failed", error: error instanceof Error ? error.message : "对象对账失败" });
+            update(item.id, { status: "failed", error: error instanceof ApiClientError && error.code ? i18n.error(error.code) : i18n.t("participantUi.queue.reconcileFailed") });
             operationTokens.current.delete(item.id);
           }
         },
@@ -530,8 +526,8 @@ export function UploadQueue({
       update(item.id, {
         status: "failed",
         error: missingSavedResource
-          ? "浏览器中的 TUS 资源地址已丢失；请创建新 Attempt 后重试"
-          : error instanceof Error ? error.message : "上传准备失败",
+          ? i18n.t("participantUi.queue.savedResourceMissing")
+          : error instanceof ApiClientError && error.code ? i18n.error(error.code) : i18n.t("participantUi.queue.prepareFailed"),
         resourceExpired: missingSavedResource,
       });
       operationTokens.current.delete(item.id);
@@ -580,16 +576,16 @@ export function UploadQueue({
   return (
     <section className="mt-8">
       {lockedSession ? (
-        <div aria-label="已绑定 Recording Session" className="mb-5 border-l-4 border-[var(--teal)] px-4 py-3">
-          <p className="text-xs font-bold uppercase tracking-[0.12em] text-[var(--muted)]">已绑定 Session，上传时不可切换</p>
+        <div aria-label={i18n.t("participantUi.queue.boundSessionAria")} className="mb-5 border-l-4 border-[var(--teal)] px-4 py-3">
+          <p className="text-xs font-bold uppercase tracking-[0.12em] text-[var(--muted)]">{i18n.t("participantUi.queue.boundSession")}</p>
           <p className="mt-2 font-bold">{lockedSession.publicId} · {lockedSession.taskTitle}</p>
           <p className="mt-1 text-xs text-[var(--muted)]">{lockedSession.deviceLabel}</p>
         </div>
       ) : null}
       <Label className="rounded-xl border bg-card/80 text-card-foreground shadow-sm backdrop-blur-xl block cursor-pointer border-dashed p-8 text-center transition hover:border-[var(--signal)] hover:bg-white sm:p-12">
         <span className="mx-auto mb-5 flex size-12 items-center justify-center rounded-full bg-[var(--teal-soft)] text-xl text-[var(--signal)]">＋</span>
-        <span className="display block text-2xl font-semibold">选择设备或 SSD 中的视频</span>
-        <span className="mt-2 block text-sm leading-6 text-[var(--muted)]">MP4 / MOV / INSV · 每批最多 5 个 · 单文件最多 50,000,000 bytes</span>
+        <span className="display block text-2xl font-semibold">{i18n.t("participantUi.queue.chooseFiles")}</span>
+        <span className="mt-2 block text-sm leading-6 text-[var(--muted)]">{i18n.t("participantUi.queue.fileLimits")}</span>
         <Input
           type="file"
           multiple
@@ -601,8 +597,8 @@ export function UploadQueue({
       {restorableUploads.length > 0 ? (
         <section className="mt-5 space-y-3" aria-labelledby="restorable-uploads-title">
           <div className="border-l-4 border-[var(--yellow)] px-4 py-3">
-            <h2 id="restorable-uploads-title" className="font-bold">待恢复上传（{restorableUploads.length}）</h2>
-            <p className="mt-1 text-sm text-[var(--muted)]">出于浏览器安全限制，请重新选择原文件；完整 SHA-256 一致后才会恢复 TUS offset。</p>
+            <h2 id="restorable-uploads-title" className="font-bold">{i18n.t("participantUi.queue.restorable", { count: restorableUploads.length })}</h2>
+            <p className="mt-1 text-sm text-[var(--muted)]">{i18n.t("participantUi.queue.restoreHelp")}</p>
           </div>
           {restorableUploads.map((saved) => {
             const progress = saved.sizeBytes > 0
@@ -614,13 +610,13 @@ export function UploadQueue({
                   <div>
                     <h3 className="font-bold break-all">{saved.originalFilename}</h3>
                     <p className="mt-1 text-xs text-[var(--muted)]">
-                      已确认 {formatBytes(saved.acceptedBytes)} / {formatBytes(saved.sizeBytes)} · 保存于 {new Date(saved.savedAt).toLocaleString("zh-CN")}
+                      {i18n.t("participantUi.queue.acceptedSaved", { accepted: i18n.bytes(saved.acceptedBytes), total: i18n.bytes(saved.sizeBytes), date: i18n.date(saved.savedAt, { dateStyle: "medium", timeStyle: "short" }) })}
                     </p>
                   </div>
-                  <Badge>{saved.attemptExpired ? "资源可能已过期" : saved.status}</Badge>
+                  <Badge>{saved.attemptExpired ? i18n.t("participantUi.queue.mayBeExpired") : i18n.state("upload_attempt.status", saved.status)}</Badge>
                 </div>
-                <Progress className="mt-4" value={progress} aria-label={`待恢复上传进度 ${progress.toFixed(1)}%`} />
-                <Label className="mt-4 block text-sm font-bold">选择原文件以恢复
+                <Progress className="mt-4" value={progress} aria-label={i18n.t("participantUi.queue.restoreProgress", { progress: progress.toFixed(1) })} />
+                <Label className="mt-4 block text-sm font-bold">{i18n.t("participantUi.queue.chooseOriginal")}
                   <Input
                     type="file"
                     accept={`.${saved.originalFilename.split(".").at(-1)?.toLowerCase() ?? "mp4"}`}
@@ -635,7 +631,7 @@ export function UploadQueue({
       ) : null}
       {legacyRestorableCount > 0 ? (
         <p className="mt-4 border-l-4 border-[var(--yellow)] px-4 py-3 text-sm">
-          另有 {legacyRestorableCount} 个旧版恢复记录。请从上方重新选择原文件，验证后会自动迁移并恢复。
+          {i18n.t("participantUi.queue.legacyRestore", { count: legacyRestorableCount })}
         </p>
       ) : null}
       {selectionError ? <Alert role="alert" className="mt-4 border-l-4 border-[var(--signal)] px-4 py-3 text-sm"><AlertDescription>{selectionError}</AlertDescription></Alert> : null}
@@ -645,38 +641,38 @@ export function UploadQueue({
           return (
           <Card as="article" key={item.id} className="p-5 sm:p-6">
             <div className="flex flex-wrap items-start justify-between gap-3">
-              <div><h2 className="font-bold break-all">{item.file.name}</h2><p className="mt-1 text-xs text-[var(--muted)]">{formatBytes(item.file.size)} · {item.contentType} · 修改于 {new Date(item.file.lastModified).toLocaleString("zh-CN")}</p></div>
-              <Badge>{item.status}</Badge>
+              <div><h2 className="font-bold break-all">{item.file.name}</h2><p className="mt-1 text-xs text-[var(--muted)]">{i18n.bytes(item.file.size)} · {item.contentType} · {i18n.t("participantUi.queue.modifiedAt", { date: i18n.date(item.file.lastModified, { dateStyle: "medium", timeStyle: "short" }) })}</p></div>
+              <Badge>{item.status === "hashing" ? i18n.t("participantUi.queue.hashing") : item.status === "ready" ? i18n.t("participantUi.previewReady") : item.status === "preparing" ? i18n.t("common.loading") : i18n.state("upload_intent.transfer_status", item.status)}</Badge>
             </div>
             <div className="mt-5 grid gap-3 sm:grid-cols-2">
-              {lockedSession ? <div className="text-sm"><p className="font-bold">Recording Session</p><p className="mt-2 border border-[var(--line)] bg-[var(--paper)] px-3 py-3" aria-label="锁定的 Recording Session">{lockedSession.publicId} · 已锁定</p></div> : <Label className="text-sm font-bold">Recording Session
+              {lockedSession ? <div className="text-sm"><p className="font-bold">{i18n.t("participantUi.queue.recordingSession")}</p><p className="mt-2 border border-[var(--line)] bg-[var(--paper)] px-3 py-3" aria-label={i18n.t("participantUi.queue.lockedSessionAria")}>{lockedSession.publicId} · {i18n.t("participantUi.queue.locked")}</p></div> : <Label className="text-sm font-bold">{i18n.t("participantUi.queue.recordingSession")}
                 <NativeSelect
                   value={item.sessionChoice}
                   disabled={!(["ready", "failed"].includes(item.status)) || Boolean(item.uploadPublicId)}
                   onChange={(event) => update(item.id, { sessionChoice: event.target.value, error: "" })}
                   className="mt-2 w-full border border-[var(--line)] bg-[var(--paper)] px-3 py-3 font-normal"
                 >
-                  <NativeSelectOption value="">请选择…</NativeSelectOption>
+                  <NativeSelectOption value="">{i18n.t("participantUi.queue.choose")}</NativeSelectOption>
                   {sessions.map((session) => <NativeSelectOption key={session.publicId} value={session.publicId}>{session.publicId} · {session.taskTitle} · {session.deviceLabel}</NativeSelectOption>)}
-                  <NativeSelectOption value="unable">Unable to Determine</NativeSelectOption>
+                  <NativeSelectOption value="unable">{i18n.t("participantUi.unableDetermine")}</NativeSelectOption>
                 </NativeSelect>
               </Label>}
-              <Label className="text-sm font-bold">备注（可选）
-                <Input value={item.note} disabled={Boolean(item.uploadPublicId)} onChange={(event) => update(item.id, { note: event.target.value.slice(0, 500) })} className="mt-2 w-full border border-[var(--line)] bg-[var(--paper)] px-3 py-3 font-normal" placeholder="不要填写敏感信息" />
+              <Label className="text-sm font-bold">{i18n.t("participantUi.queue.note")}
+                <Input value={item.note} disabled={Boolean(item.uploadPublicId)} onChange={(event) => update(item.id, { note: event.target.value.slice(0, 500) })} className="mt-2 w-full border border-[var(--line)] bg-[var(--paper)] px-3 py-3 font-normal" placeholder={i18n.t("participantUi.queue.notePlaceholder")} />
               </Label>
             </div>
-            <Progress className="mt-5" value={item.progress} aria-label={`上传进度 ${item.progress.toFixed(1)}%`} />
-            <div className="mt-2 flex justify-between text-xs text-[var(--muted)]"><span>{item.sourceSha256 ? `SHA-256 ${item.sourceSha256.slice(0, 12)}…` : "正在计算完整文件 SHA-256…"}</span><span>{item.progress.toFixed(1)}%</span></div>
-            {item.resumed ? <p className="mt-3 text-xs font-bold text-[var(--teal)]">已从浏览器保存的 TUS offset 恢复</p> : null}
-            {item.duplicateCandidate ? <p className="mt-3 border-l-4 border-[var(--yellow)] px-3 text-xs">Duplicate Candidate：仅进入人工复核，不会自动删除或拒绝。</p> : null}
+            <Progress className="mt-5" value={item.progress} aria-label={i18n.t("participantUi.queue.uploadProgress", { progress: item.progress.toFixed(1) })} />
+            <div className="mt-2 flex justify-between text-xs text-[var(--muted)]"><span>{item.sourceSha256 ? `SHA-256 ${item.sourceSha256.slice(0, 12)}…` : i18n.t("participantUi.queue.hashing")}</span><span>{item.progress.toFixed(1)}%</span></div>
+            {item.resumed ? <p className="mt-3 text-xs font-bold text-[var(--teal)]">{i18n.t("participantUi.queue.resumed")}</p> : null}
+            {item.duplicateCandidate ? <p className="mt-3 border-l-4 border-[var(--yellow)] px-3 text-xs">{i18n.t("participantUi.queue.duplicate")}</p> : null}
             {item.error ? <Alert role="alert" className="mt-3 border-l-4 border-[var(--signal)] px-3 text-sm"><AlertDescription>{item.error}</AlertDescription></Alert> : null}
             <div className="mt-5 flex flex-wrap gap-2">
-              {capabilities.canPrepare ? <Button onClick={() => void start(item)}>开始直传 Storage</Button> : null}
-              {capabilities.canPause ? <Button variant="outline" onClick={() => void pause(item)} className="border-[var(--ink)] px-4 py-3 text-sm font-bold">暂停</Button> : null}
-              {capabilities.canResume ? <Button onClick={() => void resume(item)}>继续</Button> : null}
-              {capabilities.canRetry && item.uploadPublicId ? <Button onClick={() => void start(item, item.resourceExpired)} className="bg-[var(--signal)] px-4 py-3 text-sm font-bold text-white">{item.resourceExpired ? "创建新 Attempt 并重试" : "恢复并重试"}</Button> : null}
-              {capabilities.canAbort ? <Button variant="outline" onClick={() => void cancel(item)} className="border-[var(--signal)] px-4 py-3 text-sm font-bold text-[var(--signal)]">取消</Button> : null}
-              {item.uploadPublicId ? <Link href={`/uploads/${item.uploadPublicId}`} className="border border-[var(--line)] px-4 py-3 text-sm font-bold">查看服务端状态</Link> : null}
+              {capabilities.canPrepare ? <Button onClick={() => void start(item)}>{i18n.t("participantUi.queue.start")}</Button> : null}
+              {capabilities.canPause ? <Button variant="outline" onClick={() => void pause(item)} className="border-[var(--ink)] px-4 py-3 text-sm font-bold">{i18n.t("participantUi.queue.pause")}</Button> : null}
+              {capabilities.canResume ? <Button onClick={() => void resume(item)}>{i18n.t("participantUi.queue.resume")}</Button> : null}
+              {capabilities.canRetry && item.uploadPublicId ? <Button onClick={() => void start(item, item.resourceExpired)} className="bg-[var(--signal)] px-4 py-3 text-sm font-bold text-white">{item.resourceExpired ? i18n.t("participantUi.queue.newAttemptRetry") : i18n.t("participantUi.queue.resumeRetry")}</Button> : null}
+              {capabilities.canAbort ? <Button variant="outline" onClick={() => void cancel(item)} className="border-[var(--signal)] px-4 py-3 text-sm font-bold text-[var(--signal)]">{i18n.t("participantUi.queue.abort")}</Button> : null}
+              {item.uploadPublicId ? <Link href={`/uploads/${item.uploadPublicId}`} className="border border-[var(--line)] px-4 py-3 text-sm font-bold">{i18n.t("participantUi.queue.serverStatus")}</Link> : null}
             </div>
           </Card>
           );

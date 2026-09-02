@@ -4,8 +4,10 @@ import { CheckCircle, CloudArrowUp, QrCode, ShieldCheck } from "@phosphor-icons/
 import { motion, useReducedMotion } from "framer-motion";
 import { memo } from "react";
 import styles from "@/app/home.module.css";
+import { useTranslations } from "@egocapture/ui/lib/i18n";
 
 const StatusPulse = memo(function StatusPulse() {
+  const t = useTranslations();
   const reduceMotion = useReducedMotion();
 
   return (
@@ -16,7 +18,7 @@ const StatusPulse = memo(function StatusPulse() {
         transition={{ duration: 2.4, repeat: Infinity, ease: "easeInOut" }}
         aria-hidden="true"
       />
-      Ready
+      {t("participantUi.previewReady")}
     </span>
   );
 });
@@ -35,6 +37,7 @@ const ScanLine = memo(function ScanLine() {
 });
 
 export const FieldSessionPreview = memo(function FieldSessionPreview() {
+  const t = useTranslations();
   const reduceMotion = useReducedMotion();
 
   return (
@@ -43,12 +46,12 @@ export const FieldSessionPreview = memo(function FieldSessionPreview() {
       initial={reduceMotion ? { opacity: 0 } : { opacity: 0, y: 20, scale: 0.985 }}
       animate={{ opacity: 1, y: 0, scale: 1 }}
       transition={{ type: "spring", stiffness: 100, damping: 20 }}
-      aria-label="Session 状态预览"
+      aria-label={t("participantUi.previewAria")}
     >
       <div className="flex items-center justify-between border-b border-white/9 px-5 py-4 sm:px-6">
         <div>
-          <p className="text-[0.62rem] font-semibold uppercase tracking-[0.18em] text-white/60">Demo session</p>
-          <p className="mt-1 text-sm font-medium text-white/88">日常活动采集</p>
+          <p className="text-[0.62rem] font-semibold uppercase tracking-[0.18em] text-white/60">{t("participantUi.previewDemo")}</p>
+          <p className="mt-1 text-sm font-medium text-white/88">{t("participantUi.previewActivity")}</p>
         </div>
         <StatusPulse />
       </div>
@@ -66,18 +69,18 @@ export const FieldSessionPreview = memo(function FieldSessionPreview() {
             <QrCode size={22} weight="regular" aria-hidden="true" />
           </span>
           <div className="min-w-0">
-            <p className="text-[0.6rem] font-semibold uppercase tracking-[0.16em] text-white/45">Session marker</p>
-            <p className="mt-1 text-sm font-medium text-white">已签名，可以开始录制</p>
-            <p className="mt-1 text-[0.66rem] text-white/48">不包含个人身份信息</p>
+            <p className="text-[0.6rem] font-semibold uppercase tracking-[0.16em] text-white/45">{t("participantUi.previewMarker")}</p>
+            <p className="mt-1 text-sm font-medium text-white">{t("participantUi.previewMarkerReady")}</p>
+            <p className="mt-1 text-[0.66rem] text-white/48">{t("participantUi.previewNoIdentity")}</p>
           </div>
           <CheckCircle className="ml-auto size-5 shrink-0 text-[var(--home-accent)]" weight="regular" aria-hidden="true" />
         </div>
       </div>
 
       <div className="grid grid-cols-3 divide-x divide-white/9 border-t border-white/9">
-        <PreviewFact icon={ShieldCheck} label="任务版本" value="已冻结" />
-        <PreviewFact icon={QrCode} label="会话标记" value="已生成" />
-        <PreviewFact icon={CloudArrowUp} label="上传状态" value="待录制" />
+        <PreviewFact icon={ShieldCheck} label={t("participantUi.previewTaskVersion")} value={t("participantUi.previewFrozen")} />
+        <PreviewFact icon={QrCode} label={t("participantUi.previewSessionMarker")} value={t("participantUi.previewGenerated")} />
+        <PreviewFact icon={CloudArrowUp} label={t("participantUi.previewUploadStatus")} value={t("participantUi.previewAwaitRecording")} />
       </div>
     </motion.section>
   );

@@ -9,6 +9,8 @@ import { parseRecordsQuery, type RecordsQuery } from "@/lib/records-query";
 import { getAdminRecordSummary } from "@egocapture/core/server/services/records";
 import { adminUploadListSchema, auditListSchema, listAdminUploads, listAuditEvents } from "@egocapture/core/server/services/review";
 import { adminSessionListSchema, listAdminSessions } from "@egocapture/core/server/services/sessions";
+import { createTranslator } from "@egocapture/core/i18n";
+import { requestLocale } from "@egocapture/core/server/i18n";
 
 export const dynamic = "force-dynamic";
 
@@ -42,14 +44,15 @@ async function loadTab(viewer: Awaited<ReturnType<typeof requireAdmin>>, query: 
   return { tab: "activity" as const, query, result: await listAuditEvents(viewer, input) };
 }
 
-const tabs = [
-  { value: "videos", label: "视频记录" },
-  { value: "sessions", label: "录制会话" },
-  { value: "activity", label: "操作记录" },
-] as const;
-
 export default async function RecordsPage({ searchParams }: { searchParams: Promise<Record<string, string | string[] | undefined>> }) {
   const viewer = await requireAdmin();
+  const locale = await requestLocale();
+  const i18n = createTranslator(locale);
+  const tabs = [
+    { value: "videos", label: i18n.t("adminUi.videoRecords") },
+    { value: "sessions", label: i18n.t("adminUi.sessionRecords") },
+    { value: "activity", label: i18n.t("adminUi.activityLog") },
+  ] as const;
   const query = parseRecordsQuery(await searchParams);
   const [summary, tab] = await Promise.all([
     getAdminRecordSummary(viewer),
@@ -57,34 +60,34 @@ export default async function RecordsPage({ searchParams }: { searchParams: Prom
   ]);
 
   const attentionItems = [
-    { label: "缺少上传", value: summary.attention.missingUploads, href: "/participants?missing=yes" },
-    { label: "上传失败", value: summary.attention.uploadFailed, href: "/review?caseType=upload_failed" },
-    { label: "Metadata 失败", value: summary.attention.metadataFailed, href: "/review?caseType=metadata_failed" },
-    { label: "重复候选", value: summary.attention.duplicateCandidates, href: "/review?caseType=duplicate_candidate" },
-    { label: "尚未匹配", value: summary.attention.unmatched, href: "/review?caseType=unmatched" },
-    { label: "设备不一致", value: summary.attention.deviceMismatch, href: "/review?caseType=device_mismatch" },
-    { label: "待复核总数", value: summary.attention.needsReview, href: "/review" },
+    { label: i18n.t("adminUi.missingUpload"), value: summary.attention.missingUploads, href: "/participants?missing=yes" },
+    { label: i18n.t("adminUi.uploadFailed"), value: summary.attention.uploadFailed, href: "/review?caseType=upload_failed" },
+    { label: i18n.t("adminUi.metadataFailed"), value: summary.attention.metadataFailed, href: "/review?caseType=metadata_failed" },
+    { label: i18n.t("adminUi.duplicateCandidate"), value: summary.attention.duplicateCandidates, href: "/review?caseType=duplicate_candidate" },
+    { label: i18n.t("adminUi.unmatched"), value: summary.attention.unmatched, href: "/review?caseType=unmatched" },
+    { label: i18n.t("adminUi.deviceMismatch"), value: summary.attention.deviceMismatch, href: "/review?caseType=device_mismatch" },
+    { label: i18n.t("adminUi.totalReviews"), value: summary.attention.needsReview, href: "/review" },
   ];
 
   return (
     <main className="app-page">
       <header className="border-b border-[var(--line)] pb-7">
-        <p className="page-kicker">跨任务采集运营</p>
-        <h1 className="page-title">采集记录</h1>
-        <p className="mt-4 max-w-3xl text-sm leading-6 text-[var(--muted)]">集中查看视频上传、录制会话和关键操作；异常处理仍回到原有权威详情与待处理队列。</p>
+        <p className="page-kicker">{i18n.t("adminUi.recordsKicker")}</p>
+        <h1 className="page-title">{i18n.t("adminUi.records")}</h1>
+        <p className="mt-4 max-w-3xl text-sm leading-6 text-[var(--muted)]">{i18n.t("adminUi.recordsIntro")}</p>
       </header>
 
-      <section className="mt-7 grid gap-3 sm:grid-cols-3" aria-label="采集记录汇总">
-        <Metric label="全部上传" value={summary.totalUploads} icon={StackSimple} />
-        <Metric label="传输处理中" value={summary.transfersInProgress} icon={CloudArrowUp} />
-        <Metric label="未关闭会话" value={summary.openSessions} icon={ClockCountdown} href="/records?tab=sessions&status=open" />
+      <section className="mt-7 grid gap-3 sm:grid-cols-3" aria-label={i18n.t("adminUi.recordsSummary")}>
+        <Metric label={i18n.t("adminUi.totalUploads")} value={summary.totalUploads} icon={StackSimple} />
+        <Metric label={i18n.t("adminUi.transfersInProgress")} value={summary.transfersInProgress} icon={CloudArrowUp} />
+        <Metric label={i18n.t("adminUi.openSessions")} value={summary.openSessions} icon={ClockCountdown} href="/records?tab=sessions&status=open" />
       </section>
 
       <section className="mt-4 rounded-[1.35rem] border border-white/70 bg-white/72 p-5 shadow-[var(--shadow-soft)] backdrop-blur-xl sm:p-6" aria-labelledby="attention-overview-heading">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div>
-            <p className="page-kicker">需要关注</p>
-            <h2 id="attention-overview-heading" className="display mt-1 text-2xl font-semibold">异常概览</h2>
+            <p className="page-kicker">{i18n.t("adminUi.needsAttention")}</p>
+            <h2 id="attention-overview-heading" className="display mt-1 text-2xl font-semibold">{i18n.t("adminUi.anomalyOverview")}</h2>
           </div>
           <WarningCircle className="size-7 text-[var(--signal)]" weight="duotone" aria-hidden="true" />
         </div>
@@ -98,7 +101,7 @@ export default async function RecordsPage({ searchParams }: { searchParams: Prom
         </div>
       </section>
 
-      <nav className="apple-toolbar mt-6 flex gap-1 overflow-x-auto p-1.5" aria-label="采集记录视图">
+      <nav className="apple-toolbar mt-6 flex gap-1 overflow-x-auto p-1.5" aria-label={i18n.t("adminUi.recordsView")}>
         {tabs.map((item) => (
           <Link key={item.value} href={`/records?tab=${item.value}&pageSize=${query.pageSize}`} aria-current={query.tab === item.value ? "page" : undefined} className={`flex min-h-11 shrink-0 items-center rounded-xl px-4 text-sm font-semibold outline-none transition-[background-color,color,box-shadow] focus-visible:ring-2 focus-visible:ring-[var(--ring)] ${query.tab === item.value ? "bg-white text-[var(--ink)] shadow-sm" : "text-[var(--muted)] hover:text-[var(--ink)]"}`}>
             {item.label}
@@ -107,9 +110,9 @@ export default async function RecordsPage({ searchParams }: { searchParams: Prom
       </nav>
 
       <div className="mt-6">
-        {tab.tab === "videos" ? <VideoRecordsPanel query={tab.query} result={tab.result} /> : null}
-        {tab.tab === "sessions" ? <SessionRecordsPanel query={tab.query} result={tab.result} /> : null}
-        {tab.tab === "activity" ? <ActivityRecordsPanel query={tab.query} result={tab.result} /> : null}
+        {tab.tab === "videos" ? <VideoRecordsPanel locale={locale} query={tab.query} result={tab.result} /> : null}
+        {tab.tab === "sessions" ? <SessionRecordsPanel locale={locale} query={tab.query} result={tab.result} /> : null}
+        {tab.tab === "activity" ? <ActivityRecordsPanel locale={locale} query={tab.query} result={tab.result} /> : null}
       </div>
     </main>
   );

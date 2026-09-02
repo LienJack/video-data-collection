@@ -4,6 +4,7 @@ import { Input } from "@egocapture/ui/components/input";
 import { Label } from "@egocapture/ui/components/label";
 import { MagnifyingGlass } from "@phosphor-icons/react";
 import { useId, useMemo, useRef, useState, useSyncExternalStore } from "react";
+import { useI18n } from "@egocapture/ui/lib/i18n";
 import {
   allLocales,
   canonicalLocale,
@@ -13,28 +14,9 @@ import {
   timezonesForCountry,
 } from "@egocapture/core/domain/regional-preferences";
 
-const displayLocale = "zh-CN";
-const regionNames = new Intl.DisplayNames(displayLocale, { type: "region" });
-const languageNames = new Intl.DisplayNames(displayLocale, { type: "language" });
-const collator = new Intl.Collator(displayLocale);
 const subscribeToHydration = () => () => undefined;
 const getClientHydrationState = () => true;
 const getServerHydrationState = () => false;
-
-const countryOptions = COUNTRY_PREFERENCES.map((country) => ({
-  value: country.code,
-  label: `${regionNames.of(country.code) ?? country.englishName} / ${country.englishName} · ${country.code}`,
-})).sort((left, right) => collator.compare(left.label, right.label));
-
-const localeOptions = allLocales().map((locale) => {
-  const parsed = new Intl.Locale(locale);
-  const language = languageNames.of(parsed.language) ?? parsed.language;
-  const region = parsed.region ? regionNames.of(parsed.region) : null;
-  return {
-    value: locale,
-    label: `${language}${region ? `（${region}）` : ""} · ${locale}`,
-  };
-}).sort((left, right) => collator.compare(left.label, right.label));
 
 const timezoneOptions = TIMEZONE_NAMES.map((timezone) => ({
   value: timezone,
@@ -59,13 +41,14 @@ type SearchableSelectProps = SelectProps & {
 function withCurrentValue(
   options: readonly { value: string; label: string }[],
   currentValue?: string | null,
+  currentLabel = "Current value",
 ) {
   if (!currentValue || options.some((option) => option.value === currentValue)) return options;
-  return [{ value: currentValue, label: `${currentValue}（现有值）` }, ...options];
+  return [{ value: currentValue, label: `${currentValue} (${currentLabel})` }, ...options];
 }
 
-function normalizeSearchValue(value: string) {
-  return value.trim().toLocaleLowerCase(displayLocale);
+function normalizeSearchValue(value: string, locale: string) {
+  return value.trim().toLocaleLowerCase(locale);
 }
 
 function SearchableSelect({
@@ -79,11 +62,12 @@ function SearchableSelect({
   onValueChange,
   options,
 }: SearchableSelectProps) {
+  const i18n = useI18n();
   const listId = useId();
   const inputRef = useRef<HTMLInputElement>(null);
   const availableOptions = useMemo(
-    () => withCurrentValue(options, defaultValue),
-    [defaultValue, options],
+    () => withCurrentValue(options, defaultValue, i18n.t("adminUi.currentValue")),
+    [defaultValue, i18n, options],
   );
   const initialOption = availableOptions.find((option) => option.value === defaultValue);
   const [selectedValue, setSelectedValue] = useState(defaultValue ?? "");
@@ -91,17 +75,17 @@ function SearchableSelect({
   const fieldLabel = ariaLabel ?? name;
 
   function changeSearchValue(nextSearchValue: string) {
-    const normalized = normalizeSearchValue(nextSearchValue);
+    const normalized = normalizeSearchValue(nextSearchValue, i18n.locale);
     const match = availableOptions.find((option) => (
-      normalizeSearchValue(option.label) === normalized
-      || normalizeSearchValue(option.value) === normalized
+      normalizeSearchValue(option.label, i18n.locale) === normalized
+      || normalizeSearchValue(option.value, i18n.locale) === normalized
     ));
     const nextValue = match?.value ?? "";
 
     setSearchValue(match?.label ?? nextSearchValue);
     setSelectedValue(nextValue);
     inputRef.current?.setCustomValidity(
-      normalized && !match ? `请从 ${fieldLabel} 建议中选择一个值` : "",
+      normalized && !match ? i18n.t("adminUi.chooseSuggestion", { field: fieldLabel }) : "",
     );
     if (match || !normalized) onValueChange?.(nextValue);
   }
@@ -122,7 +106,7 @@ function SearchableSelect({
         aria-autocomplete="list"
         autoComplete="off"
         spellCheck={false}
-        placeholder={blankLabel ?? `输入搜索 ${fieldLabel}`}
+        placeholder={blankLabel ?? i18n.t("adminUi.searchField", { field: fieldLabel })}
         className={`${className} pl-10 pr-3`}
         required={required}
         disabled={disabled}
@@ -147,6 +131,14 @@ export function CountrySelect({
   disabled,
   onValueChange,
 }: SelectProps) {
+  const i18n = useI18n();
+  const options = useMemo(() => {
+    const collator = new Intl.Collator(i18n.locale);
+    return COUNTRY_PREFERENCES.map((country) => ({
+      value: country.code,
+      label: `${i18n.regionName(country.code)} / ${country.englishName} · ${country.code}`,
+    })).sort((left, right) => collator.compare(left.label, right.label));
+  }, [i18n]);
   return (
     <SearchableSelect
       name={name}
@@ -157,7 +149,7 @@ export function CountrySelect({
       blankLabel={blankLabel}
       disabled={disabled}
       onValueChange={onValueChange}
-      options={countryOptions}
+      options={options}
     />
   );
 }
@@ -172,6 +164,16 @@ export function LocaleSelect({
   disabled,
   onValueChange,
 }: SelectProps) {
+  const i18n = useI18n();
+  const options = useMemo(() => {
+    const collator = new Intl.Collator(i18n.locale);
+    return allLocales().map((locale) => {
+      const parsed = new Intl.Locale(locale);
+      const language = i18n.languageName(parsed.language);
+      const region = parsed.region ? i18n.regionName(parsed.region) : null;
+      return { value: locale, label: `${language}${region ? ` (${region})` : ""} · ${locale}` };
+    }).sort((left, right) => collator.compare(left.label, right.label));
+  }, [i18n]);
   const normalizedDefault = defaultValue ? canonicalLocale(defaultValue) ?? defaultValue : "";
   return (
     <SearchableSelect
@@ -183,7 +185,7 @@ export function LocaleSelect({
       blankLabel={blankLabel}
       disabled={disabled}
       onValueChange={onValueChange}
-      options={localeOptions}
+      options={options}
     />
   );
 }
@@ -226,6 +228,7 @@ export function RegionalPreferencesFields({
   fieldClassName: string;
   labelClassName: string;
 }) {
+  const i18n = useI18n();
   const ready = useSyncExternalStore(
     subscribeToHydration,
     getClientHydrationState,
@@ -236,13 +239,22 @@ export function RegionalPreferencesFields({
   const [timezone, setTimezone] = useState(defaultTimezone);
   const preferredLocales = useMemo(() => localesForCountry(country), [country]);
   const preferredTimezones = useMemo(() => timezonesForCountry(country), [country]);
+  const localeOptions = useMemo(() => {
+    const collator = new Intl.Collator(i18n.locale);
+    return allLocales().map((optionLocale) => {
+      const parsed = new Intl.Locale(optionLocale);
+      const language = i18n.languageName(parsed.language);
+      const region = parsed.region ? i18n.regionName(parsed.region) : null;
+      return { value: optionLocale, label: `${language}${region ? ` (${region})` : ""} · ${optionLocale}` };
+    }).sort((left, right) => collator.compare(left.label, right.label));
+  }, [i18n]);
   const visibleLocales = useMemo(() => {
     const preferred = new Set(preferredLocales);
     return [
       ...localeOptions.filter((option) => preferred.has(option.value)),
       ...localeOptions.filter((option) => !preferred.has(option.value)),
     ];
-  }, [preferredLocales]);
+  }, [localeOptions, preferredLocales]);
   const visibleTimezones = useMemo(() => {
     const preferred = new Set(preferredTimezones);
     return [
@@ -262,7 +274,7 @@ export function RegionalPreferencesFields({
   return (
     <>
       <Label className={labelClassName}>
-        Country / Region
+        {i18n.t("adminUi.countryRegion")}
         <CountrySelect
           key={`country-${country}`}
           name="countryRegion"
@@ -271,11 +283,11 @@ export function RegionalPreferencesFields({
           defaultValue={country}
           onValueChange={changeCountry}
           className={fieldClassName}
-          aria-label="Country / Region"
+          aria-label={i18n.t("adminUi.countryRegion")}
         />
       </Label>
       <Label className={labelClassName}>
-        Locale
+        {i18n.t("adminUi.locale")}
         <SearchableSelect
           key={`locale-${country}-${locale}`}
           name="locale"
@@ -284,12 +296,12 @@ export function RegionalPreferencesFields({
           defaultValue={locale}
           onValueChange={setLocale}
           className={fieldClassName}
-          aria-label="Locale"
+          aria-label={i18n.t("adminUi.locale")}
           options={visibleLocales}
         />
       </Label>
       <Label className={labelClassName}>
-        Timezone
+        {i18n.t("adminUi.timezone")}
         <SearchableSelect
           key={`timezone-${country}-${timezone}`}
           name="timezone"
@@ -298,7 +310,7 @@ export function RegionalPreferencesFields({
           defaultValue={timezone}
           onValueChange={setTimezone}
           className={fieldClassName}
-          aria-label="Timezone"
+          aria-label={i18n.t("adminUi.timezone")}
           options={visibleTimezones}
         />
       </Label>

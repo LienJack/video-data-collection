@@ -11,6 +11,7 @@ import { Checkbox } from "@egocapture/ui/components/checkbox";
 import { useRouter } from "next/navigation";
 import { useState, type FormEvent } from "react";
 import { RegionalPreferencesFields } from "@/app/_components/regional-preferences-fields";
+import { useI18n } from "@egocapture/ui/lib/i18n";
 
 type Device = {
   publicId: string;
@@ -54,6 +55,7 @@ export function ParticipantControls({
   devices: Device[];
 }) {
   const router = useRouter();
+  const i18n = useI18n();
   const [error, setError] = useState("");
   const [busy, setBusy] = useState("");
   const [reason, setReason] = useState("");
@@ -66,8 +68,8 @@ export function ParticipantControls({
       method: "POST",
       headers: { "idempotency-key": crypto.randomUUID() },
     });
-    const payload = await response.json() as { data?: { invitationUrl?: string }; error?: { message?: string } };
-    if (!response.ok || !payload.data?.invitationUrl) setError(payload.error?.message || "邀请生成失败");
+    const payload = await response.json() as { data?: { invitationUrl?: string }; error?: { code?: string } };
+    if (!response.ok || !payload.data?.invitationUrl) setError(payload.error?.code ? i18n.error(payload.error.code) : i18n.t("adminUi.invitationCreateFailed"));
     else {
       setInvitationUrl(payload.data.invitationUrl);
       setCurrentInvitationStatus("generated");
@@ -77,7 +79,7 @@ export function ParticipantControls({
   }
 
   async function revokeCurrentInvitation() {
-    if (reason.trim().length < 10) { setError("撤销原因至少 10 个字符"); return; }
+    if (reason.trim().length < 10) { setError(i18n.t("adminUi.reasonMinError")); return; }
     setBusy("revoke-invitation"); setError("");
     const response = await fetch(
       `/api/admin/participants/${participantPublicId}/invitations/revoke`,
@@ -87,8 +89,8 @@ export function ParticipantControls({
         body: JSON.stringify({ reason }),
       },
     );
-    const payload = await response.json() as { error?: { message?: string } };
-    if (!response.ok) setError(payload.error?.message || "邀请撤销失败");
+    const payload = await response.json() as { error?: { code?: string } };
+    if (!response.ok) setError(payload.error?.code ? i18n.error(payload.error.code) : i18n.t("adminUi.invitationRevokeFailed"));
     else {
       setInvitationUrl("");
       setCurrentInvitationStatus("revoked");
@@ -99,15 +101,15 @@ export function ParticipantControls({
   }
 
   async function changeStatus(action: "suspend" | "reactivate" | "withdraw") {
-    if (reason.trim().length < 10) { setError("状态变更原因至少 10 个字符"); return; }
+    if (reason.trim().length < 10) { setError(i18n.t("adminUi.statusChangeReasonError")); return; }
     setBusy(action); setError("");
     const response = await fetch(`/api/admin/participants/${participantPublicId}/${action}`, {
       method: "POST",
       headers: { "content-type": "application/json" },
       body: JSON.stringify({ reason }),
     });
-    const payload = await response.json() as { error?: { message?: string } };
-    if (!response.ok) setError(payload.error?.message || "状态变更失败");
+    const payload = await response.json() as { error?: { code?: string } };
+    if (!response.ok) setError(payload.error?.code ? i18n.error(payload.error.code) : i18n.t("adminUi.statusChangeFailed"));
     else { setReason(""); router.refresh(); }
     setBusy("");
   }
@@ -126,8 +128,8 @@ export function ParticipantControls({
         setAsDefault: form.get("setAsDefault") === "on",
       }),
     });
-    const payload = await response.json() as { error?: { message?: string } };
-    if (!response.ok) setError(payload.error?.message || "设备登记失败");
+    const payload = await response.json() as { error?: { code?: string } };
+    if (!response.ok) setError(payload.error?.code ? i18n.error(payload.error.code) : i18n.t("adminUi.deviceCreateFailed"));
     else { formElement.reset(); router.refresh(); }
     setBusy("");
   }
@@ -148,8 +150,8 @@ export function ParticipantControls({
         expectedUpdatedAt: profile.updatedAt,
       }),
     });
-    const payload = await response.json() as { error?: { message?: string } };
-    if (!response.ok) setError(payload.error?.message || "Participant 更新失败");
+    const payload = await response.json() as { error?: { code?: string } };
+    if (!response.ok) setError(payload.error?.code ? i18n.error(payload.error.code) : i18n.t("adminUi.participantUpdateFailed"));
     else router.refresh();
     setBusy("");
   }
@@ -167,8 +169,8 @@ export function ParticipantControls({
         expectedUpdatedAt: device.updatedAt,
       }),
     });
-    const payload = await response.json() as { error?: { message?: string } };
-    if (!response.ok) setError(payload.error?.message || "Device 更新失败");
+    const payload = await response.json() as { error?: { code?: string } };
+    if (!response.ok) setError(payload.error?.code ? i18n.error(payload.error.code) : i18n.t("adminUi.deviceUpdateFailed"));
     else router.refresh();
     setBusy("");
   }
@@ -177,11 +179,11 @@ export function ParticipantControls({
   return (
     <div className="space-y-8">
       <section className="border border-[var(--line)] bg-white/30 p-6">
-        <h2 className="display text-2xl font-semibold">Participant 资料</h2>
-        <p className="mt-2 text-sm leading-6 text-[var(--muted)]">管理邮箱仅作内部记录，不发送真实邮件。Notes 不得填写敏感信息。</p>
+        <h2 className="display text-2xl font-semibold">{i18n.t("adminUi.participantProfile")}</h2>
+        <p className="mt-2 text-sm leading-6 text-[var(--muted)]">{i18n.t("adminUi.participantProfileHelp")}</p>
         <form onSubmit={updateProfile} className="mt-5 grid gap-4 sm:grid-cols-2">
-          <Label className="text-xs font-bold uppercase tracking-[0.12em]">Display Alias<Input name="displayAlias" required maxLength={120} defaultValue={profile.displayAlias} className={`mt-2 ${field}`} /></Label>
-          <Label className="text-xs font-bold uppercase tracking-[0.12em]">Management Email<Input name="managementEmail" type="email" defaultValue={profile.managementEmail ?? ""} className={`mt-2 ${field}`} /></Label>
+          <Label className="text-xs font-bold uppercase tracking-[0.12em]">{i18n.t("adminUi.displayAlias")}<Input name="displayAlias" required maxLength={120} defaultValue={profile.displayAlias} className={`mt-2 ${field}`} /></Label>
+          <Label className="text-xs font-bold uppercase tracking-[0.12em]">{i18n.t("adminUi.managementEmail")}<Input name="managementEmail" type="email" defaultValue={profile.managementEmail ?? ""} className={`mt-2 ${field}`} /></Label>
           <RegionalPreferencesFields
             defaultCountry={profile.countryRegion}
             defaultLocale={profile.locale}
@@ -189,40 +191,40 @@ export function ParticipantControls({
             fieldClassName={`mt-2 ${field}`}
             labelClassName="text-xs font-bold uppercase tracking-[0.12em]"
           />
-          <Label className="text-xs font-bold uppercase tracking-[0.12em] sm:col-span-2">Notes<Textarea name="notes" maxLength={500} defaultValue={profile.notes ?? ""} className={`mt-2 min-h-24 ${field}`} /><span className="mt-1 block font-normal normal-case text-[var(--muted)]">最多 500 字；请勿写姓名、住址、证件号等敏感信息。</span></Label>
-          <Button disabled={Boolean(busy) || fixtureProtected} className="bg-[var(--teal)] px-4 py-3 font-bold text-white sm:col-span-2">{busy === "profile" ? "保存中…" : "保存 Participant 资料"}</Button>
+          <Label className="text-xs font-bold uppercase tracking-[0.12em] sm:col-span-2">{i18n.t("common.notes")}<Textarea name="notes" maxLength={500} defaultValue={profile.notes ?? ""} className={`mt-2 min-h-24 ${field}`} /><span className="mt-1 block font-normal normal-case text-[var(--muted)]">{i18n.t("adminUi.sensitiveNotesHelp")}</span></Label>
+          <Button disabled={Boolean(busy) || fixtureProtected} className="bg-[var(--teal)] px-4 py-3 font-bold text-white sm:col-span-2">{busy === "profile" ? i18n.t("common.saving") : i18n.t("adminUi.saveParticipant")}</Button>
         </form>
       </section>
       <section className="border border-[var(--line)] bg-white/30 p-6">
-        <h2 className="display text-2xl font-semibold">邀请与状态</h2>
-        <p className="mt-2 text-sm leading-6 text-[var(--muted)]">邀请链接只显示一次；数据库仅保存 SHA-256 hash。</p>
+        <h2 className="display text-2xl font-semibold">{i18n.t("adminUi.invitationAndStatus")}</h2>
+        <p className="mt-2 text-sm leading-6 text-[var(--muted)]">{i18n.t("adminUi.invitationHashHelp")}</p>
         <p className="mt-3 text-xs text-[var(--muted)]">
-          当前邀请：{currentInvitationStatus || "尚未生成"}
+          {i18n.t("adminUi.currentInvitation", { status: currentInvitationStatus ? i18n.state("participant_invitation.status", currentInvitationStatus) : i18n.t("adminUi.notGenerated") })}
           {invitationExpiresAt && ["generated", "opened"].includes(currentInvitationStatus || "")
-            ? ` · ${new Date(invitationExpiresAt).toLocaleString("zh-CN")}`
+            ? ` · ${i18n.date(invitationExpiresAt)}`
             : ""}
         </p>
-        {isFixture ? <p className="mt-4 border-l-4 border-[var(--yellow)] px-3 text-sm">Demo Fixture{fixtureProtected ? " 受保护，公开管理员不能修改。" : "。"}</p> : null}
+        {isFixture ? <p className="mt-4 border-l-4 border-[var(--yellow)] px-3 text-sm">{i18n.t("adminUi.demoData")}{fixtureProtected ? ` · ${i18n.t("adminUi.fixtureProtected")}` : ""}</p> : null}
         <div className="mt-5 flex flex-wrap gap-3">
-          {["draft", "invited", "expired"].includes(status) ? <Button disabled={Boolean(busy) || fixtureProtected} onClick={generateInvitation} className="bg-[var(--signal)] px-4 py-2.5 font-bold text-white">{busy === "invite" ? "生成中…" : "生成 / 重发邀请"}</Button> : null}
+          {["draft", "invited", "expired"].includes(status) ? <Button disabled={Boolean(busy) || fixtureProtected} onClick={generateInvitation} className="bg-[var(--signal)] px-4 py-2.5 font-bold text-white">{busy === "invite" ? i18n.t("adminUi.generating") : i18n.t("adminUi.generateInvitation")}</Button> : null}
         </div>
-        {invitationUrl ? <div className="mt-4 break-all border border-[var(--teal)] bg-[var(--teal-soft)] p-4 text-sm"><p className="font-bold">一次性邀请 URL</p><p className="mt-2">{invitationUrl}</p><div className="mt-3 flex gap-4"><Button variant="link" className="border-b border-[var(--ink)] font-bold" onClick={() => navigator.clipboard.writeText(invitationUrl)}>复制链接</Button><a href={invitationUrl} target="_blank" rel="noreferrer" className="border-b border-[var(--ink)] font-bold">新窗口打开</a></div></div> : null}
-        {status !== "withdrawn" ? <div className="mt-6"><Label className="text-xs font-bold uppercase tracking-[0.14em]">操作原因<Input value={reason} onChange={(event) => setReason(event.target.value)} maxLength={500} placeholder="至少 10 个字符" className={`mt-2 ${field}`} /></Label><div className="mt-3 flex flex-wrap gap-2">{["generated", "opened"].includes(currentInvitationStatus || "") ? <Button variant="outline" disabled={Boolean(busy) || fixtureProtected} onClick={revokeCurrentInvitation} className="border-[var(--signal)] px-3 py-2 font-bold text-[var(--signal)]">撤销邀请</Button> : null}{status === "active" ? <Button variant="outline" disabled={Boolean(busy) || fixtureProtected} onClick={() => changeStatus("suspend")} className="border-[var(--ink)] px-3 py-2 font-bold">暂停</Button> : null}{status === "suspended" ? <Button variant="outline" disabled={Boolean(busy) || fixtureProtected} onClick={() => changeStatus("reactivate")} className="border-[var(--teal)] px-3 py-2 font-bold text-[var(--teal)]">恢复</Button> : null}<Button variant="outline" disabled={Boolean(busy) || fixtureProtected} onClick={() => changeStatus("withdraw")} className="border-[var(--signal)] px-3 py-2 font-bold text-[var(--signal)]">退出研究</Button></div></div> : null}
+        {invitationUrl ? <div className="mt-4 break-all border border-[var(--teal)] bg-[var(--teal-soft)] p-4 text-sm"><p className="font-bold">{i18n.t("adminUi.oneTimeInvitationUrl")}</p><p className="mt-2">{invitationUrl}</p><div className="mt-3 flex gap-4"><Button variant="link" className="border-b border-[var(--ink)] font-bold" onClick={() => navigator.clipboard.writeText(invitationUrl)}>{i18n.t("adminUi.copyLink")}</Button><a href={invitationUrl} target="_blank" rel="noreferrer" className="border-b border-[var(--ink)] font-bold">{i18n.t("adminUi.openNewWindow")}</a></div></div> : null}
+        {status !== "withdrawn" ? <div className="mt-6"><Label className="text-xs font-bold uppercase tracking-[0.14em]">{i18n.t("adminUi.operationReason")}<Input value={reason} onChange={(event) => setReason(event.target.value)} maxLength={500} placeholder={i18n.t("adminUi.minimum10")} className={`mt-2 ${field}`} /></Label><div className="mt-3 flex flex-wrap gap-2">{["generated", "opened"].includes(currentInvitationStatus || "") ? <Button variant="outline" disabled={Boolean(busy) || fixtureProtected} onClick={revokeCurrentInvitation} className="border-[var(--signal)] px-3 py-2 font-bold text-[var(--signal)]">{i18n.t("adminUi.revokeInvitation")}</Button> : null}{status === "active" ? <Button variant="outline" disabled={Boolean(busy) || fixtureProtected} onClick={() => changeStatus("suspend")} className="border-[var(--ink)] px-3 py-2 font-bold">{i18n.t("adminUi.pauseParticipant")}</Button> : null}{status === "suspended" ? <Button variant="outline" disabled={Boolean(busy) || fixtureProtected} onClick={() => changeStatus("reactivate")} className="border-[var(--teal)] px-3 py-2 font-bold text-[var(--teal)]">{i18n.t("adminUi.reactivateParticipant")}</Button> : null}<Button variant="outline" disabled={Boolean(busy) || fixtureProtected} onClick={() => changeStatus("withdraw")} className="border-[var(--signal)] px-3 py-2 font-bold text-[var(--signal)]">{i18n.t("adminUi.withdrawParticipant")}</Button></div></div> : null}
       </section>
 
       <section className="border border-[var(--line)] bg-white/30 p-6">
-        <h2 className="display text-2xl font-semibold">登记设备</h2>
+        <h2 className="display text-2xl font-semibold">{i18n.t("adminUi.registerDevice")}</h2>
         <form onSubmit={addDevice} className="mt-5 grid gap-3 sm:grid-cols-2">
-          <Input name="manufacturer" required placeholder="Manufacturer" className={field} />
-          <Input name="model" required placeholder="Model" className={field} />
-          <NativeSelect name="deviceType" className={field}><NativeSelectOption value="phone">Phone</NativeSelectOption><NativeSelectOption value="action_camera">Action Camera</NativeSelectOption><NativeSelectOption value="camera">Camera</NativeSelectOption><NativeSelectOption value="other">Other</NativeSelectOption></NativeSelect>
-          <NativeSelect name="status" className={field}><NativeSelectOption value="active">Active</NativeSelectOption><NativeSelectOption value="shared">Shared</NativeSelectOption></NativeSelect>
-          <Input name="serial" placeholder="Serial（只保存 HMAC）" className={field} />
-          <Input name="firmwareVersion" placeholder="Firmware" className={field} />
-          <Label className="flex items-center gap-2 text-sm"><Checkbox name="setAsDefault" defaultChecked />设为 Default Device</Label>
-          <Button disabled={Boolean(busy) || fixtureProtected} className="bg-[var(--ink)] px-4 py-3 font-bold text-[var(--paper)]">{busy === "device" ? "登记中…" : "登记设备"}</Button>
+          <Input name="manufacturer" required placeholder={i18n.t("adminUi.manufacturer")} className={field} />
+          <Input name="model" required placeholder={i18n.t("adminUi.model")} className={field} />
+          <NativeSelect name="deviceType" className={field}><NativeSelectOption value="phone">{i18n.t("adminUi.deviceTypePhone")}</NativeSelectOption><NativeSelectOption value="action_camera">{i18n.t("adminUi.deviceTypeActionCamera")}</NativeSelectOption><NativeSelectOption value="camera">{i18n.t("adminUi.deviceTypeCamera")}</NativeSelectOption><NativeSelectOption value="other">{i18n.t("adminUi.deviceTypeOther")}</NativeSelectOption></NativeSelect>
+          <NativeSelect name="status" className={field}><NativeSelectOption value="active">{i18n.state("device.status", "active")}</NativeSelectOption><NativeSelectOption value="shared">{i18n.state("device.status", "shared")}</NativeSelectOption></NativeSelect>
+          <Input name="serial" placeholder={i18n.t("adminUi.serialHmacOnly")} className={field} />
+          <Input name="firmwareVersion" placeholder={i18n.t("adminUi.firmware")} className={field} />
+          <Label className="flex items-center gap-2 text-sm"><Checkbox name="setAsDefault" defaultChecked />{i18n.t("adminUi.setDefaultDevice")}</Label>
+          <Button disabled={Boolean(busy) || fixtureProtected} className="bg-[var(--ink)] px-4 py-3 font-bold text-[var(--paper)]">{busy === "device" ? i18n.t("adminUi.registering") : i18n.t("adminUi.registerDevice")}</Button>
         </form>
-        <div className="mt-6 space-y-3">{devices.map((device) => <Card as="article" key={device.publicId} className="border-t border-[var(--line)] py-4 text-sm"><div className="flex flex-wrap justify-between gap-3"><div><p className="font-bold">{device.manufacturer} {device.model}</p><p className="mt-1 text-xs text-[var(--muted)]">{device.publicId} · {device.deviceType}{device.isDefault ? " · Default" : ""}</p></div><span className="font-bold uppercase">{device.status}</span></div><form onSubmit={(event) => void updateDevice(event, device)} className="mt-4 grid gap-3 sm:grid-cols-[1fr_150px_1.5fr_auto]"><Input name="firmwareVersion" defaultValue={device.firmwareVersion ?? ""} placeholder="Firmware" className={field} /><NativeSelect name="status" defaultValue={device.status} disabled={device.status === "retired"} className={field}><NativeSelectOption value="active">Active</NativeSelectOption><NativeSelectOption value="shared">Shared</NativeSelectOption><NativeSelectOption value="lost">Lost</NativeSelectOption><NativeSelectOption value="retired">Retired</NativeSelectOption></NativeSelect><Input name="reason" required minLength={10} maxLength={500} placeholder="修改原因（10～500 字符）" className={field} /><Button variant="outline" disabled={Boolean(busy) || fixtureProtected} className="border-[var(--teal)] px-4 py-2 font-bold text-[var(--teal)]">{busy === `edit-${device.publicId}` ? "保存中…" : "更新"}</Button></form></Card>)}{devices.length === 0 ? <p className="text-sm text-[var(--muted)]">尚未登记设备。</p> : null}</div>
+        <div className="mt-6 space-y-3">{devices.map((device) => <Card as="article" key={device.publicId} className="border-t border-[var(--line)] py-4 text-sm"><div className="flex flex-wrap justify-between gap-3"><div><p className="font-bold">{device.manufacturer} {device.model}</p><p className="mt-1 text-xs text-[var(--muted)]">{device.publicId} · {device.deviceType}{device.isDefault ? ` · ${i18n.t("adminUi.defaultDevice")}` : ""}</p></div><span className="font-bold uppercase">{i18n.state("device.status", device.status)}</span></div><form onSubmit={(event) => void updateDevice(event, device)} className="mt-4 grid gap-3 sm:grid-cols-[1fr_150px_1.5fr_auto]"><Input name="firmwareVersion" defaultValue={device.firmwareVersion ?? ""} placeholder={i18n.t("adminUi.firmware")} className={field} /><NativeSelect name="status" defaultValue={device.status} disabled={device.status === "retired"} className={field}><NativeSelectOption value="active">{i18n.state("device.status", "active")}</NativeSelectOption><NativeSelectOption value="shared">{i18n.state("device.status", "shared")}</NativeSelectOption><NativeSelectOption value="lost">{i18n.state("device.status", "lost")}</NativeSelectOption><NativeSelectOption value="retired">{i18n.state("device.status", "retired")}</NativeSelectOption></NativeSelect><Input name="reason" required minLength={10} maxLength={500} placeholder={i18n.t("adminUi.updateReason")} className={field} /><Button variant="outline" disabled={Boolean(busy) || fixtureProtected} className="border-[var(--teal)] px-4 py-2 font-bold text-[var(--teal)]">{busy === `edit-${device.publicId}` ? i18n.t("common.saving") : i18n.t("common.edit")}</Button></form></Card>)}{devices.length === 0 ? <p className="text-sm text-[var(--muted)]">{i18n.t("adminUi.noDevices")}</p> : null}</div>
       </section>
       {error ? <Alert variant="destructive"><AlertDescription>{error}</AlertDescription></Alert> : null}
     </div>

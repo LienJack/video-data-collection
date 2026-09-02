@@ -3,8 +3,10 @@
 import { Alert, AlertDescription } from "@egocapture/ui/components/alert";
 import { Button } from "@egocapture/ui/components/button";
 import { useState, type FormEvent } from "react";
+import { useI18n } from "@egocapture/ui/lib/i18n";
 
 export function AcceptInvitationForm({ token }: { token: string }) {
+  const i18n = useI18n();
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
 
@@ -16,14 +18,14 @@ export function AcceptInvitationForm({ token }: { token: string }) {
       const response = await fetch(`/api/invitations/${encodeURIComponent(token)}/accept`, {
         method: "POST",
       });
-      const payload = await response.json() as { data?: { redirectTo?: string }; error?: { message?: string } };
+      const payload = await response.json() as { data?: { redirectTo?: string }; error?: { code?: string } };
       if (!response.ok || !payload.data?.redirectTo) {
-        setError(payload.error?.message || "邀请无效或已过期");
+        setError(payload.error?.code ? i18n.error(payload.error.code) : i18n.t("participantUi.invitationInvalid"));
         return;
       }
       window.location.assign(payload.data.redirectTo);
     } catch {
-      setError("暂时无法接受邀请，请稍后重试");
+      setError(i18n.error("INVITATION_ACCEPT_FAILED"));
     } finally {
       setBusy(false);
     }
@@ -32,11 +34,11 @@ export function AcceptInvitationForm({ token }: { token: string }) {
   return (
     <form className="mt-8 space-y-5" onSubmit={submit}>
       <p className="text-sm leading-7 text-[var(--muted)]">
-        登录帐号和系统生成的密码由管理员提供。确认后将激活你的 Participant 工作区。
+        {i18n.t("participantUi.invitationAccountBody")}
       </p>
       {error ? <Alert variant="destructive"><AlertDescription>{error}</AlertDescription></Alert> : null}
       <Button disabled={busy} className="w-full disabled:opacity-60">
-        {busy ? "正在激活…" : "接受邀请并进入任务"}
+        {busy ? i18n.t("participantUi.activating") : i18n.t("participantUi.acceptInvitation")}
       </Button>
     </form>
   );

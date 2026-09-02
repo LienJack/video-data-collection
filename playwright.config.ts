@@ -12,6 +12,7 @@ export default defineConfig({
   reporter: process.env.CI ? "github" : "list",
   use: {
     baseURL: participantOrigin,
+    locale: "zh-CN",
     trace: "on-first-retry",
   },
   webServer: {

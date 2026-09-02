@@ -23,6 +23,7 @@ This directory contains guidelines for frontend development. Fill in each file w
 | [Admin Table Pagination](./pagination-contract.md) | Cross-layer page result, query, URL, UI, and test contract | Active |
 | [Participant Login Credentials](./participant-credential-contract.md) | Plaintext participant credential authority, sync, API, and test contract | Active |
 | [Lifecycle State Machines](./lifecycle-state-machine-contract.md) | XState, service transaction, PostgreSQL guard, upload actor, and test contract | Active |
+| [Internationalization](./i18n-contract.md) | Locale resolution, catalogs, formatting, error/status mapping, and test contract | Active |
 
 ---
 

@@ -3,32 +3,29 @@ import { Card } from "@egocapture/ui/components/card";
 import { ArrowSquareOut, CheckCircle, Compass, Flask, WarningCircle } from "@phosphor-icons/react/dist/ssr";
 import type { ReactNode } from "react";
 
-type GuideStatus = "current" | "future" | "boundary";
+import type { GuideStatus } from "./guide-content";
 
-const statusConfig: Record<GuideStatus, { label: string; icon: ReactNode; className: string }> = {
+const statusConfig: Record<GuideStatus, { icon: ReactNode; className: string }> = {
   current: {
-    label: "当前已实现",
     icon: <CheckCircle weight="fill" aria-hidden="true" />,
     className: "border-transparent bg-[var(--teal-soft)] text-[var(--signal-dark)]",
   },
   future: {
-    label: "未来方案",
     icon: <Flask weight="duotone" aria-hidden="true" />,
     className: "border-transparent bg-violet-50 text-violet-700",
   },
   boundary: {
-    label: "能力边界",
     icon: <WarningCircle weight="duotone" aria-hidden="true" />,
     className: "border-amber-200 bg-amber-50 text-amber-800",
   },
 };
 
-export function StatusPill({ status }: { status: GuideStatus }) {
+export function StatusPill({ status, label }: { status: GuideStatus; label: string }) {
   const config = statusConfig[status];
   return (
     <Badge variant="outline" className={`gap-1.5 px-2.5 py-1 ${config.className}`}>
       {config.icon}
-      {config.label}
+      {label}
     </Badge>
   );
 }
@@ -40,6 +37,7 @@ export function GuideArticle({
   title,
   summary,
   statuses,
+  statusLabels,
   icon,
   children,
 }: {
@@ -49,6 +47,7 @@ export function GuideArticle({
   title: string;
   summary: string;
   statuses: GuideStatus[];
+  statusLabels: Record<GuideStatus, string>;
   icon: ReactNode;
   children: ReactNode;
 }) {
@@ -74,7 +73,7 @@ export function GuideArticle({
               </h2>
             </div>
           </div>
-          <div className="flex flex-wrap gap-2">{statuses.map((status) => <StatusPill key={status} status={status} />)}</div>
+          <div className="flex flex-wrap gap-2">{statuses.map((status) => <StatusPill key={status} status={status} label={statusLabels[status]} />)}</div>
         </div>
         <p className="mt-5 max-w-3xl text-base leading-7 text-[var(--muted)] sm:ms-16 sm:mt-6 sm:text-lg sm:leading-8">{summary}</p>
       </header>
@@ -93,7 +92,7 @@ export function GuideSection({ title, eyebrow, children }: { title: string; eyeb
   );
 }
 
-export function Conclusion({ children, tone = "blue" }: { children: ReactNode; tone?: "blue" | "amber" | "violet" }) {
+export function Conclusion({ children, label, tone = "blue" }: { children: ReactNode; label: string; tone?: "blue" | "amber" | "violet" }) {
   const color = tone === "amber"
     ? "border-amber-200 bg-amber-50/80"
     : tone === "violet"
@@ -104,14 +103,14 @@ export function Conclusion({ children, tone = "blue" }: { children: ReactNode; t
     <div className={`rounded-2xl border p-5 sm:p-6 ${color}`}>
       <p className="flex items-center gap-2 text-xs font-bold uppercase tracking-[0.14em] text-[var(--ink)]">
         <Compass className="size-4 text-[var(--signal)]" weight="duotone" aria-hidden="true" />
-        结论先行
+        {label}
       </p>
       <div className="mt-3 text-sm leading-7 text-[var(--ink)] sm:text-base sm:leading-8">{children}</div>
     </div>
   );
 }
 
-export function GuideDiagram({ title, description, src }: { title: string; description: string; src: string }) {
+export function GuideDiagram({ title, description, src, actionLabel }: { title: string; description: string; src: string; actionLabel: string }) {
   const diagramSlug = src.split("/").at(-1)?.replace(/\.html$/, "") ?? "unknown";
 
   return (
@@ -127,7 +126,7 @@ export function GuideDiagram({ title, description, src }: { title: string; descr
           rel="noreferrer"
           className="inline-flex min-h-11 shrink-0 items-center justify-center gap-2 rounded-xl border border-[var(--line)] bg-white px-4 text-sm font-semibold text-[var(--signal-dark)] shadow-sm outline-none transition hover:border-[var(--signal)] hover:bg-[var(--teal-soft)] focus-visible:ring-2 focus-visible:ring-[var(--ring)] focus-visible:ring-offset-2"
         >
-          打开交互图
+          {actionLabel}
           <ArrowSquareOut className="size-4" aria-hidden="true" />
         </a>
       </figcaption>
@@ -174,10 +173,10 @@ export function FactGrid({ items }: { items: Array<{ label: string; value: React
 
 type Reference = { label: string; href?: string; note?: string };
 
-export function ReferenceList({ items }: { items: Reference[] }) {
+export function ReferenceList({ items, label, newTabLabel }: { items: Reference[]; label: string; newTabLabel: string }) {
   return (
-    <section className="rounded-2xl border border-[var(--line)] bg-[var(--paper)]/65 p-5 sm:p-6" aria-label="依据与延伸阅读">
-      <h3 className="text-sm font-semibold text-[var(--ink)]">依据与延伸阅读</h3>
+    <section className="rounded-2xl border border-[var(--line)] bg-[var(--paper)]/65 p-5 sm:p-6" aria-label={label}>
+      <h3 className="text-sm font-semibold text-[var(--ink)]">{label}</h3>
       <ul className="mt-3 space-y-2 text-sm leading-6 text-[var(--muted)]">
         {items.map((item) => (
           <li key={item.label} className="flex items-start gap-2">
@@ -185,7 +184,7 @@ export function ReferenceList({ items }: { items: Reference[] }) {
             <span>
               {item.href ? (
                 <a className="font-semibold text-[var(--signal-dark)] underline decoration-[var(--signal)]/30 underline-offset-4 hover:decoration-[var(--signal)]" href={item.href} target="_blank" rel="noreferrer">
-                  {item.label}<span className="sr-only">（在新标签页打开）</span>
+                  {item.label}<span className="sr-only">{newTabLabel}</span>
                 </a>
               ) : <code className="break-all rounded bg-white px-1.5 py-0.5 text-[0.8rem] text-[var(--ink)]">{item.label}</code>}
               {item.note ? <span> — {item.note}</span> : null}

@@ -34,9 +34,9 @@ describe("regional preferences", () => {
       />,
     );
 
-    const country = screen.getByLabelText("Country / Region") as HTMLInputElement;
-    const locale = screen.getByLabelText("Locale") as HTMLInputElement;
-    const timezone = screen.getByLabelText("Timezone") as HTMLInputElement;
+    const country = screen.getByLabelText("国家 / 地区") as HTMLInputElement;
+    const locale = screen.getByLabelText("语言区域") as HTMLInputElement;
+    const timezone = screen.getByLabelText("时区") as HTMLInputElement;
     const countryValue = document.querySelector<HTMLInputElement>('input[type="hidden"][name="countryRegion"]');
     const localeValue = document.querySelector<HTMLInputElement>('input[type="hidden"][name="locale"]');
     const timezoneValue = document.querySelector<HTMLInputElement>('input[type="hidden"][name="timezone"]');
@@ -50,7 +50,7 @@ describe("regional preferences", () => {
 
     fireEvent.change(country, { target: { value: "JP" } });
 
-    expect((screen.getByLabelText("Country / Region") as HTMLInputElement).value).toContain("Japan");
+    expect((screen.getByLabelText("国家 / 地区") as HTMLInputElement).value).toContain("Japan");
     expect(document.querySelector<HTMLInputElement>('input[type="hidden"][name="countryRegion"]')?.value).toBe("JP");
     expect(document.querySelector<HTMLInputElement>('input[type="hidden"][name="locale"]')?.value).toBe("ja-JP");
     expect(document.querySelector<HTMLInputElement>('input[type="hidden"][name="timezone"]')?.value).toBe("Asia/Tokyo");

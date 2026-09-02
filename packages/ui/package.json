@@ -12,10 +12,13 @@
     "./globals.css": "./globals.css",
     "./components/*": "./src/components/*.tsx",
     "./hooks/*": "./src/hooks/*.ts",
+    "./lib/i18n": "./src/lib/i18n.tsx",
     "./lib/*": "./src/lib/*.ts"
   },
   "dependencies": {
+    "@egocapture/core": "workspace:*",
     "@phosphor-icons/react": "^2.1.10",
+    "next": "16.3.4",
     "class-variance-authority": "^0.7.1",
     "clsx": "2.1.1",
     "radix-ui": "^1.6.7",

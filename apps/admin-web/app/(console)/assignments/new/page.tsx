@@ -3,11 +3,15 @@ import Link from "next/link";
 import { AssignmentForm } from "@/app/(console)/assignments/new/assignment-form";
 import { requireAdmin } from "@/lib/auth";
 import { database } from "@egocapture/core/server/database";
+import { createTranslator } from "@egocapture/core/i18n";
+import { requestLocale } from "@egocapture/core/server/i18n";
 
 export const dynamic = "force-dynamic";
 
 export default async function NewAssignmentPage() {
   await requireAdmin();
+  const locale = await requestLocale();
+  const i18n = createTranslator(locale);
   const db = database();
   const [participants, versions, devices] = await Promise.all([
     db<{ publicId: string; displayAlias: string }[]>`
@@ -29,5 +33,5 @@ export default async function NewAssignmentPage() {
       order by device.manufacturer, device.model
     `,
   ]);
-  return <main className="content-page"><Link href="/assignments" className={buttonVariants({ variant: "outline", className: "" })}>← Assignments</Link><p className="page-kicker mt-10">Frozen delivery</p><h1 className="page-title">创建 Assignment</h1><p className="mt-4 text-sm leading-7 text-[var(--muted)]">服务端会重新核对 Active、Consent、Published Version 和 Device 归属；下拉组合不构成授权。</p><AssignmentForm participants={participants} versions={versions} devices={devices} /></main>;
+  return <main className="content-page"><Link href="/assignments" className={buttonVariants({ variant: "outline", className: "" })}>← {i18n.t("adminUi.assignmentsBack")}</Link><p className="page-kicker mt-10">{i18n.t("adminUi.assignmentsKicker")}</p><h1 className="page-title">{i18n.t("adminUi.createAssignment")}</h1><p className="mt-4 text-sm leading-7 text-[var(--muted)]">{i18n.t("adminUi.assignmentAuthorityHelp")}</p><AssignmentForm participants={participants} versions={versions} devices={devices} /></main>;
 }

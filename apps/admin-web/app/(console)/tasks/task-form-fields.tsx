@@ -7,6 +7,7 @@ import { Label } from "@egocapture/ui/components/label";
 import { NativeSelect, NativeSelectOption } from "@egocapture/ui/components/native-select";
 import { PlusIcon, XIcon } from "@phosphor-icons/react";
 import { useState } from "react";
+import { useI18n } from "@egocapture/ui/lib/i18n";
 
 export function FieldError({ id, message }: { id: string; message?: string }) {
   if (!message) return null;
@@ -32,6 +33,7 @@ export function TextListField({
   error?: string;
   maxItems?: number;
 }) {
+  const i18n = useI18n();
   const errorId = `${id}-error`;
   return (
     <div>
@@ -57,7 +59,7 @@ export function TextListField({
                 variant="ghost"
                 size="icon"
                 onClick={() => onChange(items.filter((_, itemIndex) => itemIndex !== index))}
-                aria-label={`移除${label} ${index + 1}`}
+                aria-label={i18n.t("adminUi.removeItem", { label, number: index + 1 })}
               >
                 <XIcon aria-hidden="true" />
               </Button>
@@ -99,6 +101,7 @@ export function TagSelectField({
   error?: string;
   maxItems?: number;
 }) {
+  const i18n = useI18n();
   const [customValue, setCustomValue] = useState("");
   const [localError, setLocalError] = useState("");
   const errorId = `${id}-error`;
@@ -106,15 +109,15 @@ export function TagSelectField({
   function add(value: string) {
     const trimmed = value.trim();
     if (!trimmed) {
-      setLocalError("请输入自定义选项");
+      setLocalError(i18n.t("adminUi.enterCustomOption"));
       return;
     }
     if (values.some((item) => item.toLocaleLowerCase() === trimmed.toLocaleLowerCase())) {
-      setLocalError(`“${trimmed}”已经添加`);
+      setLocalError(i18n.t("adminUi.alreadyAdded", { value: trimmed }));
       return;
     }
     if (values.length >= maxItems) {
-      setLocalError(`最多添加 ${maxItems} 项`);
+      setLocalError(i18n.t("adminUi.maxItems", { count: maxItems }));
       return;
     }
     onChange([...values, trimmed]);
@@ -128,7 +131,7 @@ export function TagSelectField({
     <div>
       <p className="text-sm font-semibold">{label}</p>
       {values.length > 0 ? (
-        <ul className="mt-3 flex flex-wrap gap-2" aria-label={`已选${label}`}>
+        <ul className="mt-3 flex flex-wrap gap-2" aria-label={i18n.t("adminUi.selectedLabel", { label })}>
           {values.map((value, index) => (
             <li key={`${value}-${index}`}>
               <Badge variant="secondary" className="gap-2 py-1 ps-3 pe-1 text-sm">
@@ -137,7 +140,7 @@ export function TagSelectField({
                   type="button"
                   className="inline-flex min-h-8 min-w-8 items-center justify-center rounded-full outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50"
                   onClick={() => onChange(values.filter((_, itemIndex) => itemIndex !== index))}
-                  aria-label={`从${label}中移除“${value}”`}
+                  aria-label={i18n.t("adminUi.removeValue", { label, value })}
                 >
                   <XIcon aria-hidden="true" />
                 </button>
@@ -145,11 +148,11 @@ export function TagSelectField({
             </li>
           ))}
         </ul>
-      ) : <p className="mt-2 text-sm text-muted-foreground">尚未添加。</p>}
+      ) : <p className="mt-2 text-sm text-muted-foreground">{i18n.t("adminUi.nothingAdded")}</p>}
 
       <div className="mt-4 grid gap-3 sm:grid-cols-2">
         <div>
-          <Label htmlFor={`${id}-preset`}>从预设中添加</Label>
+          <Label htmlFor={`${id}-preset`}>{i18n.t("adminUi.addFromPreset")}</Label>
           <NativeSelect
             id={`${id}-preset`}
             value=""
@@ -159,12 +162,12 @@ export function TagSelectField({
             className="mt-2 w-full"
             aria-describedby={message ? errorId : undefined}
           >
-            <NativeSelectOption value="">选择一个预设选项</NativeSelectOption>
+            <NativeSelectOption value="">{i18n.t("adminUi.choosePreset")}</NativeSelectOption>
             {availablePresets.map((preset) => <NativeSelectOption key={preset} value={preset}>{preset}</NativeSelectOption>)}
           </NativeSelect>
         </div>
         <div>
-          <Label htmlFor={`${id}-custom`}>添加自定义选项</Label>
+          <Label htmlFor={`${id}-custom`}>{i18n.t("adminUi.addCustomOption")}</Label>
           <div className="mt-2 flex gap-2">
             <Input
               id={`${id}-custom`}
@@ -181,9 +184,9 @@ export function TagSelectField({
               aria-invalid={Boolean(message)}
               aria-describedby={message ? errorId : undefined}
             />
-            <Button type="button" variant="outline" onClick={() => add(customValue)} aria-label={`添加自定义${label}`}>
+            <Button type="button" variant="outline" onClick={() => add(customValue)} aria-label={i18n.t("adminUi.addCustom", { label })}>
               <PlusIcon aria-hidden="true" />
-              添加
+              {i18n.t("adminUi.add")}
             </Button>
           </div>
         </div>

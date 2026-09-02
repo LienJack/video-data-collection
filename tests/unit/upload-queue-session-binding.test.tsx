@@ -80,9 +80,9 @@ describe("participant upload queue Session binding", () => {
     selectVideo();
 
     const card = await screen.findByRole("article");
-    const selector = within(card).getByRole("combobox", { name: "Recording Session" });
+    const selector = within(card).getByRole("combobox", { name: "录制会话" });
     expect(selector).toHaveValue("");
-    expect(within(selector).getByRole("option", { name: "Unable to Determine" })).toBeInTheDocument();
+    expect(within(selector).getByRole("option", { name: "无法确定" })).toBeInTheDocument();
   });
 
   it("locks new files and sends the locked Session in the UploadIntent request", async () => {
@@ -111,13 +111,13 @@ describe("participant upload queue Session binding", () => {
     vi.stubGlobal("fetch", fetchMock);
 
     const view = render(<UploadQueue sessions={sessions} lockedSessionPublicId="RS-OPEN0001" />);
-    expect(screen.getByLabelText("已绑定 Recording Session")).toHaveTextContent("RS-OPEN0001");
+    expect(screen.getByLabelText("已绑定录制会话")).toHaveTextContent("RS-OPEN0001");
     selectVideo();
 
     const card = await screen.findByRole("article");
-    expect(within(card).queryByRole("combobox", { name: "Recording Session" })).not.toBeInTheDocument();
-    expect(within(card).getByLabelText("锁定的 Recording Session")).toHaveTextContent("RS-OPEN0001 · 已锁定");
-    fireEvent.click(await within(card).findByRole("button", { name: "开始直传 Storage" }));
+    expect(within(card).queryByRole("combobox", { name: "录制会话" })).not.toBeInTheDocument();
+    expect(within(card).getByLabelText("锁定的录制会话")).toHaveTextContent("RS-OPEN0001 · 已锁定");
+    fireEvent.click(await within(card).findByRole("button", { name: "开始直传存储" }));
 
     await waitFor(() => expect(fetchMock).toHaveBeenCalledWith(
       "/api/upload-intents",
@@ -166,9 +166,9 @@ describe("participant upload queue Session binding", () => {
 
     const card = await screen.findByRole("article");
     await waitFor(() => expect(within(card).getByRole("alert")).toHaveTextContent(
-      "该文件已有绑定其他 Session 的待恢复上传",
+      "该文件已有绑定其他会话的待恢复上传",
     ));
-    expect(within(card).queryByRole("button", { name: "开始直传 Storage" })).not.toBeInTheDocument();
+    expect(within(card).queryByRole("button", { name: "开始直传存储" })).not.toBeInTheDocument();
     expect(screen.queryByText("待恢复上传（1）")).not.toBeInTheDocument();
     expect(fetchMock).not.toHaveBeenCalled();
   });

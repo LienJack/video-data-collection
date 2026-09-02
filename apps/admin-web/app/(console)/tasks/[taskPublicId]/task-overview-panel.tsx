@@ -9,6 +9,7 @@ import {
   WarningCircle,
 } from "@phosphor-icons/react/dist/ssr";
 import Link from "next/link";
+import { createTranslator, type UiLocale } from "@egocapture/core/i18n";
 import type { getTaskOperations } from "@egocapture/core/server/services/tasks";
 
 type TaskOperations = Awaited<ReturnType<typeof getTaskOperations>>;
@@ -22,41 +23,15 @@ type Upload = Omit<TaskOperations["uploads"][number], "createdAt"> & { createdAt
 type Audit = Omit<TaskOperations["audits"][number], "createdAt"> & { createdAt: string | Date };
 
 type TaskOverviewPanelProps = {
+  locale: UiLocale;
   summary: TaskOperations["summary"];
   participants: Participant[];
   uploads: Upload[];
   audits: Audit[];
 };
 
-const statusLabels: Record<string, string> = {
-  draft: "草稿",
-  awaiting_participants: "待分配参与者",
-  running: "采集中",
-  needs_attention: "需要处理",
-  completed: "已完成",
-  archived: "已归档",
-};
-
-const assignmentLabels: Record<string, string> = {
-  planned: "待发布",
-  assigned: "待确认",
-  acknowledged: "已确认",
-  session_created: "已创建录制",
-  uploading: "上传中",
-  submitted: "已提交",
-  needs_review: "待复核",
-  rework_required: "需重新采集",
-  accepted: "已完成",
-  expired: "已逾期",
-  missing_upload: "缺少视频",
-  canceled: "已停止",
-};
-
-function formatDate(value: string | Date) {
-  return new Date(value).toLocaleString("zh-CN", { dateStyle: "medium", timeStyle: "short" });
-}
-
-export function TaskOverviewPanel({ summary, participants, uploads, audits }: TaskOverviewPanelProps) {
+export function TaskOverviewPanel({ locale, summary, participants, uploads, audits }: TaskOverviewPanelProps) {
+  const i18n = createTranslator(locale);
   const completion = summary.participantCount > 0
     ? Math.round((summary.completedCount / summary.participantCount) * 100)
     : 0;
@@ -69,34 +44,34 @@ export function TaskOverviewPanel({ summary, participants, uploads, audits }: Ta
     ...uploads.slice(0, 3).map((upload) => ({
       id: `upload-${upload.publicId}`,
       at: upload.createdAt,
-      title: `收到视频：${upload.originalFilename}`,
-      detail: `${upload.participantAlias} · ${upload.transferStatus === "verified" ? "上传已验证" : "上传处理中"}`,
+      title: i18n.t("adminUi.receivedVideo", { filename: upload.originalFilename }),
+      detail: `${upload.participantAlias} · ${upload.transferStatus === "verified" ? i18n.t("adminUi.uploadVerified") : i18n.t("adminUi.uploadProcessing")}`,
       href: `/uploads/${upload.publicId}`,
     })),
     ...audits.slice(0, 3).map((audit) => ({
       id: `audit-${audit.id}`,
       at: audit.createdAt,
-      title: audit.action,
-      detail: `${audit.actorDisplayName ?? "系统"}${audit.reason ? ` · ${audit.reason}` : ""}`,
+      title: i18n.label("auditAction", audit.action),
+      detail: `${audit.actorDisplayName ?? i18n.t("adminUi.systemActor")}${audit.reason ? ` · ${audit.reason}` : ""}`,
       href: null,
     })),
   ].sort((left, right) => new Date(right.at).getTime() - new Date(left.at).getTime()).slice(0, 5);
 
   const metrics = [
-    { label: "当前参与者", value: summary.participantCount, hint: "不含已停止人员", icon: UsersThree },
-    { label: "已完成人数", value: summary.completedCount, hint: `完成率 ${completion}%`, icon: CheckCircle },
-    { label: "有效视频", value: summary.videoCount, hint: "已匹配到本任务", icon: VideoCamera },
-    { label: "需要处理", value: summary.attentionCount, hint: summary.attentionCount > 0 ? "建议尽快检查" : "当前没有异常", icon: WarningCircle },
+    { label: i18n.t("adminUi.currentParticipants"), value: summary.participantCount, hint: i18n.t("adminUi.excludesStopped"), icon: UsersThree },
+    { label: i18n.t("adminUi.completedParticipants"), value: summary.completedCount, hint: i18n.t("adminUi.completionRate", { value: completion }), icon: CheckCircle },
+    { label: i18n.t("adminUi.validVideos"), value: summary.videoCount, hint: i18n.t("adminUi.matchedToTask"), icon: VideoCamera },
+    { label: i18n.t("adminUi.needsHandling"), value: summary.attentionCount, hint: summary.attentionCount > 0 ? i18n.t("adminUi.handleSoon") : i18n.t("adminUi.noAnomalies"), icon: WarningCircle },
   ];
 
   return (
     <div className="space-y-5">
       <section aria-labelledby="task-summary-heading">
         <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
-          <h2 id="task-summary-heading" className="display text-2xl font-semibold">任务概览</h2>
+          <h2 id="task-summary-heading" className="display text-2xl font-semibold">{i18n.t("adminUi.taskOverview")}</h2>
           <Badge variant={summary.operationalStatus === "needs_attention" ? "destructive" : "secondary"}>
             {summary.operationalStatus === "needs_attention" ? <WarningCircle weight="fill" /> : <CheckCircle weight="fill" />}
-            {statusLabels[summary.operationalStatus] ?? summary.operationalStatus}
+            {i18n.label("taskOperational", summary.operationalStatus)}
           </Badge>
         </div>
         <div className="grid grid-cols-1 gap-3 min-[26rem]:grid-cols-2 xl:grid-cols-4">
@@ -122,12 +97,12 @@ export function TaskOverviewPanel({ summary, participants, uploads, audits }: Ta
         <Card as="section" aria-labelledby="task-progress-heading" className="gap-5 rounded-[1.35rem] border-white/70 bg-white/80 p-5 shadow-[var(--shadow-soft)] sm:p-6">
           <div className="flex flex-wrap items-end justify-between gap-3">
             <div>
-              <p className="text-xs font-semibold tracking-[0.08em] text-[var(--muted)]">整体进度</p>
-              <h3 id="task-progress-heading" className="display mt-1 text-2xl font-semibold">{summary.completedCount} / {summary.participantCount || "—"} 人完成</h3>
+              <p className="text-xs font-semibold tracking-[0.08em] text-[var(--muted)]">{i18n.t("adminUi.overallProgress")}</p>
+              <h3 id="task-progress-heading" className="display mt-1 text-2xl font-semibold">{i18n.t("adminUi.participantsCompleted", { completed: summary.completedCount, total: summary.participantCount || "—" })}</h3>
             </div>
-            <p className="text-2xl font-semibold tabular-nums" aria-label={`完成率 ${completion}%`}>{completion}%</p>
+            <p className="text-2xl font-semibold tabular-nums" aria-label={i18n.t("adminUi.completionRate", { value: completion })}>{completion}%</p>
           </div>
-          <Progress value={completion} aria-label={`任务完成率 ${completion}%`} className="h-2" />
+          <Progress value={completion} aria-label={i18n.t("adminUi.taskCompletionRate", { value: completion })} className="h-2" />
           <div className="grid gap-2 sm:grid-cols-2">
             {upcoming.map((participant) => (
               <div key={participant.assignmentPublicId ?? `planned-${participant.participantPublicId}`} className="rounded-2xl bg-[var(--paper)] p-4">
@@ -136,18 +111,18 @@ export function TaskOverviewPanel({ summary, participants, uploads, audits }: Ta
                     <p className="break-words text-sm font-semibold">{participant.participantAlias}</p>
                     <p className="mt-1 break-all text-xs text-[var(--muted)]">{participant.participantPublicId}</p>
                   </div>
-                  <Badge variant={participant.isMissing || participant.reviewCount > 0 ? "destructive" : "outline"}>{assignmentLabels[participant.status] ?? participant.status}</Badge>
+                  <Badge variant={participant.isMissing || participant.reviewCount > 0 ? "destructive" : "outline"}>{participant.status === "planned" ? i18n.t("adminUi.draftRosterState") : i18n.state("assignment.status", participant.status)}</Badge>
                 </div>
-                <p className="mt-3 flex items-start gap-2 text-xs leading-5 text-[var(--muted)]"><ClockCounterClockwise className="mt-0.5 size-4 shrink-0" aria-hidden="true" />截止 {formatDate(participant.dueAt)}</p>
+                <p className="mt-3 flex items-start gap-2 text-xs leading-5 text-[var(--muted)]"><ClockCounterClockwise className="mt-0.5 size-4 shrink-0" aria-hidden="true" />{i18n.t("adminUi.duePrefix", { date: i18n.date(participant.dueAt) })}</p>
               </div>
             ))}
-            {upcoming.length === 0 ? <p className="text-sm leading-6 text-[var(--muted)]">当前没有待完成的参与者。新增参与者后，最近截止时间会显示在这里。</p> : null}
+            {upcoming.length === 0 ? <p className="text-sm leading-6 text-[var(--muted)]">{i18n.t("adminUi.noPendingParticipants")}</p> : null}
           </div>
         </Card>
 
         <Card as="section" aria-labelledby="recent-activity-heading" className="gap-4 rounded-[1.35rem] border-white/70 bg-white/80 p-5 shadow-[var(--shadow-soft)] sm:p-6">
           <div className="flex items-center justify-between gap-3">
-            <h3 id="recent-activity-heading" className="display text-2xl font-semibold">最近动态</h3>
+            <h3 id="recent-activity-heading" className="display text-2xl font-semibold">{i18n.t("adminUi.recentActivity")}</h3>
             <ClockCounterClockwise className="size-5 text-[var(--muted)]" aria-hidden="true" />
           </div>
           <ol className="divide-y divide-[var(--line)]">
@@ -155,25 +130,25 @@ export function TaskOverviewPanel({ summary, participants, uploads, audits }: Ta
               <li key={activity.id} className="py-3 first:pt-0 last:pb-0">
                 {activity.href ? (
                   <Link href={activity.href} className="block rounded-lg outline-none transition-colors hover:text-[var(--signal-dark)] focus-visible:ring-2 focus-visible:ring-[var(--ring)] active:opacity-70">
-                    <ActivityContent activity={activity} />
+                    <ActivityContent activity={activity} locale={locale} />
                   </Link>
-                ) : <ActivityContent activity={activity} />}
+                ) : <ActivityContent activity={activity} locale={locale} />}
               </li>
             ))}
           </ol>
-          {recentActivity.length === 0 ? <p className="text-sm leading-6 text-[var(--muted)]">任务还没有上传或操作记录。</p> : null}
+          {recentActivity.length === 0 ? <p className="text-sm leading-6 text-[var(--muted)]">{i18n.t("adminUi.noTaskActivity")}</p> : null}
         </Card>
       </div>
     </div>
   );
 }
 
-function ActivityContent({ activity }: { activity: { title: string; detail: string; at: string | Date } }) {
+function ActivityContent({ activity, locale }: { activity: { title: string; detail: string; at: string | Date }; locale: UiLocale }) {
   return (
     <div className="min-w-0">
       <p className="break-words text-sm font-semibold leading-5">{activity.title}</p>
       <p className="mt-1 break-words text-xs leading-5 text-[var(--muted)]">{activity.detail}</p>
-      <time className="mt-1 block text-[0.6875rem] text-[var(--muted)]">{formatDate(activity.at)}</time>
+      <time className="mt-1 block text-[0.6875rem] text-[var(--muted)]">{createTranslator(locale).date(activity.at)}</time>
     </div>
   );
 }

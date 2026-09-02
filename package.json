@@ -40,6 +40,7 @@
     "review:test": "tsx scripts/review-check.ts",
     "cron:test": "tsx scripts/cron-check.ts",
     "repo:safety": "tsx scripts/repository-safety.ts",
+    "i18n:check": "tsx scripts/i18n-check.ts",
     "build": "pnpm --filter @egocapture/participant-web build && pnpm --filter @egocapture/admin-web build",
     "start": "pnpm --parallel --filter @egocapture/participant-web --filter @egocapture/admin-web start",
     "lint": "eslint .",

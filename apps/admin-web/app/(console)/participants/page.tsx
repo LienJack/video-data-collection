@@ -11,19 +11,19 @@ import { listParticipants, participantListSchema } from "@egocapture/core/server
 import { CountrySelect, LocaleSelect } from "@/app/_components/regional-preferences-fields";
 import { TablePagination } from "@/app/_components/table-pagination";
 import { parsePageParam, parsePageSizeParam } from "@/lib/pagination";
+import { createTranslator } from "@egocapture/core/i18n";
+import { requestLocale } from "@egocapture/core/server/i18n";
 
 export const dynamic = "force-dynamic";
 
-const statusLabels: Record<string, string> = {
-  draft: "Draft", invited: "Invited", expired: "Expired", active: "Active",
-  suspended: "Suspended", withdrawn: "Withdrawn",
-};
+const participantStatuses = ["draft", "invited", "expired", "active", "suspended", "withdrawn"] as const;
+const consentStatuses = ["pending", "valid", "expired", "withdrawn"] as const;
 
 const filterFieldClass = "w-full border border-[var(--line)] bg-[var(--paper)] px-3 py-3";
 
 export default async function ParticipantsPage({ searchParams }: { searchParams: Promise<Record<string, string | string[] | undefined>> }) {
-  const viewer = await requireAdmin();
-  const params = await searchParams;
+  const [viewer, params, locale] = await Promise.all([requireAdmin(), searchParams, requestLocale()]);
+  const i18n = createTranslator(locale);
   const query = participantListSchema.parse({
     search: typeof params.search === "string" && params.search ? params.search : undefined,
     status: typeof params.status === "string" && params.status ? params.status : undefined,
@@ -40,51 +40,51 @@ export default async function ParticipantsPage({ searchParams }: { searchParams:
     <main className="app-page">
       <header className="flex flex-wrap items-end justify-between gap-6 border-b border-[var(--line)] pb-7">
         <div>
-          <p className="page-kicker">Participant registry</p>
-          <h1 className="page-title">参与者</h1>
+          <p className="page-kicker">{i18n.t("adminUi.participantList.kicker")}</p>
+          <h1 className="page-title">{i18n.t("adminUi.participants")}</h1>
         </div>
         <Link
           href="/participants/new"
           className={buttonVariants({ className: "" })}
           style={{ color: "var(--primary-foreground)" }}
         >
-          <Plus className="size-4" weight="bold" />创建 Participant
+          <Plus className="size-4" weight="bold" />{i18n.t("adminUi.createParticipant")}
         </Link>
       </header>
-      <form className="my-7 grid items-stretch gap-2 rounded-xl border bg-card/80 p-3 text-card-foreground shadow-sm backdrop-blur-xl sm:grid-cols-2 sm:gap-3 xl:grid-cols-4">
+      <form aria-label={i18n.t("adminUi.participantList.filters")} className="my-7 grid items-stretch gap-2 rounded-xl border bg-card/80 p-3 text-card-foreground shadow-sm backdrop-blur-xl sm:grid-cols-2 sm:gap-3 xl:grid-cols-4">
         <input type="hidden" name="pageSize" value={query.pageSize} />
         <div className="relative">
           <MagnifyingGlass aria-hidden="true" className="pointer-events-none absolute top-1/2 left-3.5 z-10 size-4 -translate-y-1/2 text-[var(--muted)]" />
-          <Input name="search" aria-label="Public ID 或 Alias" defaultValue={query.search} placeholder="Public ID 或 Alias" className={`${filterFieldClass} pl-10`} />
+          <Input name="search" aria-label={i18n.t("adminUi.searchParticipants")} defaultValue={query.search} placeholder={i18n.t("adminUi.participantSearchPlaceholder")} className={`${filterFieldClass} pl-10`} />
         </div>
         <NativeSelect name="status" defaultValue={query.status ?? ""} className={filterFieldClass}>
-          <NativeSelectOption value="">全部状态</NativeSelectOption>
-          {Object.entries(statusLabels).map(([value, label]) => <NativeSelectOption key={value} value={value}>{label}</NativeSelectOption>)}
+          <NativeSelectOption value="">{i18n.t("adminUi.allStatuses")}</NativeSelectOption>
+          {participantStatuses.map((value) => <NativeSelectOption key={value} value={value}>{i18n.state("participant.status", value)}</NativeSelectOption>)}
         </NativeSelect>
-        <NativeSelect name="consentStatus" aria-label="Consent" defaultValue={query.consentStatus ?? ""} className={filterFieldClass}><NativeSelectOption value="">全部 Consent</NativeSelectOption>{["pending", "valid", "expired", "withdrawn"].map((value) => <NativeSelectOption key={value} value={value}>{value}</NativeSelectOption>)}</NativeSelect>
-        <LocaleSelect name="locale" defaultValue={query.locale} blankLabel="全部 Locale" aria-label="Locale" className={filterFieldClass} />
-        <CountrySelect name="countryRegion" defaultValue={query.countryRegion} blankLabel="全部国家 / 地区" aria-label="Country / Region" className={filterFieldClass} />
-        <NativeSelect name="missing" aria-label="Missing" defaultValue={query.missing ?? ""} className={filterFieldClass}><NativeSelectOption value="">全部 Missing 状态</NativeSelectOption><NativeSelectOption value="yes">仅 Missing</NativeSelectOption><NativeSelectOption value="no">排除 Missing</NativeSelectOption></NativeSelect>
-        <NativeSelect name="needsReview" aria-label="Needs Review" defaultValue={query.needsReview ?? ""} className={filterFieldClass}><NativeSelectOption value="">全部 Review 状态</NativeSelectOption><NativeSelectOption value="yes">仅 Needs Review</NativeSelectOption><NativeSelectOption value="no">排除 Needs Review</NativeSelectOption></NativeSelect>
-        <Button className="w-full">筛选</Button>
+        <NativeSelect name="consentStatus" aria-label={i18n.t("adminUi.consent")} defaultValue={query.consentStatus ?? ""} className={filterFieldClass}><NativeSelectOption value="">{i18n.t("adminUi.participantList.allConsentStatuses")}</NativeSelectOption>{consentStatuses.map((value) => <NativeSelectOption key={value} value={value}>{i18n.state("participant.consent_status", value)}</NativeSelectOption>)}</NativeSelect>
+        <LocaleSelect name="locale" defaultValue={query.locale} blankLabel={i18n.t("adminUi.participantList.allLocales")} aria-label={i18n.t("adminUi.locale")} className={filterFieldClass} />
+        <CountrySelect name="countryRegion" defaultValue={query.countryRegion} blankLabel={i18n.t("adminUi.participantList.allCountriesRegions")} aria-label={i18n.t("adminUi.countryRegion")} className={filterFieldClass} />
+        <NativeSelect name="missing" aria-label={i18n.t("adminUi.missing")} defaultValue={query.missing ?? ""} className={filterFieldClass}><NativeSelectOption value="">{i18n.t("adminUi.participantList.allMissingSignals")}</NativeSelectOption><NativeSelectOption value="yes">{i18n.t("adminUi.participantList.onlyMissing")}</NativeSelectOption><NativeSelectOption value="no">{i18n.t("adminUi.participantList.excludeMissing")}</NativeSelectOption></NativeSelect>
+        <NativeSelect name="needsReview" aria-label={i18n.t("adminUi.awaitingReview")} defaultValue={query.needsReview ?? ""} className={filterFieldClass}><NativeSelectOption value="">{i18n.t("adminUi.participantList.allReviewSignals")}</NativeSelectOption><NativeSelectOption value="yes">{i18n.t("adminUi.participantList.onlyNeedsReview")}</NativeSelectOption><NativeSelectOption value="no">{i18n.t("adminUi.participantList.excludeNeedsReview")}</NativeSelectOption></NativeSelect>
+        <Button className="w-full">{i18n.t("adminUi.filter")}</Button>
       </form>
       <div className="rounded-xl border bg-card shadow-sm overflow-x-auto">
         <Table className="w-full min-w-[820px] border-collapse text-sm">
-          <TableHeader className="text-left text-xs uppercase tracking-[0.12em]"><TableRow><TableHead className="p-4">Participant</TableHead><TableHead className="p-4">Status</TableHead><TableHead className="p-4">Consent</TableHead><TableHead className="p-4">Locale / Region</TableHead><TableHead className="p-4">Signals</TableHead><TableHead className="p-4 text-right">操作</TableHead></TableRow></TableHeader>
+          <TableHeader className="text-left text-xs uppercase tracking-[0.12em]"><TableRow><TableHead className="p-4">{i18n.t("common.participant")}</TableHead><TableHead className="p-4">{i18n.t("common.status")}</TableHead><TableHead className="p-4">{i18n.t("adminUi.consent")}</TableHead><TableHead className="p-4">{i18n.t("adminUi.countryRegion")}</TableHead><TableHead className="p-4">{i18n.t("adminUi.statusSignals")}</TableHead><TableHead className="p-4 text-right">{i18n.t("common.actions")}</TableHead></TableRow></TableHeader>
           <TableBody>
             {result.items.map((participant) => (
               <TableRow key={participant.publicId} className="border-t border-[var(--line)] hover:bg-white/35">
-                <TableCell className="p-4"><Link className="font-bold underline decoration-[var(--signal)] decoration-2 underline-offset-4" href={`/participants/${participant.publicId}`}>{participant.publicId}</Link><p className="mt-1 text-[var(--muted)]">{participant.displayAlias}{participant.isFixture ? " · Demo Fixture" : ""}</p></TableCell>
-                <TableCell className="p-4"><Badge>{statusLabels[participant.status]}</Badge></TableCell>
-                <TableCell className="p-4">{participant.consentStatus}</TableCell>
-                <TableCell className="p-4">{participant.locale}<span className="text-[var(--muted)]"> · {participant.countryRegion || "—"}</span></TableCell>
-                <TableCell className="p-4"><div className="flex flex-wrap gap-2">{participant.isMissing ? <Badge variant="secondary">Missing</Badge> : null}{participant.needsReview ? <Badge>Needs Review</Badge> : null}{!participant.isMissing && !participant.needsReview ? <span className="text-[var(--muted)]">—</span> : null}</div></TableCell>
-                <TableCell className="p-4 text-right"><Link href={`/participants/${participant.publicId}`} className={buttonVariants({ variant: "outline", size: "sm" })}>查看</Link></TableCell>
+                <TableCell className="p-4"><Link className="font-bold underline decoration-[var(--signal)] decoration-2 underline-offset-4" href={`/participants/${participant.publicId}`}>{participant.publicId}</Link><p className="mt-1 text-[var(--muted)]">{participant.displayAlias}{participant.isFixture ? ` · ${i18n.t("adminUi.demoData")}` : ""}</p></TableCell>
+                <TableCell className="p-4"><Badge>{i18n.state("participant.status", participant.status)}</Badge></TableCell>
+                <TableCell className="p-4">{i18n.state("participant.consent_status", participant.consentStatus)}</TableCell>
+                <TableCell className="p-4">{i18n.languageName(participant.locale)}<span className="text-[var(--muted)]"> · {participant.countryRegion ? i18n.regionName(participant.countryRegion) : "—"}</span></TableCell>
+                <TableCell className="p-4"><div className="flex flex-wrap gap-2">{participant.isMissing ? <Badge variant="secondary">{i18n.t("adminUi.missing")}</Badge> : null}{participant.needsReview ? <Badge>{i18n.t("adminUi.awaitingReview")}</Badge> : null}{!participant.isMissing && !participant.needsReview ? <span className="text-[var(--muted)]">—</span> : null}</div></TableCell>
+                <TableCell className="p-4 text-right"><Link href={`/participants/${participant.publicId}`} className={buttonVariants({ variant: "outline", size: "sm" })}>{i18n.t("common.view")}</Link></TableCell>
               </TableRow>
             ))}
           </TableBody>
         </Table>
-        {result.items.length === 0 ? <Empty className="m-4"><EmptyDescription>没有符合条件的 Participant。</EmptyDescription></Empty> : null}
+        {result.items.length === 0 ? <Empty className="m-4"><EmptyDescription>{i18n.t("adminUi.noParticipantMatches")}</EmptyDescription></Empty> : null}
       </div>
       <div className="mt-6"><TablePagination pathname="/participants" query={query} pagination={result} /></div>
     </main>

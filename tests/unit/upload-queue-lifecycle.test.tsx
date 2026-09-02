@@ -103,13 +103,13 @@ describe("participant upload queue async lifecycle", () => {
     render(<UploadQueue sessions={sessions} lockedSessionPublicId="RS-OPEN0001" />);
     selectVideo();
     const card = await screen.findByRole("article");
-    fireEvent.click(await within(card).findByRole("button", { name: "开始直传 Storage" }));
+    fireEvent.click(await within(card).findByRole("button", { name: "开始直传存储" }));
     await waitFor(() => expect(fetchMock).toHaveBeenCalledWith(
       "/api/upload-intents",
       expect.objectContaining({ method: "POST" }),
     ));
     fireEvent.click(within(card).getByRole("button", { name: "取消" }));
-    expect(within(card).getByText("aborted")).toBeInTheDocument();
+    expect(within(card).getByText("已中止")).toBeInTheDocument();
 
     await act(async () => {
       intent.resolve(new Response(JSON.stringify({ data: credential }), { status: 200 }));
@@ -141,7 +141,7 @@ describe("participant upload queue async lifecycle", () => {
     const view = render(<UploadQueue sessions={sessions} lockedSessionPublicId="RS-OPEN0001" />);
     selectVideo();
     const card = await screen.findByRole("article");
-    fireEvent.click(await within(card).findByRole("button", { name: "开始直传 Storage" }));
+    fireEvent.click(await within(card).findByRole("button", { name: "开始直传存储" }));
     await waitFor(() => expect(fetchMock).toHaveBeenCalledWith(
       "/api/upload-intents",
       expect.objectContaining({ method: "POST" }),

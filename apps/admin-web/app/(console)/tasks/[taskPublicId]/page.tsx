@@ -9,31 +9,19 @@ import { TaskParticipantsPanel } from "@/app/(console)/tasks/[taskPublicId]/task
 import { TaskUploadsPanel } from "@/app/(console)/tasks/[taskPublicId]/task-uploads-panel";
 import { TaskEditor } from "@/app/(console)/tasks/task-editor";
 import { requireAdmin } from "@/lib/auth";
+import { createTranslator } from "@egocapture/core/i18n";
+import { requestLocale } from "@egocapture/core/server/i18n";
 import { getTask, getTaskOperations } from "@egocapture/core/server/services/tasks";
 
 export const dynamic = "force-dynamic";
 
-const tabLabels = {
-  overview: "概览",
-  participants: "参与者",
-  uploads: "上传视频",
-  instructions: "任务说明",
-  audit: "操作记录",
-} as const;
-
-type Tab = keyof typeof tabLabels;
-
-const statusLabels: Record<string, string> = {
-  draft: "草稿",
-  awaiting_participants: "待分配",
-  running: "进行中",
-  needs_attention: "需要处理",
-  completed: "已完成",
-  archived: "已归档",
-};
+type Tab = "overview" | "participants" | "uploads" | "instructions" | "audit";
 
 export default async function TaskDetailPage({ params, searchParams }: { params: Promise<{ taskPublicId: string }>; searchParams: Promise<Record<string, string | string[] | undefined>> }) {
   const viewer = await requireAdmin();
+  const locale = await requestLocale();
+  const i18n = createTranslator(locale);
+  const tabLabels: Record<Tab, string> = { overview: i18n.t("adminUi.overview"), participants: i18n.t("adminUi.participants"), uploads: i18n.t("adminUi.uploadedVideos"), instructions: i18n.t("adminUi.instructions"), audit: i18n.t("adminUi.activityLog") };
   const { taskPublicId } = await params;
   const search = await searchParams;
   const [task, operations] = await Promise.all([getTask(viewer, taskPublicId), getTaskOperations(viewer, taskPublicId)]);
@@ -47,33 +35,33 @@ export default async function TaskDetailPage({ params, searchParams }: { params:
   return (
     <main className="app-page">
       <div className="flex flex-wrap items-center justify-between gap-4">
-        <Link href="/tasks" className="inline-flex min-h-11 items-center gap-1 rounded-xl px-2 text-sm font-semibold text-[var(--muted)] transition-colors hover:bg-white/70 hover:text-[var(--ink)]"><CaretLeft className="size-4" />采集任务</Link>
+        <Link href="/tasks" className="inline-flex min-h-11 items-center gap-1 rounded-xl px-2 text-sm font-semibold text-[var(--muted)] transition-colors hover:bg-white/70 hover:text-[var(--ink)]"><CaretLeft className="size-4" />{i18n.t("adminUi.taskBack")}</Link>
         <AddTaskParticipants taskPublicId={task.publicId} versions={task.versions} participants={operations.eligibleParticipants} />
       </div>
 
       <header className="mt-7">
-        <div className="flex flex-wrap items-center gap-3"><p className="page-kicker">{task.publicId}</p>{task.isFixture ? <Badge variant="outline">演示数据</Badge> : null}<Badge variant={summary.operationalStatus === "needs_attention" ? "destructive" : summary.operationalStatus === "running" ? "default" : "secondary"}>{summary.operationalStatus === "needs_attention" ? <WarningCircle weight="fill" /> : summary.operationalStatus === "completed" ? <CheckCircle weight="fill" /> : null}{statusLabels[summary.operationalStatus] ?? summary.operationalStatus}</Badge></div>
+        <div className="flex flex-wrap items-center gap-3"><p className="page-kicker">{task.publicId}</p>{task.isFixture ? <Badge variant="outline">{i18n.t("adminUi.demoData")}</Badge> : null}<Badge variant={summary.operationalStatus === "needs_attention" ? "destructive" : summary.operationalStatus === "running" ? "default" : "secondary"}>{summary.operationalStatus === "needs_attention" ? <WarningCircle weight="fill" /> : summary.operationalStatus === "completed" ? <CheckCircle weight="fill" /> : null}{i18n.label("taskOperational", summary.operationalStatus)}</Badge></div>
         <h1 className="page-title max-w-5xl">{task.title}</h1>
-        <p className="mt-4 max-w-3xl text-sm leading-6 text-[var(--muted)]">一个任务对应一组参与者。每个人拥有独立进度、Session 和视频，人员调整不会改写历史。</p>
+        <p className="mt-4 max-w-3xl text-sm leading-6 text-[var(--muted)]">{i18n.t("adminUi.taskHistorySafe")}</p>
       </header>
 
-      <section className="mt-8 grid grid-cols-2 gap-3 lg:grid-cols-4" aria-label="任务汇总">
-        <Link href={`?tab=participants`} className="rounded-2xl bg-white/82 p-4 shadow-[var(--shadow-soft)] backdrop-blur-xl transition-transform active:scale-[0.98] sm:p-5"><div className="flex items-center justify-between gap-3"><p className="text-xs font-semibold text-[var(--muted)]">参与者</p><UsersThree className="size-5 text-[var(--signal)]" weight="duotone" /></div><p className="mt-3 text-3xl font-semibold tracking-[-0.04em] tabular-nums">{summary.participantCount}</p></Link>
-        <Link href={`?tab=participants`} className="rounded-2xl bg-white/82 p-4 shadow-[var(--shadow-soft)] backdrop-blur-xl transition-transform active:scale-[0.98] sm:p-5"><div className="flex items-center justify-between gap-3"><p className="text-xs font-semibold text-[var(--muted)]">已完成</p><CheckCircle className="size-5 text-[var(--signal)]" weight="duotone" /></div><p className="mt-3 text-3xl font-semibold tracking-[-0.04em] tabular-nums">{summary.completedCount}<span className="ml-1 text-base font-medium text-[var(--muted)]">/{summary.participantCount || "—"}</span></p></Link>
-        <Link href={`?tab=uploads`} className="rounded-2xl bg-white/82 p-4 shadow-[var(--shadow-soft)] backdrop-blur-xl transition-transform active:scale-[0.98] sm:p-5"><div className="flex items-center justify-between gap-3"><p className="text-xs font-semibold text-[var(--muted)]">视频</p><VideoCamera className="size-5 text-[var(--signal)]" weight="duotone" /></div><p className="mt-3 text-3xl font-semibold tracking-[-0.04em] tabular-nums">{summary.videoCount}</p></Link>
-        <Link href={`?tab=uploads`} className={`rounded-2xl p-4 shadow-[var(--shadow-soft)] backdrop-blur-xl transition-transform active:scale-[0.98] sm:p-5 ${summary.attentionCount > 0 ? "bg-red-50/92" : "bg-white/82"}`}><div className="flex items-center justify-between gap-3"><p className="text-xs font-semibold text-[var(--muted)]">待处理</p><WarningCircle className={`size-5 ${summary.attentionCount > 0 ? "text-[var(--destructive)]" : "text-[var(--muted)]"}`} weight={summary.attentionCount > 0 ? "fill" : "duotone"} /></div><p className={`mt-3 text-3xl font-semibold tracking-[-0.04em] tabular-nums ${summary.attentionCount > 0 ? "text-[var(--destructive)]" : ""}`}>{summary.attentionCount}</p></Link>
+      <section className="mt-8 grid grid-cols-2 gap-3 lg:grid-cols-4" aria-label={i18n.t("adminUi.taskSummary")}>
+        <Link href={`?tab=participants`} className="rounded-2xl bg-white/82 p-4 shadow-[var(--shadow-soft)] backdrop-blur-xl transition-transform active:scale-[0.98] sm:p-5"><div className="flex items-center justify-between gap-3"><p className="text-xs font-semibold text-[var(--muted)]">{i18n.t("adminUi.participants")}</p><UsersThree className="size-5 text-[var(--signal)]" weight="duotone" /></div><p className="mt-3 text-3xl font-semibold tracking-[-0.04em] tabular-nums">{summary.participantCount}</p></Link>
+        <Link href={`?tab=participants`} className="rounded-2xl bg-white/82 p-4 shadow-[var(--shadow-soft)] backdrop-blur-xl transition-transform active:scale-[0.98] sm:p-5"><div className="flex items-center justify-between gap-3"><p className="text-xs font-semibold text-[var(--muted)]">{i18n.t("adminUi.completed")}</p><CheckCircle className="size-5 text-[var(--signal)]" weight="duotone" /></div><p className="mt-3 text-3xl font-semibold tracking-[-0.04em] tabular-nums">{summary.completedCount}<span className="ml-1 text-base font-medium text-[var(--muted)]">/{summary.participantCount || "—"}</span></p></Link>
+        <Link href={`?tab=uploads`} className="rounded-2xl bg-white/82 p-4 shadow-[var(--shadow-soft)] backdrop-blur-xl transition-transform active:scale-[0.98] sm:p-5"><div className="flex items-center justify-between gap-3"><p className="text-xs font-semibold text-[var(--muted)]">{i18n.t("adminUi.videos")}</p><VideoCamera className="size-5 text-[var(--signal)]" weight="duotone" /></div><p className="mt-3 text-3xl font-semibold tracking-[-0.04em] tabular-nums">{summary.videoCount}</p></Link>
+        <Link href={`?tab=uploads`} className={`rounded-2xl p-4 shadow-[var(--shadow-soft)] backdrop-blur-xl transition-transform active:scale-[0.98] sm:p-5 ${summary.attentionCount > 0 ? "bg-red-50/92" : "bg-white/82"}`}><div className="flex items-center justify-between gap-3"><p className="text-xs font-semibold text-[var(--muted)]">{i18n.t("adminUi.attention")}</p><WarningCircle className={`size-5 ${summary.attentionCount > 0 ? "text-[var(--destructive)]" : "text-[var(--muted)]"}`} weight={summary.attentionCount > 0 ? "fill" : "duotone"} /></div><p className={`mt-3 text-3xl font-semibold tracking-[-0.04em] tabular-nums ${summary.attentionCount > 0 ? "text-[var(--destructive)]" : ""}`}>{summary.attentionCount}</p></Link>
       </section>
 
-      <nav className="apple-toolbar mt-6 flex gap-1 overflow-x-auto p-1.5" aria-label="任务详情">
+      <nav className="apple-toolbar mt-6 flex gap-1 overflow-x-auto p-1.5" aria-label={i18n.t("adminUi.taskDetails")}>
         {(Object.entries(tabLabels) as Array<[Tab, string]>).map(([tab, label]) => <Link key={tab} href={`?tab=${tab}`} aria-current={activeTab === tab ? "page" : undefined} className={`flex min-h-11 shrink-0 items-center rounded-xl px-4 text-sm font-semibold transition-[background-color,color,box-shadow,transform] ${activeTab === tab ? "bg-white text-[var(--ink)] shadow-sm" : "text-[var(--muted)] hover:text-[var(--ink)]"}`}>{label}{tab === "participants" ? <span className="ml-2 rounded-full bg-[var(--paper-deep)] px-1.5 py-0.5 text-[10px] tabular-nums">{summary.participantCount}</span> : null}{tab === "uploads" && summary.attentionCount > 0 ? <span className="ml-2 rounded-full bg-red-100 px-1.5 py-0.5 text-[10px] text-[var(--destructive)] tabular-nums">{summary.attentionCount}</span> : null}</Link>)}
       </nav>
 
       <div className="mt-6">
-        {activeTab === "overview" ? <TaskOverviewPanel summary={summary} participants={serializedParticipants} uploads={serializedUploads} audits={serializedAudits} /> : null}
-        {activeTab === "participants" ? <TaskParticipantsPanel taskPublicId={task.publicId} participants={serializedParticipants} versions={task.versions} candidates={operations.eligibleParticipants} /> : null}
-        {activeTab === "uploads" ? <TaskUploadsPanel uploads={serializedUploads} /> : null}
-        {activeTab === "audit" ? <TaskAuditPanel audits={serializedAudits} /> : null}
-        {activeTab === "instructions" ? <div className="grid gap-8 xl:grid-cols-[minmax(0,1fr)_20rem]"><TaskEditor mode="edit" taskPublicId={task.publicId} initialInstructions={task.draftInstructions} initialUpdatedAt={task.updatedAt.toISOString()} /><aside className="mt-8 h-fit rounded-[1.35rem] bg-white/82 p-5 shadow-[var(--shadow-soft)] backdrop-blur-xl"><h2 className="text-lg font-semibold tracking-[-0.02em]">已发布版本</h2><div className="mt-4 space-y-3">{task.versions.map((version) => <Card as="article" key={version.version} className="gap-2 border-0 bg-[var(--paper)] p-4 shadow-none"><div className="flex items-center justify-between gap-3"><p className="font-semibold">版本 {version.version}</p><Badge variant="outline">冻结</Badge></div><p className="break-all font-mono text-[10px] text-[var(--muted)]">{version.contentHash}</p><p className="text-xs text-[var(--muted)]">{version.publishedAt.toLocaleString("zh-CN")}</p></Card>)}{task.versions.length === 0 ? <p className="text-sm leading-6 text-[var(--muted)]">可以先在“参与者”中维护发布名单。首次发布时，系统会把名单绑定到冻结版本并生成 Assignment。</p> : null}</div></aside></div> : null}
+        {activeTab === "overview" ? <TaskOverviewPanel locale={locale} summary={summary} participants={serializedParticipants} uploads={serializedUploads} audits={serializedAudits} /> : null}
+        {activeTab === "participants" ? <TaskParticipantsPanel locale={locale} taskPublicId={task.publicId} participants={serializedParticipants} versions={task.versions} candidates={operations.eligibleParticipants} /> : null}
+        {activeTab === "uploads" ? <TaskUploadsPanel locale={locale} uploads={serializedUploads} /> : null}
+        {activeTab === "audit" ? <TaskAuditPanel locale={locale} audits={serializedAudits} /> : null}
+        {activeTab === "instructions" ? <div className="grid gap-8 xl:grid-cols-[minmax(0,1fr)_20rem]"><TaskEditor mode="edit" taskPublicId={task.publicId} initialInstructions={task.draftInstructions} initialUpdatedAt={task.updatedAt.toISOString()} /><aside className="mt-8 h-fit rounded-[1.35rem] bg-white/82 p-5 shadow-[var(--shadow-soft)] backdrop-blur-xl"><h2 className="text-lg font-semibold tracking-[-0.02em]">{i18n.t("adminUi.publishedVersions")}</h2><div className="mt-4 space-y-3">{task.versions.map((version) => <Card as="article" key={version.version} className="gap-2 border-0 bg-[var(--paper)] p-4 shadow-none"><div className="flex items-center justify-between gap-3"><p className="font-semibold">{i18n.t("common.version", { value: version.version })}</p><Badge variant="outline">{i18n.t("adminUi.frozen")}</Badge></div><p className="break-all font-mono text-[10px] text-[var(--muted)]">{version.contentHash}</p><p className="text-xs text-[var(--muted)]">{i18n.date(version.publishedAt)}</p></Card>)}{task.versions.length === 0 ? <p className="text-sm leading-6 text-[var(--muted)]">{i18n.t("adminUi.firstVersionBindingHelp")}</p> : null}</div></aside></div> : null}
       </div>
     </main>
   );

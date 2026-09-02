@@ -38,7 +38,7 @@ describe("records workspace query", () => {
 
 describe("record presenters", () => {
   it("uses Chinese labels with lossless fallback for unknown evidence", () => {
-    expect(transferStatusLabel("verified")).toBe("上传已验证");
+    expect(transferStatusLabel("verified")).toBe("已验证");
     expect(matchDecisionLabel("unmatched")).toBe("尚未匹配");
     expect(auditActionLabel("session.closed")).toBe("关闭录制会话");
     expect(auditEntityLabel("recording_session")).toBe("录制会话");

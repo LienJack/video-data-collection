@@ -7,7 +7,7 @@ describe("accept invitation confirmation", () => {
     render(<AcceptInvitationForm token="test-token" />);
 
     expect(screen.queryByRole("textbox")).not.toBeInTheDocument();
-    expect(screen.getByText(/登录帐号和系统生成的密码由管理员提供/)).toBeVisible();
+    expect(screen.getByText(/登录账号和系统生成的密码由管理员提供/)).toBeVisible();
     expect(screen.getByRole("button", { name: "接受邀请并进入任务" })).toBeEnabled();
   });
 });

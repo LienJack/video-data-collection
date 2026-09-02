@@ -8,6 +8,7 @@ import { NativeSelect, NativeSelectOption } from "@egocapture/ui/components/nati
 import { ArrowsLeftRight, CalendarBlank, Prohibit, X } from "@phosphor-icons/react";
 import { useRouter } from "next/navigation";
 import { useMemo, useRef, useState } from "react";
+import { useI18n } from "@egocapture/ui/lib/i18n";
 
 type Candidate = {
   publicId: string;
@@ -45,6 +46,7 @@ export function TaskParticipantActions({
 }) {
   const dialogRef = useRef<HTMLDialogElement>(null);
   const router = useRouter();
+  const i18n = useI18n();
   const [mode, setMode] = useState<"extend" | "cancel" | "replace">("replace");
   const [reason, setReason] = useState("");
   const [dueAt, setDueAt] = useState(() => localDateTime(assignment.dueAt));
@@ -73,15 +75,15 @@ export function TaskParticipantActions({
 
   async function submit() {
     if (reason.trim().length < 10) {
-      setError("请填写至少 10 个字符的操作原因。");
+      setError(i18n.t("adminUi.reasonMinError"));
       return;
     }
     if ((mode === "extend" || mode === "replace") && !dueAt) {
-      setError("请选择新的截止时间。");
+      setError(i18n.t("adminUi.chooseDueError"));
       return;
     }
     if (mode === "replace" && !participantPublicId) {
-      setError("请选择替代参与者。");
+      setError(i18n.t("adminUi.chooseReplacementError"));
       return;
     }
     setBusy(true);
@@ -99,9 +101,9 @@ export function TaskParticipantActions({
       headers: { "content-type": "application/json", ...(mode === "replace" ? { "idempotency-key": crypto.randomUUID() } : {}) },
       body: JSON.stringify(body),
     });
-    const payload = await response.json() as { error?: { message?: string } };
+    const payload = await response.json() as { error?: { code?: string } };
     if (!response.ok) {
-      setError(payload.error?.message || "无法完成操作，请重试。");
+      setError(payload.error?.code ? i18n.error(payload.error.code) : i18n.t("adminUi.operationFailed"));
     } else {
       close();
       router.refresh();
@@ -112,33 +114,33 @@ export function TaskParticipantActions({
   return (
     <>
       <div className="flex flex-wrap justify-end gap-1.5">
-        <Button size="sm" variant="ghost" onClick={() => open("extend")}><CalendarBlank className="size-4" />延期</Button>
-        <Button size="sm" variant="outline" onClick={() => open("replace")}><ArrowsLeftRight className="size-4" />替换</Button>
-        <Button size="sm" variant="ghost" className="text-[var(--destructive)] hover:bg-red-50 hover:text-[var(--destructive)]" onClick={() => open("cancel")}><Prohibit className="size-4" />停止</Button>
+        <Button size="sm" variant="ghost" onClick={() => open("extend")}><CalendarBlank className="size-4" />{i18n.t("adminUi.extend")}</Button>
+        <Button size="sm" variant="outline" onClick={() => open("replace")}><ArrowsLeftRight className="size-4" />{i18n.t("adminUi.replace")}</Button>
+        <Button size="sm" variant="ghost" className="text-[var(--destructive)] hover:bg-red-50 hover:text-[var(--destructive)]" onClick={() => open("cancel")}><Prohibit className="size-4" />{i18n.t("adminUi.stop")}</Button>
       </div>
 
       <dialog ref={dialogRef} onCancel={(event) => { event.preventDefault(); close(); }} className="apple-dialog w-[min(34rem,calc(100%-1.5rem))] p-0 text-[var(--ink)] backdrop:bg-[rgb(15_23_42_/_28%)]">
         <div className="apple-dialog-header flex items-start justify-between gap-4 px-5 py-4 sm:px-6">
-          <div><p className="page-kicker">{assignment.assignmentPublicId}</p><h2 className="mt-1 text-2xl font-semibold tracking-[-0.035em]">{mode === "replace" ? "替换参与者" : mode === "cancel" ? "停止参与" : "调整截止时间"}</h2></div>
-          <Button type="button" variant="ghost" size="icon" onClick={close} aria-label="关闭人员管理窗口"><X className="size-5" /></Button>
+          <div><p className="page-kicker">{assignment.assignmentPublicId}</p><h2 className="mt-1 text-2xl font-semibold tracking-[-0.035em]">{mode === "replace" ? i18n.t("adminUi.replaceParticipant") : mode === "cancel" ? i18n.t("adminUi.stopParticipation") : i18n.t("adminUi.adjustDue")}</h2></div>
+          <Button type="button" variant="ghost" size="icon" onClick={close} aria-label={i18n.t("adminUi.closePeopleManager")}><X className="size-5" /></Button>
         </div>
         <div className="space-y-5 px-5 py-5 sm:px-6">
-          <section className="rounded-2xl bg-[var(--paper)] p-4"><p className="font-semibold">{assignment.participantAlias}</p><p className="mt-1 text-xs text-[var(--muted)]">{assignment.participantPublicId} · 版本 {assignment.taskVersion} · Session {assignment.sessionCount} · 视频 {assignment.videoCount}</p></section>
+          <section className="rounded-2xl bg-[var(--paper)] p-4"><p className="font-semibold">{assignment.participantAlias}</p><p className="mt-1 text-xs text-[var(--muted)]">{assignment.participantPublicId} · {i18n.t("adminUi.participantStats", { version: assignment.taskVersion, sessions: assignment.sessionCount, videos: assignment.videoCount })}</p></section>
 
           {mode === "replace" ? <>
-            <Alert><AlertDescription>替换只会停止原参与者的后续操作。已有 Session、上传和视频仍归原参与者，不会转移。</AlertDescription></Alert>
-            <Label htmlFor={`replacement-${assignment.assignmentPublicId}`}>替代参与者<NativeSelect id={`replacement-${assignment.assignmentPublicId}`} value={participantPublicId} onChange={(event) => { setParticipantPublicId(event.target.value); const candidate = eligibleCandidates.find((item) => item.publicId === event.target.value); setPreferredDevicePublicId(candidate?.defaultDevicePublicId ?? ""); }} className="mt-2 w-full"><NativeSelectOption value="">选择一名可用参与者</NativeSelectOption>{eligibleCandidates.map((candidate) => <NativeSelectOption key={candidate.publicId} value={candidate.publicId}>{candidate.displayAlias} · {candidate.publicId}</NativeSelectOption>)}</NativeSelect></Label>
-            <div className="grid gap-4 sm:grid-cols-2"><Label htmlFor={`replacement-version-${assignment.assignmentPublicId}`}>任务版本<NativeSelect id={`replacement-version-${assignment.assignmentPublicId}`} value={String(taskVersion)} onChange={(event) => setTaskVersion(Number(event.target.value))} className="mt-2 w-full">{versions.map((version) => <NativeSelectOption key={version.version} value={String(version.version)}>版本 {version.version}{version.version === assignment.taskVersion ? " · 与原记录一致" : ""}</NativeSelectOption>)}</NativeSelect></Label><Label htmlFor={`replacement-due-${assignment.assignmentPublicId}`}>新截止时间<Input id={`replacement-due-${assignment.assignmentPublicId}`} type="datetime-local" value={dueAt} onChange={(event) => setDueAt(event.target.value)} className="mt-2" /></Label></div>
-            {selectedCandidate ? <Label htmlFor={`replacement-device-${assignment.assignmentPublicId}`}>首选设备<NativeSelect id={`replacement-device-${assignment.assignmentPublicId}`} value={preferredDevicePublicId} onChange={(event) => setPreferredDevicePublicId(event.target.value)} className="mt-2 w-full"><NativeSelectOption value="">不指定设备</NativeSelectOption>{selectedCandidate.devices.map((device) => <NativeSelectOption key={device.publicId} value={device.publicId}>{device.label} · {device.publicId}</NativeSelectOption>)}</NativeSelect></Label> : null}
+            <Alert><AlertDescription>{i18n.t("adminUi.replaceHistoryHelp")}</AlertDescription></Alert>
+            <Label htmlFor={`replacement-${assignment.assignmentPublicId}`}>{i18n.t("adminUi.replacementParticipant")}<NativeSelect id={`replacement-${assignment.assignmentPublicId}`} value={participantPublicId} onChange={(event) => { setParticipantPublicId(event.target.value); const candidate = eligibleCandidates.find((item) => item.publicId === event.target.value); setPreferredDevicePublicId(candidate?.defaultDevicePublicId ?? ""); }} className="mt-2 w-full"><NativeSelectOption value="">{i18n.t("adminUi.chooseAvailableParticipant")}</NativeSelectOption>{eligibleCandidates.map((candidate) => <NativeSelectOption key={candidate.publicId} value={candidate.publicId}>{candidate.displayAlias} · {candidate.publicId}</NativeSelectOption>)}</NativeSelect></Label>
+            <div className="grid gap-4 sm:grid-cols-2"><Label htmlFor={`replacement-version-${assignment.assignmentPublicId}`}>{i18n.t("adminUi.taskVersion")}<NativeSelect id={`replacement-version-${assignment.assignmentPublicId}`} value={String(taskVersion)} onChange={(event) => setTaskVersion(Number(event.target.value))} className="mt-2 w-full">{versions.map((version) => <NativeSelectOption key={version.version} value={String(version.version)}>{i18n.t("common.version", { value: version.version })}{version.version === assignment.taskVersion ? ` · ${i18n.t("adminUi.sameAsOriginal")}` : ""}</NativeSelectOption>)}</NativeSelect></Label><Label htmlFor={`replacement-due-${assignment.assignmentPublicId}`}>{i18n.t("adminUi.newDue")}<Input id={`replacement-due-${assignment.assignmentPublicId}`} type="datetime-local" value={dueAt} onChange={(event) => setDueAt(event.target.value)} className="mt-2" /></Label></div>
+            {selectedCandidate ? <Label htmlFor={`replacement-device-${assignment.assignmentPublicId}`}>{i18n.t("adminUi.preferredDevice")}<NativeSelect id={`replacement-device-${assignment.assignmentPublicId}`} value={preferredDevicePublicId} onChange={(event) => setPreferredDevicePublicId(event.target.value)} className="mt-2 w-full"><NativeSelectOption value="">{i18n.t("adminUi.noDeviceSpecified")}</NativeSelectOption>{selectedCandidate.devices.map((device) => <NativeSelectOption key={device.publicId} value={device.publicId}>{device.label} · {device.publicId}</NativeSelectOption>)}</NativeSelect></Label> : null}
           </> : null}
 
-          {mode === "extend" ? <Label htmlFor={`extend-due-${assignment.assignmentPublicId}`}>新的截止时间<Input id={`extend-due-${assignment.assignmentPublicId}`} type="datetime-local" value={dueAt} onChange={(event) => setDueAt(event.target.value)} className="mt-2" /></Label> : null}
-          {mode === "cancel" ? <Alert variant="destructive"><AlertDescription>停止后将关闭开放的 Session，并禁止创建新的 Session 和上传。最后一名参与者不能单独停止，请使用替换操作。</AlertDescription></Alert> : null}
+          {mode === "extend" ? <Label htmlFor={`extend-due-${assignment.assignmentPublicId}`}>{i18n.t("adminUi.newDue")}<Input id={`extend-due-${assignment.assignmentPublicId}`} type="datetime-local" value={dueAt} onChange={(event) => setDueAt(event.target.value)} className="mt-2" /></Label> : null}
+          {mode === "cancel" ? <Alert variant="destructive"><AlertDescription>{i18n.t("adminUi.cancelHistoryHelp")}</AlertDescription></Alert> : null}
 
-          <Label htmlFor={`participant-reason-${assignment.assignmentPublicId}`}>操作原因<Input id={`participant-reason-${assignment.assignmentPublicId}`} value={reason} onChange={(event) => setReason(event.target.value)} maxLength={500} placeholder="说明调整原因，至少 10 个字符" className="mt-2" /></Label>
+          <Label htmlFor={`participant-reason-${assignment.assignmentPublicId}`}>{i18n.t("adminUi.operationReason")}<Input id={`participant-reason-${assignment.assignmentPublicId}`} value={reason} onChange={(event) => setReason(event.target.value)} maxLength={500} placeholder={i18n.t("adminUi.reasonPlaceholder")} className="mt-2" /></Label>
           {error ? <Alert role="alert" variant="destructive"><AlertDescription>{error}</AlertDescription></Alert> : null}
         </div>
-        <div className="apple-dialog-footer flex justify-end gap-2 px-5 py-4 sm:px-6"><Button type="button" variant="ghost" onClick={close}>取消</Button><Button type="button" disabled={busy} variant={mode === "cancel" ? "destructive" : "default"} onClick={() => void submit()}>{busy ? "正在处理…" : mode === "replace" ? `停止 ${assignment.participantAlias} 并分配` : mode === "cancel" ? "停止参与" : "保存新截止时间"}</Button></div>
+        <div className="apple-dialog-footer flex justify-end gap-2 px-5 py-4 sm:px-6"><Button type="button" variant="ghost" onClick={close}>{i18n.t("common.cancel")}</Button><Button type="button" disabled={busy} variant={mode === "cancel" ? "destructive" : "default"} onClick={() => void submit()}>{busy ? i18n.t("adminUi.processing") : mode === "replace" ? i18n.t("adminUi.stopAndAssign", { name: assignment.participantAlias }) : mode === "cancel" ? i18n.t("adminUi.stopParticipation") : i18n.t("adminUi.saveNewDue")}</Button></div>
       </dialog>
     </>
   );
