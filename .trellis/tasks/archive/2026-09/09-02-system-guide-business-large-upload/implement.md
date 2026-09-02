@@ -49,8 +49,8 @@
 ## 6. Finish
 
 - [x] 评估 code-spec 更新：本任务只重写说明内容与图表，没有新增或改变可执行 API、数据、基础设施或跨层合同，因此不修改 `.trellis/spec/`；实现选择与验证边界记录在本任务设计和研究文件中。
-- [ ] 审计最终 diff，只显式暂存本任务 owned paths；禁止 `git add .`。
-- [ ] 创建一个聚焦 commit，记录验证结果和 commit SHA。
+- [x] 审计最终 diff，只显式暂存本任务 owned paths；禁止 `git add .`。
+- [x] 创建一个聚焦 commit `b9e4fe8`，记录验证结果和范围。
 - [ ] 按 Trellis finish 流程更新 journal 并归档任务。
 
 ## Rollback points
