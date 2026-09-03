@@ -44,6 +44,7 @@
 - `09-02-zh-en-ja-i18n`：跨两个应用的语言解析、字典、切换、格式化、错误码映射与翻译完整性测试。
 - `09-02-deterministic-demo-data`：受保护的数据清理、固定演示目录、Auth/Storage 清理与确定性种子验收。
 - `09-02-vercel-supabase-production`：云端项目创建/关联、变量配置、迁移、种子、双应用部署与公网验收。
+- `09-03-state-machine-registry-rls`：状态机注册表的数据库权限收口与 RLS 验证。
 
 执行顺序为状态机 → i18n → 演示数据 → 部署；父任务负责最终跨子任务集成验收，不直接承载实现。
 
@@ -89,12 +90,21 @@
 
 ## Acceptance Criteria
 
-- [ ] AC1：仓库中每个被盘点为生命周期字段的状态变更都通过对应状态机；单元测试覆盖允许迁移、拒绝迁移、终态、重复请求和至少一个并发保护场景。
-- [ ] AC2：管理员端与参与者端核心路径可在 `zh-CN`、`en`、`ja` 间切换并持久化，三种语言不存在核心文案缺失，语言切换不改变业务状态值。
-- [ ] AC3：一条命令可安全清理业务数据并生成确定性演示数据；重复运行结果一致，三种语言下页面能展示自然的人名、国家/地区和完整业务链路。
-- [ ] AC4：现有聚焦测试、类型检查、Lint、生产构建及关键 E2E 通过；状态机和 i18n 均有新增自动化测试。
-- [ ] AC5：Vercel/Supabase 预检结果有记录；成功时提供真实公网 URL 及公网烟雾验收，失败时提供可复现的外部阻塞证据和未执行写操作说明。
-- [ ] AC6：所有本任务提交范围清晰，未覆盖当前工作区中其他任务的未提交改动。
+- [x] AC1：仓库中每个被盘点为生命周期字段的状态变更都通过对应状态机；单元测试覆盖允许迁移、拒绝迁移、终态、重复请求和至少一个并发保护场景。
+- [x] AC2：管理员端与参与者端核心路径可在 `zh-CN`、`en`、`ja` 间切换并持久化，三种语言不存在核心文案缺失，语言切换不改变业务状态值。
+- [x] AC3：一条命令可安全清理业务数据并生成确定性演示数据；重复运行结果一致，三种语言下页面能展示自然的人名、国家/地区和完整业务链路。
+- [x] AC4：现有聚焦测试、类型检查、Lint、生产构建及关键 E2E 通过；状态机和 i18n 均有新增自动化测试。
+- [x] AC5：Vercel/Supabase 预检结果有记录；成功时提供真实公网 URL 及公网烟雾验收，失败时提供可复现的外部阻塞证据和未执行写操作说明。
+- [x] AC6：所有本任务提交范围清晰，未覆盖当前工作区中其他任务的未提交改动。
+
+## Final Outcome
+
+- 固定应用提交：`a69858e33a5a027331e7c55b274d96e00142b93f`；部署收据提交：`98ee875`。
+- Participant：<https://egocapture-participant.vercel.app>（deployment `dpl_9sxt527Z3n3vPsZEdFREQAnTKhZP`）。
+- Admin：<https://egocapture-admin.vercel.app>（deployment `dpl_9ZpY84UREL6263KbjUrwRTapHxpU`）。
+- Supabase：`egocapture-demo` / `phchhsatgoxlqqhpnnfk` / `us-west-1`；Vercel Functions：`sfo1`。
+- 最终公网 Playwright `4/4 PASS`；固定 demo digest、24 migrations、28/28 RLS、Storage 对象 `0` 和演示 Auth 基线均在写入验收后恢复。
+- 数据库主密码的额外防御性轮换因 Supabase 管理权限边界记为 scoped `HOLD`；密码未泄露且现有 Production 连接有效，不改变本任务 GO。美国侧独立延迟继续记为 `SKIP`。
 
 ## Out of Scope
 

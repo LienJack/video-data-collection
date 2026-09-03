@@ -1,4 +1,4 @@
 {"file":".trellis/spec/guides/cross-layer-thinking-guide.md","reason":"Parent integration spans domain, database, two apps, seed and cloud boundaries."}
 {"file":".trellis/spec/guides/code-reuse-thinking-guide.md","reason":"Shared state and translation contracts must remain single-source."}
-{"file":".trellis/tasks/09-02-vercel-supabase-production/research/cloud-preflight.md","reason":"Use the verified account, resource isolation and region decisions."}
-{"file":".trellis/tasks/09-02-unified-state-machines/research/state-machine-library-evaluation.md","reason":"Use the approved XState v5 architecture and dependency boundary."}
+{"file":".trellis/tasks/archive/2026-09/09-02-vercel-supabase-production/research/cloud-preflight.md","reason":"Use the verified account, resource isolation and region decisions."}
+{"file":".trellis/tasks/archive/2026-09/09-02-unified-state-machines/research/state-machine-library-evaluation.md","reason":"Use the approved XState v5 architecture and dependency boundary."}

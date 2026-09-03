@@ -1,3 +1,3 @@
 {"file":".trellis/spec/guides/cross-layer-thinking-guide.md","reason":"Verify the final one-snapshot contract across all layers and children."}
-{"file":".trellis/tasks/09-02-vercel-supabase-production/research/cloud-preflight.md","reason":"Check public claims against the recorded cloud boundary."}
-{"file":".trellis/tasks/09-02-unified-state-machines/research/state-machine-library-evaluation.md","reason":"Check final integration against the researched state-machine boundary."}
+{"file":".trellis/tasks/archive/2026-09/09-02-vercel-supabase-production/research/cloud-preflight.md","reason":"Check public claims against the recorded cloud boundary."}
+{"file":".trellis/tasks/archive/2026-09/09-02-unified-state-machines/research/state-machine-library-evaluation.md","reason":"Check final integration against the researched state-machine boundary."}
