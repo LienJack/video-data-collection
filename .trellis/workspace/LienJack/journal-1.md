@@ -249,3 +249,37 @@ Added guarded dedicated-environment refresh across PostgreSQL, Supabase Auth and
 ### Status
 
 [OK] **Completed**
+
+
+## Session 12: Deploy EgoCapture production stack
+
+**Date**: 2026-09-03
+**Task**: Deploy EgoCapture production stack
+**Package**: admin-web
+**Branch**: `codex/egocapture-mvp`
+
+### Summary
+
+Deployed Participant and Admin to Vercel sfo1 with dedicated Supabase us-west-1, rotated demo Auth credentials, passed final public 4/4 and deterministic baseline/RLS/Storage restore, documented the scoped database-password rotation HOLD, and preserved unrelated UI work.
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `dd6aa59` | (see git log) |
+| `bcb6f4a` | (see git log) |
+| `fdf3495` | (see git log) |
+| `0af0f08` | (see git log) |
+| `a88d66b` | (see git log) |
+| `1cc77e6` | (see git log) |
+| `e5d790a` | (see git log) |
+| `6278d6e` | (see git log) |
+| `4e6422c` | (see git log) |
+| `3ca9b88` | (see git log) |
+| `6fb1be8` | (see git log) |
+| `a69858e` | (see git log) |
+| `98ee875` | (see git log) |
+
+### Status
+
+[OK] **Completed**
