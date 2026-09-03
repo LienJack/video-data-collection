@@ -1,0 +1,8 @@
+{"file":".trellis/tasks/09-02-participant-view-edit-drawer/prd.md","reason":"Authoritative scope, drawer behavior, editable fields, credential copy, protection rules, and acceptance criteria."}
+{"file":".trellis/tasks/09-02-participant-view-edit-drawer/design.md","reason":"Client boundary, dialog behavior, view/edit state, credential presentation, pagination coexistence, and rollback design."}
+{"file":".trellis/tasks/09-02-participant-table-experience/prd.md","reason":"Parent integration and parallel-task constraints."}
+{"file":".trellis/tasks/09-02-unified-table-pagination/design.md","reason":"Participants Table and URL contract that the drawer must preserve."}
+{"file":".trellis/tasks/09-02-participant-login-credentials/design.md","reason":"Single-participant credential API and status contract consumed by the drawer."}
+{"file":".trellis/spec/admin-web/frontend/index.md","reason":"Admin frontend guidance index for Server/Client boundaries and interactions."}
+{"file":".trellis/spec/ui/frontend/index.md","reason":"Shared UI guidance index for table and dialog composition."}
+{"file":".trellis/spec/guides/cross-layer-thinking-guide.md","reason":"Detail API to client state to copy/edit round-trip checklist."}

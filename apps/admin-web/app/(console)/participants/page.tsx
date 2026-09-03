@@ -11,6 +11,7 @@ import { listParticipants, participantListSchema } from "@egocapture/core/server
 import { CountrySelect, LocaleSelect } from "@/app/_components/regional-preferences-fields";
 import { TablePagination } from "@/app/_components/table-pagination";
 import { parsePageParam, parsePageSizeParam } from "@/lib/pagination";
+import { ParticipantRowActions } from "@/app/(console)/participants/participant-row-actions";
 import { createTranslator } from "@egocapture/core/i18n";
 import { requestLocale } from "@egocapture/core/server/i18n";
 
@@ -79,7 +80,12 @@ export default async function ParticipantsPage({ searchParams }: { searchParams:
                 <TableCell className="p-4">{i18n.state("participant.consent_status", participant.consentStatus)}</TableCell>
                 <TableCell className="p-4">{i18n.languageName(participant.locale)}<span className="text-[var(--muted)]"> · {participant.countryRegion ? i18n.regionName(participant.countryRegion) : "—"}</span></TableCell>
                 <TableCell className="p-4"><div className="flex flex-wrap gap-2">{participant.isMissing ? <Badge variant="secondary">{i18n.t("adminUi.missing")}</Badge> : null}{participant.needsReview ? <Badge>{i18n.t("adminUi.awaitingReview")}</Badge> : null}{!participant.isMissing && !participant.needsReview ? <span className="text-[var(--muted)]">—</span> : null}</div></TableCell>
-                <TableCell className="p-4 text-right"><Link href={`/participants/${participant.publicId}`} className={buttonVariants({ variant: "outline", size: "sm" })}>{i18n.t("common.view")}</Link></TableCell>
+                <TableCell className="p-4 text-right">
+                  <ParticipantRowActions
+                    participantPublicId={participant.publicId}
+                    fixtureProtected={viewer.isDemoAdmin && participant.isFixture}
+                  />
+                </TableCell>
               </TableRow>
             ))}
           </TableBody>

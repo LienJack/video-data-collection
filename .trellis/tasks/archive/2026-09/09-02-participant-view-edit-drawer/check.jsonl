@@ -1,0 +1,7 @@
+{"file":".trellis/tasks/09-02-participant-view-edit-drawer/prd.md","reason":"Acceptance source for actions, drawer states, field scope, credential copy, errors, accessibility, and regression coverage."}
+{"file":".trellis/tasks/09-02-participant-view-edit-drawer/design.md","reason":"Review source for focus, modal behavior, state cleanup, API use, clipboard feedback, and pagination coexistence."}
+{"file":".trellis/tasks/09-02-unified-table-pagination/design.md","reason":"Dependency contract for Participants Table and URL persistence."}
+{"file":".trellis/tasks/09-02-participant-login-credentials/design.md","reason":"Dependency contract for credential states, read/reset APIs, and auth boundaries."}
+{"file":".trellis/spec/admin-web/frontend/index.md","reason":"Admin frontend review guidance index."}
+{"file":".trellis/spec/ui/frontend/index.md","reason":"UI semantics and composition review guidance index."}
+{"file":".trellis/spec/guides/cross-layer-thinking-guide.md","reason":"State cleanup and API/UI boundary verification checklist."}
