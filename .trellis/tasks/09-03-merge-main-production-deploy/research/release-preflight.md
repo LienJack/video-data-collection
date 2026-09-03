@@ -49,3 +49,10 @@ The original working checkout's pre-existing uncommitted paths remained outside 
 ## Independent final check
 
 The required Trellis full-scope check reviewed the committed diff across `admin-web`, `participant-web`, `core`, and `ui` on the same detached snapshot. It found no verified release-blocking defect and made no changes. In addition to rerunning the local gates, it spot-checked `sfo1` configuration, production database pool size, serialized server queries, shared auth-cookie options, cloud NAS-mode rejection, signed TUS headers, and guarded exact-ref refresh. Verdict: **GO** to push and create the PR; GitHub CI and post-merge public acceptance remain mandatory later gates.
+
+## Pull Request
+
+- URL: `https://github.com/LienJack/video-data-collection/pull/1`
+- Base: `main`
+- Initial PR head: `67d73200f33620e7244782fe3e9cb19d11070362`
+- State at creation: open, non-Draft; GitHub Actions pending

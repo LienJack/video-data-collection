@@ -17,8 +17,8 @@
 
 ## 3. Push, create PR, and pass CI
 
-- [ ] Push `codex/egocapture-mvp` without force.
-- [ ] Create a non-Draft PR to `main` with scope, validation, provider identity, rollback, and deployment plan.
+- [x] Push `codex/egocapture-mvp` without force.
+- [x] Create a non-Draft PR to `main` with scope, validation, provider identity, rollback, and deployment plan.
 - [ ] Wait for `quality`, `repository-safety`, and `browser-acceptance` on the exact PR head.
 - [ ] If CI fails, fix only evidence-backed blockers, rerun local checks, push, and wait for the replacement run.
 
