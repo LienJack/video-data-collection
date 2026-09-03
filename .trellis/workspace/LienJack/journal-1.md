@@ -283,3 +283,25 @@ Deployed Participant and Admin to Vercel sfo1 with dedicated Supabase us-west-1,
 ### Status
 
 [OK] **Completed**
+
+
+## Session 13: Complete state machine i18n demo deployment
+
+**Date**: 2026-09-03
+**Task**: Complete state machine i18n demo deployment
+**Package**: admin-web
+**Branch**: `codex/egocapture-mvp`
+
+### Summary
+
+Closed AC1-AC6 after final repository, NAS and public integration gates; validated archived child context references, recorded the scoped database-password HOLD and US-latency SKIP, archived the five-child parent task, and preserved unrelated participant UI work.
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `585a728` | (see git log) |
+
+### Status
+
+[OK] **Completed**

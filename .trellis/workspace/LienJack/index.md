@@ -8,7 +8,7 @@
 
 <!-- @@@auto:current-status -->
 - **Active File**: `journal-1.md`
-- **Total Sessions**: 12
+- **Total Sessions**: 13
 - **Last Active**: 2026-09-03
 <!-- @@@/auto:current-status -->
 
@@ -19,7 +19,7 @@
 <!-- @@@auto:active-documents -->
 | File | Lines | Status |
 |------|-------|--------|
-| `journal-1.md` | ~285 | Active |
+| `journal-1.md` | ~307 | Active |
 <!-- @@@/auto:active-documents -->
 
 ---
@@ -29,6 +29,7 @@
 <!-- @@@auto:session-history -->
 | # | Date | Title | Commits | Branch |
 |---|------|-------|---------|--------|
+| 13 | 2026-09-03 | Complete state machine i18n demo deployment | `585a728` | `codex/egocapture-mvp` |
 | 12 | 2026-09-03 | Deploy EgoCapture production stack | `dd6aa59`, `bcb6f4a`, `fdf3495`, `0af0f08`, `a88d66b`, `1cc77e6`, `e5d790a`, `6278d6e`, `4e6422c`, `3ca9b88`, `6fb1be8`, `a69858e`, `98ee875` | `codex/egocapture-mvp` |
 | 11 | 2026-09-03 | Deterministic multi-region demo data | `070462c` | `codex/egocapture-mvp` |
 | 10 | 2026-09-03 | Harden state machine registry RLS | `c2228c9` | `codex/egocapture-mvp` |
