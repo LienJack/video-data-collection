@@ -51,6 +51,7 @@
 - [x] 公网核心业务链及真实小对象直传完成，验收文档清楚区分 observed PASS、SKIP 与 WAITING_EXTERNAL。
 - [x] Vercel/Supabase 日志和仓库中没有秘密泄漏，`pnpm repo:safety` 通过。
 - [x] 若出现计费/权限/配额阻塞，未发生未经授权的购买或对无关项目的写入，并给出精确恢复步骤。
+- [x] Trellis final review 后的 production receipt 绑定固定提交 `a69858e33a5a027331e7c55b274d96e00142b93f` 与最终 deployment IDs；临时 refresh route/变量/deployment 均已移除。
 
 ## Out of Scope
 

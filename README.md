@@ -10,7 +10,7 @@ EgoCapture 是一套第一人称视频数据采集与人工复核系统。它把
 |---|---|
 | Public URL | Participant <https://egocapture-participant.vercel.app>；Admin <https://egocapture-admin.vercel.app> |
 | Repository | [LienJack/video-data-collection](https://github.com/LienJack/video-data-collection) |
-| Deployed Commit | `4e6422c24dcc9a93889c0e7755dc8045530d4881` |
+| Deployed Commit | `a69858e33a5a027331e7c55b274d96e00142b93f` |
 | Admin Demo | 账号来自 `DEMO_ADMIN_USERNAME`（默认 `admin`）；密码来自 `DEMO_ADMIN_PASSWORD` |
 | Participant Demo | 中国 `PT-5YTSMK53SU`、美国 `PT-DQ2HDNKM76`、日本 `PT-L96ESMAD8E`；共享密码来自 `DEMO_PARTICIPANT_PASSWORD` |
 | Supabase Project / Region | `egocapture-demo` / `phchhsatgoxlqqhpnnfk` / `us-west-1` |
@@ -268,7 +268,7 @@ Playwright 的主流程真实上传一个有效 MP4，并验证视频请求目�
 
 两套 Vercel Project 的精确配置见 [双应用部署说明](docs/deployment/vercel-dual-app.md)。
 
-当前专用 Supabase `phchhsatgoxlqqhpnnfk` 已在 `us-west-1` 完成 24 个 Migration、确定性 Seed/RLS 与 private Storage 验证；Vercel Project 分别绑定 `apps/participant-web` 与 `apps/admin-web`，Node 为 24.x、Functions 为 `sfo1`。固定提交 `4e6422c24dcc9a93889c0e7755dc8045530d4881` 的两端 Production、公网三语言登录、官方 signed TUS、真实 MP4 metadata 与 Review/Audit 已通过，详见 [公网验收记录](docs/acceptance/2026-09-03-public-deployment.md)。
+当前专用 Supabase `phchhsatgoxlqqhpnnfk` 已在 `us-west-1` 完成 24 个 Migration、确定性 Seed/RLS 与 private Storage 验证；Vercel Project 分别绑定 `apps/participant-web` 与 `apps/admin-web`，Node 为 24.x、Functions 为 `sfo1`。固定提交 `a69858e33a5a027331e7c55b274d96e00142b93f` 的两端 Production、公网三语言登录、official signed TUS、真实 MP4 metadata、Review/Audit 与最终 guarded refresh 已通过，详见 [公网验收记录](docs/acceptance/2026-09-03-public-deployment.md)。
 
 ## 生产演进
 

@@ -15,7 +15,7 @@
   "branch": null,
   "base_branch": "main",
   "worktree_path": null,
-  "commit": "4e6422c24dcc9a93889c0e7755dc8045530d4881",
+  "commit": "a69858e33a5a027331e7c55b274d96e00142b93f",
   "pr_url": null,
   "subtasks": [],
   "children": [],
@@ -25,6 +25,6 @@
     "docs/acceptance/2026-09-03-public-deployment.md",
     "docs/deployment/vercel-dual-app.md"
   ],
-  "notes": "GO: dedicated us-west-1 Supabase and two sfo1 Vercel Production deployments passed public 4/4, signed direct-Storage TUS, genuine MP4 Range metadata, review/audit, redacted log audit, and deterministic baseline restoration. US-side independent latency remains an explicit SKIP.",
+  "notes": "GO at a69858e: dedicated us-west-1 Supabase and final Participant/Admin deployments dpl_9sxt527Z3n3vPsZEdFREQAnTKhZP / dpl_9ZpY84UREL6263KbjUrwRTapHxpU passed public 4/4, signed direct-Storage TUS, genuine MP4 Range metadata, review/audit, healthy-cn regression, redacted log audit, and deterministic baseline restoration. Demo credentials were rotated and temporary refresh access removed. Defensive database-password rotation is a scoped HOLD requiring Supabase management authority; US-side independent latency remains SKIP.",
   "meta": {}
 }
