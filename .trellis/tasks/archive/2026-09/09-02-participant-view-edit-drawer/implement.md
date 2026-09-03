@@ -45,4 +45,4 @@
 - [x] Trellis check 子代理复核状态机、可访问性、敏感字段边界、分页共存和测试覆盖。
 - [x] `git diff --check`；显式暂存 Participants 操作列、drawer 组件/测试和本任务 Trellis 文件。
 - [x] 确认 staged diff 不含分页基础、凭据后端、任务详情动作、bootstrap guidelines 或 `需求.md`。
-- [ ] 创建一个 drawer 子任务 scoped commit，并记录 commit SHA 后归档子任务。
+- [x] 创建 drawer 子任务 scoped commit `10d16b2`，记录 SHA 后归档子任务。
