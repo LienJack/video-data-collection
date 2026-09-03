@@ -1,0 +1,5 @@
+{"file":".trellis/spec/core/frontend/quality-guidelines.md","reason":"Core quality and testing review boundary."}
+{"file":".trellis/spec/core/frontend/lifecycle-state-machine-contract.md","reason":"Verify machine graphs, database authority, races and required test evidence."}
+{"file":".trellis/spec/guides/cross-layer-thinking-guide.md","reason":"Check state contract consistency at every boundary."}
+{"file":".trellis/tasks/09-02-unified-state-machines/research/state-inventory.md","reason":"Verify every observed machine and write cluster was addressed."}
+{"file":".trellis/tasks/09-02-unified-state-machines/research/state-machine-library-evaluation.md","reason":"Verify implementation stays within the researched XState and PostgreSQL authority boundaries."}

@@ -1,0 +1,7 @@
+{"file":".trellis/tasks/09-02-unified-table-pagination/prd.md","reason":"Acceptance source for all seven datasets, pagination boundaries, semantics, and scoped diff."}
+{"file":".trellis/tasks/09-02-unified-table-pagination/design.md","reason":"Correctness review source for counts, clamping, stable ordering, URL preservation, and table conversions."}
+{"file":".trellis/tasks/09-02-participant-table-experience/prd.md","reason":"Parent boundary and integration expectations."}
+{"file":".trellis/spec/admin-web/frontend/index.md","reason":"Admin frontend review guidance index."}
+{"file":".trellis/spec/core/frontend/index.md","reason":"Core contract review guidance index."}
+{"file":".trellis/spec/ui/frontend/index.md","reason":"Semantic Table review guidance index."}
+{"file":".trellis/spec/guides/code-reuse-thinking-guide.md","reason":"Duplication and missed-consumer review checklist."}

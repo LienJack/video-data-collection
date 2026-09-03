@@ -1,0 +1,28 @@
+{
+  "id": "merge-main-production-deploy",
+  "name": "merge-main-production-deploy",
+  "title": "Merge MVP to main and deploy production",
+  "description": "",
+  "status": "in_progress",
+  "dev_type": null,
+  "scope": "release",
+  "package": "admin-web",
+  "priority": "P2",
+  "creator": "LienJack",
+  "assignee": "LienJack",
+  "createdAt": "2026-09-03",
+  "completedAt": null,
+  "branch": "codex/egocapture-mvp",
+  "base_branch": "main",
+  "worktree_path": null,
+  "commit": null,
+  "pr_url": "https://github.com/LienJack/video-data-collection/pull/1",
+  "subtasks": [],
+  "children": [],
+  "parent": null,
+  "relatedFiles": [],
+  "notes": "",
+  "meta": {
+    "description": "Merge the reviewed MVP branch to main and deploy the exact merge commit to both existing Vercel production projects."
+  }
+}

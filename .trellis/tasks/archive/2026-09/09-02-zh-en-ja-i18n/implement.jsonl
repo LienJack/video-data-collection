@@ -1,0 +1,7 @@
+{"file":".trellis/spec/admin-web/frontend/index.md","reason":"Admin App Router and component surface."}
+{"file":".trellis/spec/participant-web/frontend/index.md","reason":"Participant App Router and client upload surface."}
+{"file":".trellis/spec/core/frontend/index.md","reason":"Shared domain/error/status contracts."}
+{"file":".trellis/spec/core/frontend/i18n-contract.md","reason":"Executable locale, catalog, formatting, error mapping and route contract."}
+{"file":".trellis/spec/ui/frontend/index.md","reason":"Shared provider and language switcher surface."}
+{"file":".trellis/spec/guides/cross-layer-thinking-guide.md","reason":"Locale crosses server, client, API and persisted preference boundaries."}
+{"file":".trellis/tasks/09-02-zh-en-ja-i18n/research/i18n-inventory.md","reason":"Next.js 16 constraints and current hardcoded-content inventory."}

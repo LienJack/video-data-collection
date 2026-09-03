@@ -1,0 +1,231 @@
+{
+  "schema_version": 1,
+  "diagram_type": "architecture",
+  "meta": {
+    "title": "EgoCapture 双应用架构与演进边界",
+    "locale": "zh-CN",
+    "output": "apps/admin-web/public/system-guide/diagrams/system-architecture.html",
+    "quality_profile": "showcase",
+    "viewBox": [1240, 720],
+    "views": [
+      {
+        "id": "control-plane",
+        "label": "当前控制面",
+        "focus": ["admin-web", "participant-web", "shared-packages", "postgres-authority"],
+        "note": "两套 Web 应用通过共享包与服务读写 PostgreSQL 权威状态。"
+      },
+      {
+        "id": "media-plane",
+        "label": "当前视频数据面",
+        "focus": ["participant-web", "private-storage", "media-processing"],
+        "note": "浏览器使用 TUS 直传私有 Storage，视频字节不经过 Next.js。"
+      },
+      {
+        "id": "future-plane",
+        "label": "未来演进（未实现）",
+        "focus": ["future-adapter", "future-media-provider"],
+        "note": "Multipart 与直播通过可替换适配器接入，不改变内部业务权威。"
+      }
+    ]
+  },
+  "components": [
+    {
+      "id": "admin-user",
+      "type": "external",
+      "label": "管理员",
+      "sublabel": "运营 / 人工复核",
+      "pos": [20, 90],
+      "size": [130, 68]
+    },
+    {
+      "id": "admin-web",
+      "type": "frontend",
+      "label": "Admin Web",
+      "sublabel": "Next.js 管理端",
+      "tag": "当前已实现",
+      "pos": [300, 88],
+      "size": [170, 74]
+    },
+    {
+      "id": "participant-user",
+      "type": "external",
+      "label": "参与者",
+      "sublabel": "录制与上传",
+      "pos": [20, 304],
+      "size": [130, 68]
+    },
+    {
+      "id": "participant-web",
+      "type": "frontend",
+      "label": "Participant Web",
+      "sublabel": "Next.js 参与者端",
+      "tag": "当前已实现",
+      "pos": [300, 300],
+      "size": [170, 74]
+    },
+    {
+      "id": "shared-packages",
+      "type": "backend",
+      "label": "共享 packages",
+      "sublabel": "core 领域服务 · ui 视觉基础",
+      "tag": "控制面",
+      "pos": [570, 190],
+      "size": [196, 86]
+    },
+    {
+      "id": "postgres-authority",
+      "type": "database",
+      "label": "PostgreSQL",
+      "sublabel": "业务与审计权威",
+      "tag": "Source of truth",
+      "pos": [990, 88],
+      "size": [190, 80]
+    },
+    {
+      "id": "private-storage",
+      "type": "cloud",
+      "label": "私有对象存储",
+      "sublabel": "TUS 视频字节",
+      "tag": "数据面",
+      "pos": [790, 318],
+      "size": [184, 78]
+    },
+    {
+      "id": "media-processing",
+      "type": "backend",
+      "label": "对账与轻量处理",
+      "sublabel": "Range metadata · Match",
+      "pos": [1002, 440],
+      "size": [184, 78]
+    },
+    {
+      "id": "future-adapter",
+      "type": "backend",
+      "label": "媒体供应商适配器",
+      "sublabel": "内部合同保持稳定",
+      "tag": "未来方案",
+      "pos": [570, 590],
+      "size": [196, 78]
+    },
+    {
+      "id": "future-media-provider",
+      "type": "cloud",
+      "label": "Multipart / 直播平台",
+      "sublabel": "S3 Multipart · AWS IVS",
+      "tag": "尚未实现",
+      "pos": [902, 590],
+      "size": [222, 78]
+    }
+  ],
+  "boundaries": [
+    {
+      "kind": "region",
+      "label": "当前系统边界",
+      "wraps": ["admin-web", "participant-web", "shared-packages", "postgres-authority", "private-storage", "media-processing"],
+      "pad": 24
+    },
+    {
+      "kind": "region",
+      "label": "未来演进（未上线）",
+      "wraps": ["future-adapter", "future-media-provider"],
+      "pad": 22
+    }
+  ],
+  "connections": [
+    {
+      "id": "admin-opens-admin-web",
+      "from": "admin-user",
+      "to": "admin-web",
+      "label": "管理与复核",
+      "variant": "emphasis"
+    },
+    {
+      "id": "participant-opens-web",
+      "from": "participant-user",
+      "to": "participant-web",
+      "label": "确认 · Session · 上传",
+      "variant": "emphasis"
+    },
+    {
+      "id": "admin-control-commands",
+      "from": "admin-web",
+      "to": "shared-packages",
+      "label": "Auth / 管理命令"
+    },
+    {
+      "id": "participant-control-commands",
+      "from": "participant-web",
+      "to": "shared-packages",
+      "label": "Session / Upload 控制",
+      "labelAt": [520, 290]
+    },
+    {
+      "id": "core-persists-authority",
+      "from": "shared-packages",
+      "to": "postgres-authority",
+      "label": "SQL · 业务事实 / Audit",
+      "variant": "emphasis"
+    },
+    {
+      "id": "participant-direct-tus",
+      "from": "participant-web",
+      "to": "private-storage",
+      "label": "TUS 视频字节直传",
+      "variant": "emphasis"
+    },
+    {
+      "id": "core-storage-control",
+      "from": "shared-packages",
+      "to": "private-storage",
+      "label": "短期授权 / object key / 对账"
+    },
+    {
+      "id": "storage-to-processing",
+      "from": "private-storage",
+      "to": "media-processing",
+      "label": "HEAD / Range metadata",
+      "variant": "dashed"
+    },
+    {
+      "id": "processing-persists-evidence",
+      "from": "media-processing",
+      "to": "postgres-authority",
+      "label": "Validation / Match / Review",
+      "fromSide": "top",
+      "toSide": "bottom"
+    },
+    {
+      "id": "adapter-to-future-provider",
+      "from": "future-adapter",
+      "to": "future-media-provider",
+      "label": "预签分片 / 推流与录制",
+      "variant": "dashed"
+    }
+  ],
+  "cards": [
+    {
+      "dot": "cyan",
+      "title": "当前控制面",
+      "items": [
+        "Admin Web 与 Participant Web 独立部署，共享 packages/core 与 packages/ui",
+        "PostgreSQL 保存 Participant、TaskVersion、Session、Upload、Match、Review 与 Audit 权威"
+      ]
+    },
+    {
+      "dot": "emerald",
+      "title": "当前视频数据面",
+      "items": [
+        "参与者浏览器通过 TUS 将视频字节直传私有对象存储",
+        "Next.js 只处理授权、object key、对账与轻量 metadata，不代理视频请求体"
+      ]
+    },
+    {
+      "dot": "amber",
+      "title": "未来演进（未实现）",
+      "items": [
+        "S3 Multipart 负责生产级跨天断点续传，直播平台负责推流与自动录制",
+        "外部 provider ID 只是引用；内部业务关系与审计仍以 PostgreSQL 为准"
+      ]
+    }
+  ]
+}

@@ -4,7 +4,6 @@ as
 select
   assignment.id,
   assignment.public_id,
-  assignment.study_id,
   assignment.participant_id,
   assignment.task_version_id,
   assignment.status,

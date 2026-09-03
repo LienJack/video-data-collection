@@ -1,0 +1,7 @@
+{"file":".trellis/tasks/09-02-system-guide-business-large-upload/prd.md","reason":"Authoritative Leader-facing scope, current-versus-future boundary, requirements, exclusions, and acceptance criteria."}
+{"file":".trellis/tasks/09-02-system-guide-business-large-upload/design.md","reason":"Business narrative, role handoffs, exception handling, large-file recovery contract, diagram redesign, ownership, and verification strategy."}
+{"file":".trellis/spec/admin-web/frontend/index.md","reason":"Admin frontend guidance index for the existing protected system-guide route."}
+{"file":".trellis/spec/admin-web/frontend/quality-guidelines.md","reason":"Existing same-origin committed HTML iframe security and browser-test contract."}
+{"file":".trellis/tasks/09-02-system-guide-business-large-upload/research/repository-and-reader-evidence.md","reason":"Current article problems, verified TUS behavior, end-to-end business flow, and exact evidence boundaries."}
+{"file":".trellis/tasks/09-02-system-guide-business-large-upload/research/upload-and-business-evidence.md","reason":"Official current protocol and provider facts plus business-language implications for pause, refresh, resume, complete, and cleanup."}
+{"file":"docs/acceptance/2026-09-02-local-mvp.md","reason":"Fixed local acceptance evidence used to prevent claims that exceed the currently verified MVP."}

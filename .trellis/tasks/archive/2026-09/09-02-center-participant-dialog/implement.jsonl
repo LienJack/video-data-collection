@@ -1,0 +1,3 @@
+{"file":".trellis/tasks/09-02-center-participant-dialog/prd.md","reason":"Approved requirements and acceptance criteria for the centered two-step participant dialog, list scrolling, and region multi-select."}
+{"file":"node_modules/next/dist/docs/01-app/01-getting-started/05-server-and-client-components.md","reason":"Next.js 16 client component boundary guidance for local interactive state and browser dialog behavior."}
+{"file":"node_modules/next/dist/docs/01-app/01-getting-started/11-css.md","reason":"Next.js 16 global CSS and Tailwind styling guidance for dialog positioning."}

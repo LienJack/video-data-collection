@@ -1,5 +1,7 @@
 import { defineConfig, devices } from "@playwright/test";
 
+const participantOrigin = process.env.PARTICIPANT_SITE_URL || "http://localhost:3000";
+
 export default defineConfig({
   testDir: "./tests/e2e",
   globalSetup: "./tests/e2e/global-setup.ts",
@@ -9,12 +11,13 @@ export default defineConfig({
   retries: process.env.CI ? 2 : 0,
   reporter: process.env.CI ? "github" : "list",
   use: {
-    baseURL: "http://localhost:3000",
+    baseURL: participantOrigin,
+    locale: "zh-CN",
     trace: "on-first-retry",
   },
   webServer: {
     command: "pnpm dev",
-    url: "http://localhost:3000",
+    url: participantOrigin,
     reuseExistingServer: !process.env.CI,
   },
   projects: [

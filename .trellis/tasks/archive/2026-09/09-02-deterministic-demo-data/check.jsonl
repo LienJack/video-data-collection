@@ -1,0 +1,4 @@
+{"file":".trellis/spec/core/frontend/quality-guidelines.md","reason":"Review fixture, safety and integration test quality."}
+{"file":".trellis/spec/guides/cross-layer-thinking-guide.md","reason":"Verify no Auth, Storage or database layer was left stale."}
+{"file":".trellis/tasks/09-02-deterministic-demo-data/research/demo-data-inventory.md","reason":"Compare new coverage with the old one-participant baseline."}
+{"file":".trellis/spec/core/frontend/demo-data-refresh-contract.md","reason":"Verify the exact target, purge order, deterministic digest, and runtime acceptance contract."}

@@ -1,0 +1,235 @@
+{
+  "schema_version": 1,
+  "diagram_type": "sequence",
+  "meta": {
+    "title": "未来方案：参与者直播推流与管理端归档回看",
+    "locale": "zh-CN",
+    "output": "apps/admin-web/public/system-guide/diagrams/live-recording.html",
+    "quality_profile": "showcase",
+    "column_fit": "spread",
+    "viewBox": [1500, 730],
+    "views": [
+      {
+        "id": "authorize-broadcast",
+        "label": "创建与授权",
+        "focus": ["capture-web", "control-plane", "postgres", "provider-adapter", "amazon-ivs"],
+        "note": "内部 LiveCapture 先落库，再通过适配器获取短期、受限推流授权。"
+      },
+      {
+        "id": "stream-and-record",
+        "label": "推流与自动录制",
+        "focus": ["capture-web", "amazon-ivs", "private-s3", "provider-adapter", "control-plane"],
+        "note": "IVS 接收直播并自动录制到私有 S3；回调需要认证、去重与对账。"
+      },
+      {
+        "id": "admin-playback",
+        "label": "管理端状态与回看",
+        "focus": ["admin-web", "control-plane", "postgres", "private-s3"],
+        "note": "管理端读取内部权威状态，并通过短期受控播放授权回看归档。"
+      }
+    ]
+  },
+  "participants": [
+    {
+      "id": "capture-web",
+      "type": "frontend",
+      "label": "参与者采集端"
+    },
+    {
+      "id": "control-plane",
+      "type": "backend",
+      "label": "控制面服务"
+    },
+    {
+      "id": "postgres",
+      "type": "database",
+      "label": "PostgreSQL"
+    },
+    {
+      "id": "provider-adapter",
+      "type": "backend",
+      "label": "直播供应商适配器"
+    },
+    {
+      "id": "amazon-ivs",
+      "type": "cloud",
+      "label": "Amazon IVS"
+    },
+    {
+      "id": "private-s3",
+      "type": "cloud",
+      "label": "私有 S3"
+    },
+    {
+      "id": "admin-web",
+      "type": "frontend",
+      "label": "Admin Web"
+    }
+  ],
+  "segments": [
+    {
+      "from": 150,
+      "to": 336,
+      "label": "创建 LiveCapture 与短期推流授权"
+    },
+    {
+      "from": 344,
+      "to": 506,
+      "label": "推流、自动录制与幂等回调"
+    },
+    {
+      "from": 514,
+      "to": 650,
+      "label": "归档登记、管理端状态与受控回看"
+    }
+  ],
+  "messages": [
+    {
+      "id": "capture-request-live",
+      "from": "capture-web",
+      "to": "control-plane",
+      "y": 170,
+      "label": "基于 RecordingSession 创建 LiveCapture",
+      "variant": "emphasis"
+    },
+    {
+      "id": "control-persist-live-capture",
+      "from": "control-plane",
+      "to": "postgres",
+      "y": 200,
+      "label": "持久化内部 LiveCapture 与权限边界",
+      "variant": "emphasis"
+    },
+    {
+      "id": "control-create-provider-input",
+      "from": "control-plane",
+      "to": "provider-adapter",
+      "y": 230,
+      "label": "创建 / 分配 provider input"
+    },
+    {
+      "id": "adapter-configure-ivs",
+      "from": "provider-adapter",
+      "to": "amazon-ivs",
+      "y": 260,
+      "label": "配置 Channel + Auto-record to S3"
+    },
+    {
+      "id": "adapter-return-broadcast-grant",
+      "from": "provider-adapter",
+      "to": "control-plane",
+      "y": 290,
+      "label": "返回 ingest endpoint、provider refs 与 grant expiry",
+      "variant": "return"
+    },
+    {
+      "id": "control-return-short-grant",
+      "from": "control-plane",
+      "to": "capture-web",
+      "y": 320,
+      "label": "返回短期、最小权限推流授权",
+      "variant": "security",
+      "note": "不向参与者暴露长期 AWS 凭据"
+    },
+    {
+      "id": "capture-start-stream",
+      "from": "capture-web",
+      "to": "amazon-ivs",
+      "y": 360,
+      "label": "Web Broadcast SDK / RTMPS 推流",
+      "variant": "emphasis"
+    },
+    {
+      "id": "ivs-auto-record-s3",
+      "from": "amazon-ivs",
+      "to": "private-s3",
+      "y": 390,
+      "label": "Auto-record：写入 HLS、segments 与 recording metadata",
+      "variant": "emphasis"
+    },
+    {
+      "id": "ivs-send-recording-event",
+      "from": "amazon-ivs",
+      "to": "provider-adapter",
+      "y": 420,
+      "label": "EventBridge：Recording Start / End / Failed",
+      "variant": "dashed"
+    },
+    {
+      "id": "adapter-forward-authenticated-event",
+      "from": "provider-adapter",
+      "to": "control-plane",
+      "y": 450,
+      "label": "认证并规范化 provider event",
+      "variant": "security"
+    },
+    {
+      "id": "control-dedupe-provider-event",
+      "from": "control-plane",
+      "to": "postgres",
+      "y": 480,
+      "label": "按 provider + event_id 幂等写入 inbox",
+      "variant": "emphasis"
+    },
+    {
+      "id": "control-read-recording-metadata",
+      "from": "control-plane",
+      "to": "private-s3",
+      "y": 520,
+      "label": "Recording End 后读取 metadata / HEAD 对账"
+    },
+    {
+      "id": "control-register-video-asset",
+      "from": "control-plane",
+      "to": "postgres",
+      "y": 550,
+      "label": "登记 StoredObject / VideoAsset；进入 Validation / Match",
+      "variant": "emphasis"
+    },
+    {
+      "id": "admin-read-capture-status",
+      "from": "admin-web",
+      "to": "control-plane",
+      "y": 580,
+      "label": "读取直播 / 归档状态并申请短期回看授权"
+    },
+    {
+      "id": "control-read-authority",
+      "from": "control-plane",
+      "to": "postgres",
+      "y": 610,
+      "label": "查询 LiveCapture / VideoAsset 权威；追加访问 AuditEvent"
+    },
+    {
+      "id": "control-return-playback",
+      "from": "control-plane",
+      "to": "admin-web",
+      "y": 640,
+      "label": "返回状态、异常证据与受控 playback URL",
+      "variant": "return"
+    }
+  ],
+  "cards": [
+    {
+      "dot": "amber",
+      "title": "未来方案（尚未实现）",
+      "items": [
+        "AWS IVS 是参考 adapter；真实选型前仍需验证区域、DPA、回调、导出、删除与成本。"
+      ]
+    },
+    {
+      "dot": "cyan",
+      "title": "服务端自动录制",
+      "items": [
+        "采集端推流到 IVS，Auto-record 直接归档私有 S3；Admin 不下载后再上传。"
+      ]
+    },
+    {
+      "dot": "emerald",
+      "title": "内部权威与失败恢复",
+      "items": [
+        "provider 事件需认证、去重、对账；断线重连、密钥轮换、回看与保留操作进入审计。"
+      ]
+    }
+  ]
+}

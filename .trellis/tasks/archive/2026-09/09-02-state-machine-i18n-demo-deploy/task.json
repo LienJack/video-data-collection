@@ -1,0 +1,38 @@
+{
+  "id": "state-machine-i18n-demo-deploy",
+  "name": "state-machine-i18n-demo-deploy",
+  "title": "状态机、国际化、演示数据与真实部署",
+  "description": "统一业务状态机，完成中英日国际化、确定性演示数据与美国西部公网部署",
+  "status": "completed",
+  "dev_type": null,
+  "scope": null,
+  "package": "admin-web",
+  "priority": "P2",
+  "creator": "LienJack",
+  "assignee": "LienJack",
+  "createdAt": "2026-09-02",
+  "completedAt": "2026-09-03",
+  "branch": null,
+  "base_branch": "main",
+  "worktree_path": null,
+  "commit": "a69858e33a5a027331e7c55b274d96e00142b93f",
+  "pr_url": null,
+  "subtasks": [],
+  "children": [
+    "09-02-unified-state-machines",
+    "09-02-zh-en-ja-i18n",
+    "09-02-deterministic-demo-data",
+    "09-02-vercel-supabase-production",
+    "09-03-state-machine-registry-rls"
+  ],
+  "parent": null,
+  "relatedFiles": [
+    "README.md",
+    "docs/acceptance/2026-09-03-public-deployment.md",
+    "packages/core/src/domain/lifecycle-machines.ts",
+    "packages/core/src/i18n.ts",
+    "scripts/fixtures/demo-catalog.ts"
+  ],
+  "notes": "GO: five child tasks archived. Final a69858e deployments passed public 4/4, three locales, signed TUS, real MP4 metadata, review/audit, deterministic refresh, 24 migrations, 28/28 RLS and Storage-zero checks. Defensive database-password rotation remains a scoped non-blocking HOLD; independent US-client latency remains SKIP. Unrelated participant drawer/table/action work was preserved.",
+  "meta": {}
+}

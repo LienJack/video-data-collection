@@ -1,0 +1,9 @@
+{"file":".trellis/tasks/09-02-system-documentation-center/prd.md","reason":"Acceptance source for Admin-only entry, four articles, four Archify diagrams, capability boundaries, tests, and scoped commit."}
+{"file":".trellis/tasks/09-02-system-documentation-center/design.md","reason":"Review source for auth inheritance, entry placement, diagram embedding, current/future claims, live recording flow, accessibility, and rollback."}
+{"file":".trellis/spec/admin-web/frontend/index.md","reason":"Admin frontend review guidance index."}
+{"file":".trellis/spec/ui/frontend/index.md","reason":"Shared UI semantics and composition review guidance index."}
+{"file":".trellis/spec/guides/cross-layer-thinking-guide.md","reason":"Cross-boundary review checklist for auth, static HTML, navigation, and evidence claims."}
+{"file":".trellis/tasks/09-02-system-documentation-center/research/repository-evidence.md","reason":"Review baseline for auth inheritance, navigation ownership, architecture truth, TUS implementation, Multipart reservation, and installed framework contracts."}
+{"file":".trellis/tasks/09-02-system-documentation-center/research/upload-live-evidence.md","reason":"Review baseline for current/future upload claims, AWS IVS live recording flow, provider authority boundaries, and deferred validation."}
+{"file":"README.md","reason":"Current architecture and deployment truth baseline against which documentation claims must be checked."}
+{"file":"docs/acceptance/2026-09-02-local-mvp.md","reason":"Fixed local evidence boundary for implemented TUS and end-to-end claims."}

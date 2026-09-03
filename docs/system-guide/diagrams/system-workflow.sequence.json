@@ -1,0 +1,158 @@
+{
+  "schema_version": 1,
+  "diagram_type": "sequence",
+  "meta": {
+    "title": "管理员与参与者如何完成一次采集",
+    "locale": "zh-CN",
+    "output": "apps/admin-web/public/system-guide/diagrams/system-workflow.html",
+    "quality_profile": "showcase",
+    "column_fit": "spread",
+    "viewBox": [1500, 720]
+  },
+  "participants": [
+    { "id": "collection-admin", "type": "external", "label": "管理员" },
+    { "id": "task-participant", "type": "external", "label": "参与者" },
+    { "id": "capture-device", "type": "frontend", "label": "采集设备" },
+    { "id": "collection-system", "type": "backend", "label": "系统" }
+  ],
+  "segments": [
+    { "from": 150, "to": 264, "label": "一、管理员准备与发起" },
+    { "from": 272, "to": 454, "label": "二、参与者确认、准备与外部录制" },
+    { "from": 462, "to": 638, "label": "三、上传、核验、异常处置与最终接受" }
+  ],
+  "messages": [
+    {
+      "id": "admin-defines-collection",
+      "from": "collection-admin",
+      "to": "collection-system",
+      "y": 170,
+      "label": "明确目标、步骤、画面要求、禁止事项与截止时间",
+      "variant": "emphasis"
+    },
+    {
+      "id": "system-shows-fixed-requirements",
+      "from": "collection-system",
+      "to": "task-participant",
+      "y": 208,
+      "label": "展示本次固定要求与截止时间"
+    },
+    {
+      "id": "participant-confirms-assignment",
+      "from": "task-participant",
+      "to": "collection-admin",
+      "y": 246,
+      "label": "阅读要求；确认可以按时执行",
+      "variant": "return"
+    },
+    {
+      "id": "participant-checks-device",
+      "from": "task-participant",
+      "to": "capture-device",
+      "y": 292,
+      "label": "检查设备、电量、空间与拍摄环境"
+    },
+    {
+      "id": "device-reports-readiness",
+      "from": "capture-device",
+      "to": "task-participant",
+      "y": 326,
+      "label": "显示准备结果；条件不满足时先反馈",
+      "variant": "return"
+    },
+    {
+      "id": "participant-starts-collection",
+      "from": "task-participant",
+      "to": "collection-system",
+      "y": 360,
+      "label": "确认准备就绪；建立本次采集",
+      "variant": "emphasis"
+    },
+    {
+      "id": "system-shows-session-marker",
+      "from": "collection-system",
+      "to": "task-participant",
+      "y": 394,
+      "label": "显示本次现场标记与采集要求",
+      "variant": "return"
+    },
+    {
+      "id": "participant-records-externally",
+      "from": "task-participant",
+      "to": "capture-device",
+      "y": 428,
+      "label": "按要求完成外部录制"
+    },
+    {
+      "id": "device-retains-original",
+      "from": "capture-device",
+      "to": "task-participant",
+      "y": 456,
+      "label": "录制结束；保留原始视频文件",
+      "variant": "return"
+    },
+    {
+      "id": "participant-submits-original",
+      "from": "task-participant",
+      "to": "collection-system",
+      "y": 484,
+      "label": "手动选择本次采集和原文件并上传",
+      "variant": "emphasis"
+    },
+    {
+      "id": "system-enters-verification",
+      "from": "collection-system",
+      "to": "task-participant",
+      "y": 516,
+      "label": "上传 100%：进入完整性与归属核验",
+      "variant": "return"
+    },
+    {
+      "id": "system-reports-review-result",
+      "from": "collection-system",
+      "to": "collection-admin",
+      "y": 548,
+      "label": "正常可复核；异常给出原因与建议动作"
+    },
+    {
+      "id": "admin-resolves-exception",
+      "from": "collection-admin",
+      "to": "task-participant",
+      "y": 578,
+      "label": "异常时联系、纠正归属或要求重录",
+      "variant": "dashed"
+    },
+    {
+      "id": "participant-resubmits",
+      "from": "task-participant",
+      "to": "collection-system",
+      "y": 608,
+      "label": "按处置重新准备、录制并提交原文件",
+      "variant": "dashed"
+    },
+    {
+      "id": "admin-accepts-collection",
+      "from": "collection-admin",
+      "to": "collection-system",
+      "y": 636,
+      "label": "核验通过后接受；本次采集完成",
+      "variant": "emphasis"
+    }
+  ],
+  "cards": [
+    {
+      "dot": "cyan",
+      "title": "谁发起、谁执行",
+      "items": ["管理员定义目标并指派；参与者确认要求、准备设备、录制并提交原文件。"]
+    },
+    {
+      "dot": "emerald",
+      "title": "什么时候算完成",
+      "items": ["上传达到 100% 只代表传输结束；核验通过且管理员接受后，本次采集才完成。"]
+    },
+    {
+      "dot": "rose",
+      "title": "失败后怎么办",
+      "items": ["系统说明异常原因；管理员联系、纠正或要求重录，参与者随后重新提交。"]
+    }
+  ]
+}

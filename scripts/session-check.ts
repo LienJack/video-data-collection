@@ -2,11 +2,11 @@ import { createHash, randomBytes, randomUUID } from "node:crypto";
 import type { JWK } from "jose";
 import { createClient } from "@supabase/supabase-js";
 import postgres from "postgres";
-import { internalParticipantEmail } from "@/src/domain/invitation";
-import { verifyMarkerJws } from "@/src/domain/marker";
-import { createPublicId } from "@/src/domain/public-id";
-import { taskContentHash } from "@/src/domain/task-instructions";
-import { defaultTaskInstructions } from "@/src/domain/task-template";
+import { internalParticipantEmail } from "@egocapture/core/domain/invitation";
+import { verifyMarkerJws } from "@egocapture/core/domain/marker";
+import { createPublicId } from "@egocapture/core/domain/public-id";
+import { taskContentHash } from "@egocapture/core/domain/task-instructions";
+import { defaultTaskInstructions } from "@egocapture/core/domain/task-template";
 import { api, assert, CookieJar, integrationEnvironment } from "@/scripts/check-support";
 
 async function main() {
@@ -19,10 +19,10 @@ async function main() {
   const adminPassword = randomBytes(24).toString("base64url");
   const participantPassword = randomBytes(24).toString("base64url");
   const adminEmail = `session-check-${suffix}@demo.invalid`;
-  const studyId = randomUUID();
-  const studyPublicId = createPublicId("ST");
   const participantId = randomUUID();
   const participantPublicId = createPublicId("PT");
+  const backupParticipantId = randomUUID();
+  const backupParticipantPublicId = createPublicId("PT");
   const deviceId = randomUUID();
   const devicePublicId = createPublicId("DEV");
   const taskId = randomUUID();
@@ -58,28 +58,37 @@ async function main() {
       values (${participantUserId}::uuid, 'participant', 'Session Integration Fixture Participant') returning id
     `;
     await db`
-      insert into egocapture.studies (id, public_id, slug, name, serial_hmac_salt, is_demo)
-      values (${studyId}::uuid, ${studyPublicId}, ${`session-check-${suffix}`}, 'Session Integration Fixture', 'session-check-salt', true)
-    `;
-    await db`insert into egocapture.study_memberships (study_id, profile_id, role) values (${studyId}::uuid, ${adminProfile.id}::uuid, 'owner')`;
-    await db`
       insert into egocapture.participants (
-        id, public_id, study_id, auth_user_id, display_alias, status, consent_status,
-        consent_version, is_fixture, created_by
+        id, public_id, auth_user_id, display_alias, status, consent_status,
+        is_fixture, created_by
       ) values (
-        ${participantId}::uuid, ${participantPublicId}, ${studyId}::uuid, ${participantUserId}::uuid,
-        'Session Integration Participant', 'active', 'valid', 'session-check-v1', true, ${adminProfile.id}::uuid
+        ${participantId}::uuid, ${participantPublicId}, ${participantUserId}::uuid,
+        'Session Integration Participant', 'active', 'valid', true, ${adminProfile.id}::uuid
       )
     `;
     await db`
-      insert into egocapture.consent_records (participant_id, version, status, recorded_by, accepted_at)
-      values (${participantId}::uuid, 'session-check-v1', 'accepted', ${participantProfile.id}::uuid, now())
+      insert into egocapture.consent_records (participant_id, status, recorded_by, accepted_at)
+      values (${participantId}::uuid, 'accepted', ${participantProfile.id}::uuid, now())
+    `;
+    await db`
+      insert into egocapture.participants (
+        id, public_id, display_alias, status, consent_status,
+        is_fixture, created_by
+      ) values (
+        ${backupParticipantId}::uuid, ${backupParticipantPublicId},
+        'Session Integration Backup Participant', 'active', 'valid',
+        true, ${adminProfile.id}::uuid
+      )
+    `;
+    await db`
+      insert into egocapture.consent_records (participant_id, status, recorded_by, accepted_at)
+      values (${backupParticipantId}::uuid, 'accepted', ${adminProfile.id}::uuid, now())
     `;
     await db`
       insert into egocapture.devices (
-        id, public_id, study_id, manufacturer, model, device_type, serial_hmac, status, is_fixture
+        id, public_id, manufacturer, model, device_type, serial_hmac, status, is_fixture
       ) values (
-        ${deviceId}::uuid, ${devicePublicId}, ${studyId}::uuid, 'Synthetic', 'Marker Check Cam',
+        ${deviceId}::uuid, ${devicePublicId}, 'Synthetic', 'Marker Check Cam',
         'action_camera', ${createHash("sha256").update(suffix).digest("hex")}, 'active', true
       )
     `;
@@ -87,51 +96,61 @@ async function main() {
     await db`update egocapture.participants set default_device_id = ${deviceId}::uuid where id = ${participantId}::uuid`;
     await db`
       insert into egocapture.tasks (
-        id, public_id, study_id, title, lifecycle, draft_instructions, is_fixture, created_by
+        id, public_id, title, lifecycle, draft_instructions, is_fixture, created_by
       ) values (
-        ${taskId}::uuid, ${taskPublicId}, ${studyId}::uuid, ${instructions.title}, 'active',
+        ${taskId}::uuid, ${taskPublicId}, ${instructions.title}, 'active',
         ${db.json(instructions)}, true, ${adminProfile.id}::uuid
       )
     `;
     await db`
       insert into egocapture.task_versions (
-        id, task_id, study_id, version, instructions, content_hash, published_by
+        id, task_id, version, instructions, content_hash, published_by
       ) values (
-        ${taskVersionId}::uuid, ${taskId}::uuid, ${studyId}::uuid, 1,
+        ${taskVersionId}::uuid, ${taskId}::uuid, 1,
         ${db.json(instructions)}, ${contentHash}, ${adminProfile.id}::uuid
       )
     `;
     await db`
       insert into egocapture.assignments (
-        id, public_id, study_id, participant_id, task_version_id, preferred_device_id,
+        id, public_id, participant_id, task_version_id, preferred_device_id,
         due_at, locale, status, acknowledged_at, acknowledged_content_hash, created_by
       ) values (
-        ${assignmentId}::uuid, ${assignmentPublicId}, ${studyId}::uuid, ${participantId}::uuid,
+        ${assignmentId}::uuid, ${assignmentPublicId}, ${participantId}::uuid,
         ${taskVersionId}::uuid, ${deviceId}::uuid, now() + interval '2 days', 'zh-CN',
         'acknowledged', now(), ${contentHash}, ${adminProfile.id}::uuid
       )
     `;
+    await db`
+      insert into egocapture.assignments (
+        public_id, participant_id, task_version_id,
+        due_at, locale, status, created_by
+      ) values (
+        ${createPublicId("AS")}, ${backupParticipantId}::uuid,
+        ${taskVersionId}::uuid, now() + interval '2 days', 'zh-CN',
+        'assigned', ${adminProfile.id}::uuid
+      )
+    `;
 
-    const participantLogin = await api<{ data?: { redirectTo: string } }>(env.siteUrl, "/api/auth/participant-login", {
+    const participantLogin = await api<{ data?: { redirectTo: string } }>(env.participantSiteUrl, "/api/auth/participant-login", {
       method: "POST", jar: participantJar, headers: { "content-type": "application/json" },
       body: JSON.stringify({ participantPublicId, password: participantPassword }),
     });
     assert(participantLogin.response.ok, "Session check Participant login failed");
-    const invalidDevice = await api<{ error?: { code: string } }>(env.siteUrl, "/api/participant/sessions", {
+    const invalidDevice = await api<{ error?: { code: string } }>(env.participantSiteUrl, "/api/participant/sessions", {
       method: "POST", jar: participantJar,
       headers: { "content-type": "application/json", "idempotency-key": randomUUID() },
       body: JSON.stringify({ assignmentPublicId, devicePublicId: createPublicId("DEV") }),
     });
     assert(invalidDevice.response.status === 422 && invalidDevice.payload.error?.code === "DEVICE_NOT_AVAILABLE", "Unassigned Device was not rejected");
     const createKey = randomUUID();
-    const created = await api<{ data?: { sessionPublicId: string; markerExpiresAt: string } }>(env.siteUrl, "/api/participant/sessions", {
+    const created = await api<{ data?: { sessionPublicId: string; markerExpiresAt: string } }>(env.participantSiteUrl, "/api/participant/sessions", {
       method: "POST", jar: participantJar,
       headers: { "content-type": "application/json", "idempotency-key": createKey },
       body: JSON.stringify({ assignmentPublicId, devicePublicId }),
     });
     assert(created.response.status === 201 && created.payload.data?.sessionPublicId, "Recording Session creation failed");
     sessionPublicId = created.payload.data.sessionPublicId;
-    const replay = await api<{ data?: { sessionPublicId: string } }>(env.siteUrl, "/api/participant/sessions", {
+    const replay = await api<{ data?: { sessionPublicId: string } }>(env.participantSiteUrl, "/api/participant/sessions", {
       method: "POST", jar: participantJar,
       headers: { "content-type": "application/json", "idempotency-key": createKey },
       body: JSON.stringify({ assignmentPublicId, devicePublicId }),
@@ -143,7 +162,7 @@ async function main() {
       qrDataUrl: string;
       shortCode: string;
       keyId: string;
-    } }>(env.siteUrl, `/api/participant/sessions/${sessionPublicId}/marker`, { jar: participantJar });
+    } }>(env.participantSiteUrl, `/api/participant/sessions/${sessionPublicId}/marker`, { jar: participantJar });
     const firstMarkerData = firstMarker.payload.data;
     assert(firstMarker.response.ok, "Marker retrieval failed");
     assert(firstMarkerData, "Marker response did not include data");
@@ -157,12 +176,12 @@ async function main() {
         firstPayload.device_public_id === devicePublicId,
       "Signed Marker payload authority mismatch",
     );
-    assert(!JSON.stringify(firstPayload).match(/email|display|study|name/i), "Marker payload contains PII-like fields");
+    assert(!JSON.stringify(firstPayload).match(/email|display|name/i), "Marker payload contains PII-like fields");
 
     let firstAcknowledgedAt = "";
     for (let attempt = 0; attempt < 2; attempt += 1) {
       const acknowledged = await api<{ data?: { acknowledgedAt: string } }>(
-        env.siteUrl,
+        env.participantSiteUrl,
         `/api/participant/sessions/${sessionPublicId}/marker-acknowledgement`,
         { method: "POST", jar: participantJar },
       );
@@ -171,41 +190,41 @@ async function main() {
       else assert(acknowledged.payload.data.acknowledgedAt === firstAcknowledgedAt, "Marker acknowledgement was not idempotent");
     }
     const regenerateKey = randomUUID();
-    const regenerated = await api<{ data?: { expiresAt: string } }>(env.siteUrl, `/api/participant/sessions/${sessionPublicId}/marker`, {
+    const regenerated = await api<{ data?: { expiresAt: string } }>(env.participantSiteUrl, `/api/participant/sessions/${sessionPublicId}/marker`, {
       method: "POST", jar: participantJar, headers: { "idempotency-key": regenerateKey },
     });
     assert(regenerated.response.status === 201 && regenerated.payload.data?.expiresAt, "Marker regeneration failed");
-    const regeneratedReplay = await api<{ data?: { expiresAt: string } }>(env.siteUrl, `/api/participant/sessions/${sessionPublicId}/marker`, {
+    const regeneratedReplay = await api<{ data?: { expiresAt: string } }>(env.participantSiteUrl, `/api/participant/sessions/${sessionPublicId}/marker`, {
       method: "POST", jar: participantJar, headers: { "idempotency-key": regenerateKey },
     });
     assert(regeneratedReplay.payload.data?.expiresAt === regenerated.payload.data.expiresAt, "Marker regeneration replay diverged");
-    const secondMarker = await api<{ data?: { markerUri: string } }>(env.siteUrl, `/api/participant/sessions/${sessionPublicId}/marker`, { jar: participantJar });
+    const secondMarker = await api<{ data?: { markerUri: string } }>(env.participantSiteUrl, `/api/participant/sessions/${sessionPublicId}/marker`, { jar: participantJar });
     assert(secondMarker.payload.data?.markerUri && secondMarker.payload.data.markerUri !== firstMarkerData.markerUri, "Regenerated Marker overwrote or reused the old JWS");
     await verifyMarkerJws(secondMarker.payload.data.markerUri.slice("egocapture://marker/".length), env.markerPublicKeyJwk as JWK, env.markerKeyId);
 
-    const adminLogin = await api<{ data?: { redirectTo: string } }>(env.siteUrl, "/api/auth/admin-login", {
+    const adminLogin = await api<{ data?: { redirectTo: string } }>(env.adminSiteUrl, "/api/auth/admin-login", {
       method: "POST", jar: adminJar, headers: { "content-type": "application/json" },
       body: JSON.stringify({ email: adminEmail, password: adminPassword }),
     });
     assert(adminLogin.response.ok, "Session check Admin login failed");
-    const closed = await api<{ data?: { status: string } }>(env.siteUrl, `/api/admin/sessions/${sessionPublicId}/close`, {
+    const closed = await api<{ data?: { status: string } }>(env.adminSiteUrl, `/api/admin/sessions/${sessionPublicId}/close`, {
       method: "POST", jar: adminJar, headers: { "content-type": "application/json" },
       body: JSON.stringify({ reason: "Integration check explicitly closes the synthetic Recording Session" }),
     });
     assert(closed.response.ok && closed.payload.data?.status === "closed", "Admin Session close failed");
-    const secondSession = await api<{ data?: { sessionPublicId: string } }>(env.siteUrl, "/api/participant/sessions", {
+    const secondSession = await api<{ data?: { sessionPublicId: string } }>(env.participantSiteUrl, "/api/participant/sessions", {
       method: "POST", jar: participantJar,
       headers: { "content-type": "application/json", "idempotency-key": randomUUID() },
       body: JSON.stringify({ assignmentPublicId, devicePublicId }),
     });
     assert(secondSession.response.status === 201 && secondSession.payload.data?.sessionPublicId, "Second open Session creation failed");
     const secondSessionPublicId = secondSession.payload.data.sessionPublicId;
-    const canceled = await api<{ data?: { status: string } }>(env.siteUrl, `/api/admin/assignments/${assignmentPublicId}/cancel`, {
+    const canceled = await api<{ data?: { status: string } }>(env.adminSiteUrl, `/api/admin/assignments/${assignmentPublicId}/cancel`, {
       method: "POST", jar: adminJar, headers: { "content-type": "application/json" },
       body: JSON.stringify({ reason: "Integration check cancels Assignment and closes its remaining open Session" }),
     });
     assert(canceled.response.ok && canceled.payload.data?.status === "canceled", "Assignment cancellation failed");
-    const closedRegenerate = await api<{ error?: { code: string } }>(env.siteUrl, `/api/participant/sessions/${secondSessionPublicId}/marker`, {
+    const closedRegenerate = await api<{ error?: { code: string } }>(env.participantSiteUrl, `/api/participant/sessions/${secondSessionPublicId}/marker`, {
       method: "POST", jar: participantJar, headers: { "idempotency-key": randomUUID() },
     });
     assert(closedRegenerate.response.status === 409 && closedRegenerate.payload.error?.code === "SESSION_CLOSED", "Assignment-canceled Session allowed Marker regeneration");
@@ -223,6 +242,8 @@ async function main() {
       markerCount: number;
       markerAcknowledgedAt: Date | null;
       closedSessionCount: number;
+      currentParticipantCount: number;
+      backupParticipantStatus: string;
       auditCount: number;
     }[]>`
       select
@@ -232,7 +253,14 @@ async function main() {
         session.marker_acknowledged_at,
         (select count(*)::integer from egocapture.recording_sessions related
           where related.assignment_id = assignment.id and related.status = 'closed') as closed_session_count,
-        (select count(*)::integer from egocapture.audit_events audit where audit.study_id = ${studyId}::uuid) as audit_count
+        (select count(*)::integer from egocapture.assignments current_assignment
+          where current_assignment.task_id = assignment.task_id and current_assignment.status <> 'canceled') as current_participant_count,
+        (select backup.status from egocapture.assignments backup
+          where backup.task_id = assignment.task_id
+            and backup.participant_id = ${backupParticipantId}::uuid
+          limit 1) as backup_participant_status,
+        (select count(*)::integer from egocapture.audit_events audit
+          where audit.entity_public_id in (${sessionPublicId}, ${assignmentPublicId})) as audit_count
       from egocapture.recording_sessions session
       join egocapture.assignments assignment on assignment.id = session.assignment_id
       where session.public_id = ${sessionPublicId}
@@ -240,15 +268,16 @@ async function main() {
     assert(
       evidence.assignmentStatus === "canceled" && evidence.sessionStatus === "closed" &&
         evidence.markerCount === 2 && evidence.markerAcknowledgedAt &&
-        evidence.closedSessionCount === 2 && evidence.auditCount >= 6,
+        evidence.closedSessionCount === 2 && evidence.currentParticipantCount === 1 &&
+        evidence.backupParticipantStatus === "assigned" && evidence.auditCount >= 5,
       "Session/Marker database or audit evidence mismatch",
     );
   } finally {
     try {
-      await db`update egocapture.studies set is_demo = true where id = ${studyId}::uuid`;
-      await db`update egocapture.participants set is_fixture = true where study_id = ${studyId}::uuid`;
-      await db`update egocapture.devices set is_fixture = true where study_id = ${studyId}::uuid`;
-      await db`update egocapture.tasks set is_fixture = true where study_id = ${studyId}::uuid`;
+      await db`update egocapture.participants set is_fixture = true where id = ${participantId}::uuid`;
+      await db`update egocapture.participants set is_fixture = true where id = ${backupParticipantId}::uuid`;
+      await db`update egocapture.devices set is_fixture = true where id = ${deviceId}::uuid`;
+      await db`update egocapture.tasks set is_fixture = true where id = ${taskId}::uuid`;
     } finally {
       await db.end({ timeout: 2 });
     }

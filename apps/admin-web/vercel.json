@@ -1,0 +1,9 @@
+{
+  "regions": ["sfo1"],
+  "crons": [
+    {
+      "path": "/api/cron/reconcile",
+      "schedule": "17 3 * * *"
+    }
+  ]
+}

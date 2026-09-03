@@ -1,11 +1,13 @@
 import { describe, expect, it } from "vitest";
 import {
+  advanceUploadAttemptProgress,
   createUploadIntentInputSchema,
   createUploadObjectKey,
   fingerprintV1,
   sanitizeOriginalFilename,
+  updateUploadAttemptProgressInputSchema,
   uploadMetadata,
-} from "@/src/domain/upload";
+} from "@egocapture/core/domain/upload";
 
 describe("upload domain", () => {
   it("sanitizes path fragments and control characters from display filenames", () => {
@@ -33,12 +35,11 @@ describe("upload domain", () => {
 
   it("creates an opaque object key without display identifiers", () => {
     const objectKey = createUploadObjectKey({
-      studyId: "11111111-1111-4111-8111-111111111111",
       participantId: "22222222-2222-4222-8222-222222222222",
       uploadId: "33333333-3333-4333-8333-333333333333",
       extension: "mp4",
     });
-    expect(objectKey).toMatch(/^study\/11111111-1111-4111-8111-111111111111\/participant\/22222222-2222-4222-8222-222222222222\/upload\/33333333-3333-4333-8333-333333333333\/[0-9a-f-]{36}\.mp4$/);
+    expect(objectKey).toMatch(/^participant\/22222222-2222-4222-8222-222222222222\/upload\/33333333-3333-4333-8333-333333333333\/[0-9a-f-]{36}\.mp4$/);
     expect(objectKey).not.toMatch(/PT-|clip|alias/i);
   });
 
@@ -49,11 +50,32 @@ describe("upload domain", () => {
   });
 
   it("uses only allowlisted TUS metadata", () => {
-    expect(uploadMetadata("study/a/video.mp4", "video/mp4")).toEqual({
+    expect(uploadMetadata("participant/a/video.mp4", "video/mp4")).toEqual({
       bucketName: "egocapture-raw",
-      objectName: "study/a/video.mp4",
+      objectName: "participant/a/video.mp4",
       contentType: "video/mp4",
       cacheControl: "3600",
     });
+  });
+
+  it("accepts only bounded active-attempt progress updates", () => {
+    expect(updateUploadAttemptProgressInputSchema.safeParse({
+      bytesUploaded: 6,
+      status: "paused",
+    }).success).toBe(true);
+    expect(updateUploadAttemptProgressInputSchema.safeParse({
+      bytesUploaded: -1,
+      status: "uploading",
+    }).success).toBe(false);
+    expect(updateUploadAttemptProgressInputSchema.safeParse({
+      bytesUploaded: 6,
+      status: "completed",
+    }).success).toBe(false);
+  });
+
+  it("advances an Attempt offset monotonically within the declared file size", () => {
+    expect(advanceUploadAttemptProgress(6, 12, 12)).toBe(12);
+    expect(() => advanceUploadAttemptProgress(6, 3, 12)).toThrow("不能小于服务端已记录进度");
+    expect(() => advanceUploadAttemptProgress(6, 13, 12)).toThrow("不能超过文件大小");
   });
 });

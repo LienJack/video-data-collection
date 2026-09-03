@@ -1,0 +1,3 @@
+{"_example": "Fill with {\"file\": \"<path>\", \"reason\": \"<why>\"}. Put spec/research files only — no code paths. Run `python3 .trellis/scripts/get_context.py --mode packages` to list available specs. Delete this line once real entries are added."}
+{"file": ".trellis/tasks/09-03-chinese-readme/research/readme-evidence.md", "reason": "README 当前实现与能力边界的事实清单"}
+{"file": ".trellis/spec/guides/cross-layer-thinking-guide.md", "reason": "确保架构、业务流与上传数据流跨层边界一致"}

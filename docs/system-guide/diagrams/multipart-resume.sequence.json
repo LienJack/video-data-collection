@@ -1,0 +1,178 @@
+{
+  "schema_version": 1,
+  "diagram_type": "sequence",
+  "meta": {
+    "title": "未来方案：数 GB 文件如何分片、暂停与恢复",
+    "locale": "zh-CN",
+    "output": "apps/admin-web/public/system-guide/diagrams/multipart-resume.html",
+    "quality_profile": "showcase",
+    "column_fit": "spread",
+    "viewBox": [1500, 780]
+  },
+  "participants": [
+    { "id": "participant", "type": "external", "label": "参与者" },
+    { "id": "uploader", "type": "frontend", "label": "上传器" },
+    { "id": "upload-service", "type": "backend", "label": "上传服务" },
+    { "id": "object-storage", "type": "cloud", "label": "对象存储" }
+  ],
+  "segments": [
+    { "from": 150, "to": 310, "label": "一、识别文件并确认每个分片" },
+    { "from": 318, "to": 510, "label": "二、暂停或刷新后恢复同一上传" },
+    { "from": 518, "to": 712, "label": "三、合并校验，或终止并清理" }
+  ],
+  "messages": [
+    {
+      "id": "select-original-file",
+      "from": "participant",
+      "to": "uploader",
+      "y": 170,
+      "label": "选择数 GB 原文件；建立文件身份"
+    },
+    {
+      "id": "create-upload-session",
+      "from": "uploader",
+      "to": "upload-service",
+      "y": 200,
+      "label": "为这个文件创建可恢复的上传会话",
+      "variant": "emphasis"
+    },
+    {
+      "id": "return-session-grants",
+      "from": "upload-service",
+      "to": "uploader",
+      "y": 230,
+      "label": "返回会话标识与短期分片授权",
+      "variant": "security"
+    },
+    {
+      "id": "upload-parts",
+      "from": "uploader",
+      "to": "object-storage",
+      "y": 260,
+      "label": "有界并发上传；失败片独立重试",
+      "variant": "emphasis"
+    },
+    {
+      "id": "confirm-parts",
+      "from": "object-storage",
+      "to": "uploader",
+      "y": 290,
+      "label": "逐片确认；进度只累计已确认字节",
+      "variant": "return"
+    },
+    {
+      "id": "pause-transfer",
+      "from": "participant",
+      "to": "uploader",
+      "y": 330,
+      "label": "暂停：停发新片，保留会话与已确认进度",
+      "variant": "dashed"
+    },
+    {
+      "id": "reselect-after-refresh",
+      "from": "participant",
+      "to": "uploader",
+      "y": 362,
+      "label": "刷新或重开后，重新选择原文件",
+      "variant": "dashed"
+    },
+    {
+      "id": "resume-same-session",
+      "from": "uploader",
+      "to": "upload-service",
+      "y": 394,
+      "label": "核对文件身份；找回同一上传会话",
+      "variant": "emphasis"
+    },
+    {
+      "id": "query-confirmed-parts",
+      "from": "upload-service",
+      "to": "object-storage",
+      "y": 426,
+      "label": "查询远端已接收分片清单"
+    },
+    {
+      "id": "return-confirmed-parts",
+      "from": "object-storage",
+      "to": "upload-service",
+      "y": 458,
+      "label": "返回已确认分片",
+      "variant": "return"
+    },
+    {
+      "id": "reauthorize-missing-parts",
+      "from": "upload-service",
+      "to": "uploader",
+      "y": 490,
+      "label": "短期授权过期：只为缺失分片重新授权",
+      "variant": "security"
+    },
+    {
+      "id": "upload-only-missing",
+      "from": "uploader",
+      "to": "object-storage",
+      "y": 530,
+      "label": "只补传缺失分片，不重传已确认部分",
+      "variant": "emphasis"
+    },
+    {
+      "id": "request-combine",
+      "from": "uploader",
+      "to": "upload-service",
+      "y": 562,
+      "label": "全部分片到达；请求合并与整体校验"
+    },
+    {
+      "id": "combine-and-check",
+      "from": "upload-service",
+      "to": "object-storage",
+      "y": 594,
+      "label": "按顺序合并，并核验大小与完整性",
+      "variant": "emphasis"
+    },
+    {
+      "id": "transfer-complete",
+      "from": "upload-service",
+      "to": "uploader",
+      "y": 626,
+      "label": "传输完成；继续等待业务接受",
+      "variant": "return"
+    },
+    {
+      "id": "session-expired",
+      "from": "upload-service",
+      "to": "uploader",
+      "y": 658,
+      "label": "会话已过期或被清理：明确开启新上传",
+      "variant": "dashed"
+    },
+    {
+      "id": "cancel-and-clean",
+      "from": "uploader",
+      "to": "object-storage",
+      "y": 690,
+      "label": "取消：终止恢复资格并安排清理残片",
+      "variant": "dashed"
+    }
+  ],
+  "cards": [
+    {
+      "dot": "amber",
+      "title": "未来生产设计，尚未交付",
+      "items": [
+        "当前 MVP 已验证小型视频的 TUS 分片、暂停与恢复；数 GB、跨天和弱网仍需真实验证。",
+        "分片 100% 后仍要合并、整体校验并等待业务接受。"
+      ]
+    },
+    {
+      "dot": "cyan",
+      "title": "恢复同一上传，只补缺片",
+      "items": ["刷新后重选原文件并核对身份；远端清单决定哪些分片无需重传。"]
+    },
+    {
+      "dot": "rose",
+      "title": "暂停、取消和过期不是一回事",
+      "items": ["暂停可继续；取消会清理。短期授权可补发，但整个会话过期后必须开启新上传。"]
+    }
+  ]
+}

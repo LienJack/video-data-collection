@@ -1,0 +1,4 @@
+{"file":".trellis/spec/admin-web/frontend/quality-guidelines.md","reason":"Check Admin security headers, iframe and Cron deployment behavior."}
+{"file":".trellis/spec/participant-web/frontend/quality-guidelines.md","reason":"Check Participant public and upload behavior."}
+{"file":".trellis/spec/guides/cross-layer-thinking-guide.md","reason":"Verify public flow across every external boundary."}
+{"file":".trellis/tasks/09-02-vercel-supabase-production/research/cloud-preflight.md","reason":"Validate target identity and evidence claims."}

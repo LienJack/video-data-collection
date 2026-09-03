@@ -1,0 +1,7 @@
+{"file":".trellis/tasks/09-02-participant-login-credentials/prd.md","reason":"Acceptance source for readable participant credentials, admin isolation, lifecycle, failure, and permission behavior."}
+{"file":".trellis/tasks/09-02-participant-login-credentials/design.md","reason":"Review source for data-state invariants, auth synchronization, secret propagation exclusions, and rollback."}
+{"file":".trellis/tasks/09-02-participant-table-experience/prd.md","reason":"Parent-level scope and integration boundary."}
+{"file":".trellis/spec/core/frontend/index.md","reason":"Core service and contract review guidance index."}
+{"file":".trellis/spec/participant-web/frontend/index.md","reason":"Participant invitation/login review guidance index."}
+{"file":".trellis/spec/admin-web/frontend/index.md","reason":"Admin route authorization review guidance index."}
+{"file":".trellis/spec/guides/cross-layer-thinking-guide.md","reason":"Round-trip, null state, failure, and boundary verification checklist."}

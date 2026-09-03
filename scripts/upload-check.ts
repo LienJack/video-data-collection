@@ -6,11 +6,11 @@ import path from "node:path";
 import { createClient } from "@supabase/supabase-js";
 import postgres from "postgres";
 import { Upload, type HttpRequest } from "tus-js-client";
-import { internalParticipantEmail } from "@/src/domain/invitation";
-import { createPublicId } from "@/src/domain/public-id";
-import { taskContentHash } from "@/src/domain/task-instructions";
-import { defaultTaskInstructions } from "@/src/domain/task-template";
-import { fingerprintV1 } from "@/src/domain/upload";
+import { internalParticipantEmail } from "@egocapture/core/domain/invitation";
+import { createPublicId } from "@egocapture/core/domain/public-id";
+import { taskContentHash } from "@egocapture/core/domain/task-instructions";
+import { defaultTaskInstructions } from "@egocapture/core/domain/task-template";
+import { fingerprintV1 } from "@egocapture/core/domain/upload";
 import { api, assert, CookieJar, integrationEnvironment } from "@/scripts/check-support";
 
 type PreviousUpload = {
@@ -106,7 +106,7 @@ function errorStatus(error: Error) {
 async function main() {
   const env = integrationEnvironment();
   const tusEndpoint = env.tusEndpoint;
-  assert(new URL(tusEndpoint).port !== new URL(env.siteUrl).port, "TUS endpoint points at the Next.js control plane");
+  assert(new URL(tusEndpoint).origin !== new URL(env.participantSiteUrl).origin, "TUS endpoint points at the Next.js control plane");
   const generated = generateSyntheticMp4();
   const bytes = readFileSync(generated.file);
   const sphericalBytes = readFileSync(generated.sphericalFile);
@@ -125,10 +125,7 @@ async function main() {
   const supabase = createClient(env.supabaseUrl, env.serviceRoleKey, {
     auth: { autoRefreshToken: false, detectSessionInUrl: false, persistSession: false },
   });
-  const suffix = randomUUID();
   const participantPassword = randomBytes(24).toString("base64url");
-  const studyId = randomUUID();
-  const studyPublicId = createPublicId("ST");
   const participantId = randomUUID();
   const participantPublicId = createPublicId("PT");
   const deviceId = randomUUID();
@@ -161,27 +158,23 @@ async function main() {
       values (${participantUserId}::uuid, 'participant', 'TUS Upload Fixture Participant') returning id
     `;
     await db`
-      insert into egocapture.studies (id, public_id, slug, name, serial_hmac_salt, is_demo)
-      values (${studyId}::uuid, ${studyPublicId}, ${`upload-check-${suffix}`}, 'TUS Upload Integration Fixture', 'upload-check-salt', true)
-    `;
-    await db`
       insert into egocapture.participants (
-        id, public_id, study_id, auth_user_id, display_alias, status, consent_status,
-        consent_version, is_fixture
+        id, public_id, auth_user_id, display_alias, status, consent_status,
+        is_fixture
       ) values (
-        ${participantId}::uuid, ${participantPublicId}, ${studyId}::uuid, ${participantUserId}::uuid,
-        'TUS Upload Fixture', 'active', 'valid', 'upload-check-v1', true
+        ${participantId}::uuid, ${participantPublicId}, ${participantUserId}::uuid,
+        'TUS Upload Fixture', 'active', 'valid', true
       )
     `;
     await db`
-      insert into egocapture.consent_records (participant_id, version, status, recorded_by, accepted_at)
-      values (${participantId}::uuid, 'upload-check-v1', 'accepted', ${participantProfile.id}::uuid, now())
+      insert into egocapture.consent_records (participant_id, status, recorded_by, accepted_at)
+      values (${participantId}::uuid, 'accepted', ${participantProfile.id}::uuid, now())
     `;
     await db`
       insert into egocapture.devices (
-        id, public_id, study_id, manufacturer, model, device_type, serial_hmac, status, is_fixture
+        id, public_id, manufacturer, model, device_type, serial_hmac, status, is_fixture
       ) values (
-        ${deviceId}::uuid, ${devicePublicId}, ${studyId}::uuid, 'Synthetic', 'TUS Check Cam',
+        ${deviceId}::uuid, ${devicePublicId}, 'Synthetic', 'TUS Check Cam',
         'phone', null, 'active', true
       )
     `;
@@ -191,48 +184,48 @@ async function main() {
     `;
     await db`
       insert into egocapture.tasks (
-        id, public_id, study_id, title, lifecycle, draft_instructions, is_fixture, created_by
+        id, public_id, title, lifecycle, draft_instructions, is_fixture, created_by
       ) values (
-        ${taskId}::uuid, ${taskPublicId}, ${studyId}::uuid, ${instructions.title}, 'active', ${db.json(instructions)}, true,
+        ${taskId}::uuid, ${taskPublicId}, ${instructions.title}, 'active', ${db.json(instructions)}, true,
         ${participantProfile.id}::uuid
       )
     `;
     await db`
       insert into egocapture.task_versions (
-        id, task_id, study_id, version, instructions, content_hash, published_by
+        id, task_id, version, instructions, content_hash, published_by
       ) values (
-        ${taskVersionId}::uuid, ${taskId}::uuid, ${studyId}::uuid, 1, ${db.json(instructions)}, ${contentHash},
+        ${taskVersionId}::uuid, ${taskId}::uuid, 1, ${db.json(instructions)}, ${contentHash},
         ${participantProfile.id}::uuid
       )
     `;
     await db`
       insert into egocapture.assignments (
-        id, public_id, study_id, participant_id, task_version_id, preferred_device_id,
+        id, public_id, participant_id, task_version_id, preferred_device_id,
         due_at, locale, status, acknowledged_at, acknowledged_content_hash, created_by
       ) values (
-        ${assignmentId}::uuid, ${assignmentPublicId}, ${studyId}::uuid, ${participantId}::uuid,
+        ${assignmentId}::uuid, ${assignmentPublicId}, ${participantId}::uuid,
         ${taskVersionId}::uuid, ${deviceId}::uuid, now() + interval '2 days', 'zh-CN',
         'acknowledged', now(), ${contentHash}, ${participantProfile.id}::uuid
       )
     `;
 
-    const login = await api(env.siteUrl, "/api/auth/participant-login", {
+    const login = await api(env.participantSiteUrl, "/api/auth/participant-login", {
       method: "POST", jar, headers: { "content-type": "application/json" },
       body: JSON.stringify({ participantPublicId, password: participantPassword }),
     });
     assert(login.response.ok, "Upload check Participant login failed");
-    const session = await api<{ data?: { sessionPublicId: string } }>(env.siteUrl, "/api/participant/sessions", {
+    const session = await api<{ data?: { sessionPublicId: string } }>(env.participantSiteUrl, "/api/participant/sessions", {
       method: "POST", jar,
       headers: { "content-type": "application/json", "idempotency-key": randomUUID() },
       body: JSON.stringify({ assignmentPublicId, devicePublicId }),
     });
     assert(session.response.status === 201 && session.payload.data?.sessionPublicId, "Upload check Session creation failed");
     sessionPublicId = session.payload.data.sessionPublicId;
-    const batch = await api<{ data?: { batchPublicId: string } }>(env.siteUrl, "/api/upload-batches", {
+    const batch = await api<{ data?: { batchPublicId: string } }>(env.participantSiteUrl, "/api/upload-batches", {
       method: "POST", jar, headers: { "idempotency-key": randomUUID() },
     });
     assert(batch.response.status === 201 && batch.payload.data?.batchPublicId, "Upload Batch creation failed");
-    const oversized = await api<{ error?: { code: string } }>(env.siteUrl, "/api/upload-intents", {
+    const oversized = await api<{ error?: { code: string } }>(env.participantSiteUrl, "/api/upload-intents", {
       method: "POST", jar,
       headers: { "content-type": "application/json", "idempotency-key": randomUUID() },
       body: JSON.stringify({
@@ -256,7 +249,7 @@ async function main() {
       signedUploadToken: string;
       chunkSizeBytes: number;
       authMode: "official_signed" | "nas_scoped_jwt";
-    } }>(env.siteUrl, "/api/upload-intents", {
+    } }>(env.participantSiteUrl, "/api/upload-intents", {
       method: "POST", jar,
       headers: { "content-type": "application/json", "idempotency-key": randomUUID() },
       body: JSON.stringify({
@@ -278,7 +271,7 @@ async function main() {
     assert(credential.tusEndpoint === tusEndpoint, "Server returned a non-authoritative TUS endpoint");
     assert(!credential.objectKey.includes("synthetic-mobile") && !credential.objectKey.includes(participantPublicId), "Object key contains display identifiers");
     const resumedAttempt = await api<{ data?: typeof credential & { resumedExistingAttempt: boolean } }>(
-      env.siteUrl,
+      env.participantSiteUrl,
       `/api/uploads/${uploadPublicId}/attempts`,
       {
         method: "POST", jar, headers: { "content-type": "application/json" },
@@ -286,8 +279,9 @@ async function main() {
       },
     );
     assert(resumedAttempt.response.ok && resumedAttempt.payload.data?.attemptPublicId === credential.attemptPublicId, "Resume did not retain the same UploadAttempt");
+    const expiredAttemptPublicId = credential.attemptPublicId;
     const replacementAttempt = await api<{ data?: typeof credential & { resumedExistingAttempt: boolean } }>(
-      env.siteUrl,
+      env.participantSiteUrl,
       `/api/uploads/${uploadPublicId}/attempts`,
       {
         method: "POST", jar, headers: { "content-type": "application/json" },
@@ -300,6 +294,59 @@ async function main() {
       "Expired TUS replacement did not append a new UploadAttempt",
     );
     credential = replacementAttempt.payload.data;
+
+    const progressPath = `/api/uploads/${uploadPublicId}/attempts/${credential.attemptPublicId}/progress`;
+    const pausedProgress = await api<{ data?: { status: string; bytesUploaded: number } }>(
+      env.participantSiteUrl,
+      progressPath,
+      {
+        method: "PATCH", jar, headers: { "content-type": "application/json" },
+        body: JSON.stringify({ status: "paused", bytesUploaded: 1 }),
+      },
+    );
+    assert(
+      pausedProgress.response.ok
+        && pausedProgress.payload.data?.status === "paused"
+        && pausedProgress.payload.data.bytesUploaded === 1,
+      "UploadAttempt pause progress was not persisted",
+    );
+    const regressedProgress = await api<{ error?: { code: string } }>(
+      env.participantSiteUrl,
+      progressPath,
+      {
+        method: "PATCH", jar, headers: { "content-type": "application/json" },
+        body: JSON.stringify({ status: "uploading", bytesUploaded: 0 }),
+      },
+    );
+    assert(
+      regressedProgress.response.status === 409
+        && regressedProgress.payload.error?.code === "UPLOAD_PROGRESS_REGRESSION",
+      "UploadAttempt accepted a regressing byte offset",
+    );
+    const staleProgress = await api<{ error?: { code: string } }>(
+      env.participantSiteUrl,
+      `/api/uploads/${uploadPublicId}/attempts/${expiredAttemptPublicId}/progress`,
+      {
+        method: "PATCH", jar, headers: { "content-type": "application/json" },
+        body: JSON.stringify({ status: "uploading", bytesUploaded: 1 }),
+      },
+    );
+    assert(
+      staleProgress.response.status === 404 && staleProgress.payload.error?.code === "NOT_FOUND",
+      "A stale UploadAttempt accepted progress",
+    );
+    const resumedProgress = await api<{ data?: { status: string; bytesUploaded: number } }>(
+      env.participantSiteUrl,
+      progressPath,
+      {
+        method: "PATCH", jar, headers: { "content-type": "application/json" },
+        body: JSON.stringify({ status: "uploading", bytesUploaded: 1 }),
+      },
+    );
+    assert(
+      resumedProgress.response.ok && resumedProgress.payload.data?.status === "uploading",
+      "UploadAttempt resume progress was not persisted",
+    );
 
     const deniedStatus = await new Promise<number>((resolve, reject) => {
       const denied = new Upload(Buffer.from("must-not-be-stored"), {
@@ -370,6 +417,29 @@ async function main() {
       firstUpload.start();
     });
     assert(pausedAt > 0 && pausedAt < fileSize, "TUS pause did not retain a partial offset");
+    const pausedOffset = await api<{ data?: { status: string; bytesUploaded: number } }>(
+      env.participantSiteUrl,
+      progressPath,
+      {
+        method: "PATCH", jar, headers: { "content-type": "application/json" },
+        body: JSON.stringify({ status: "paused", bytesUploaded: pausedAt }),
+      },
+    );
+    assert(
+      pausedOffset.response.ok
+        && pausedOffset.payload.data?.status === "paused"
+        && pausedOffset.payload.data.bytesUploaded === pausedAt,
+      "Paused TUS offset was not persisted on the active UploadAttempt",
+    );
+    const resumedOffset = await api<{ data?: { status: string; bytesUploaded: number } }>(
+      env.participantSiteUrl,
+      progressPath,
+      {
+        method: "PATCH", jar, headers: { "content-type": "application/json" },
+        body: JSON.stringify({ status: "uploading", bytesUploaded: pausedAt }),
+      },
+    );
+    assert(resumedOffset.response.ok, "Paused UploadAttempt could not return to uploading");
     const resumedUpload = new Upload(bytes, {
       ...options,
       onError: (error) => { throw new Error(`Resumed TUS failed (${errorStatus(error)}): ${error.message}`); },
@@ -383,16 +453,16 @@ async function main() {
       resumedUpload.start();
     });
     assert(requests.length >= 2, "TUS did not issue resumable Storage requests");
-    assert(requests.every((url) => new URL(url).port === new URL(tusEndpoint).port), "Video bytes were sent outside the Storage data plane");
-    assert(requests.every((url) => new URL(url).port !== new URL(env.siteUrl).port), "Video bytes traversed the Next.js host");
+    assert(requests.every((url) => new URL(url).origin === new URL(tusEndpoint).origin), "Video bytes were sent outside the Storage data plane");
+    assert(requests.every((url) => new URL(url).origin !== new URL(env.participantSiteUrl).origin), "Video bytes traversed the Next.js host");
 
     const completed = await api<{ data?: { transferStatus: string; videoAssetPublicId: string } }>(
-      env.siteUrl,
+      env.participantSiteUrl,
       `/api/uploads/${uploadPublicId}/complete`,
       { method: "POST", jar },
     );
     assert(completed.response.ok && completed.payload.data?.transferStatus === "verified", "Upload Complete reconciliation failed");
-    const replay = await api<{ data?: { transferStatus: string; videoAssetPublicId: string } }>(env.siteUrl, `/api/uploads/${uploadPublicId}/complete`, { method: "POST", jar });
+    const replay = await api<{ data?: { transferStatus: string; videoAssetPublicId: string } }>(env.participantSiteUrl, `/api/uploads/${uploadPublicId}/complete`, { method: "POST", jar });
     assert(
       replay.response.ok && replay.payload.data?.transferStatus === "verified"
         && replay.payload.data.videoAssetPublicId === completed.payload.data.videoAssetPublicId,
@@ -408,7 +478,7 @@ async function main() {
       rangeRequestCount: number;
       bytesRead: number;
       deviceConsistency: string;
-    } }>(env.siteUrl, `/api/uploads/${uploadPublicId}/extract-metadata`, { method: "POST", jar });
+    } }>(env.participantSiteUrl, `/api/uploads/${uploadPublicId}/extract-metadata`, { method: "POST", jar });
     assert(metadata.response.ok && metadata.payload.data?.status === "extracted", "Metadata extraction did not complete");
     assert(metadata.payload.data.containerFormat === "MPEG-4", "MediaInfo did not identify the MP4 container");
     assert(metadata.payload.data.videoCodec === "AVC", "MediaInfo did not identify the H.264/AVC track");
@@ -418,7 +488,7 @@ async function main() {
     assert(metadata.payload.data.bytesRead > 0 && metadata.payload.data.bytesRead <= 16 * 1024 * 1024, "Metadata byte budget mismatch");
     assert(metadata.payload.data.deviceConsistency === "matched", "Declared and extracted synthetic device did not match");
     const metadataReplay = await api<{ data?: { status: string; attemptNumber: number } }>(
-      env.siteUrl,
+      env.participantSiteUrl,
       `/api/uploads/${uploadPublicId}/extract-metadata`,
       { method: "POST", jar },
     );
@@ -449,7 +519,8 @@ async function main() {
         (select count(*)::integer from egocapture.upload_attempts where upload_intent_id = intent.id and status = 'expired') as expired_attempt_count,
         decision.decision_type,
         assignment.status as assignment_status,
-        (select count(*)::integer from egocapture.audit_events where study_id = ${studyId}::uuid) as audit_count,
+        (select count(*)::integer from egocapture.audit_events
+          where actor_auth_user_id = ${participantUserId}::uuid) as audit_count,
         intent.metadata_status,
         (select status from egocapture.metadata_attempts where video_asset_id = asset.id order by attempt_number desc limit 1) as metadata_attempt_status,
         (select count(*)::integer from egocapture.metadata_evidence where video_asset_id = asset.id) as evidence_count,
@@ -475,10 +546,10 @@ async function main() {
       "TUS Upload database, match or audit evidence mismatch",
     );
 
-    const sphericalBatch = await api<{ data?: { batchPublicId: string } }>(env.siteUrl, "/api/upload-batches", {
+    const sphericalBatch = await api<{ data?: { batchPublicId: string } }>(env.participantSiteUrl, "/api/upload-batches", {
       method: "POST", jar, headers: { "idempotency-key": randomUUID() },
     });
-    const sphericalIntent = await api<{ data?: UploadCredential }>(env.siteUrl, "/api/upload-intents", {
+    const sphericalIntent = await api<{ data?: UploadCredential }>(env.participantSiteUrl, "/api/upload-intents", {
       method: "POST", jar,
       headers: { "content-type": "application/json", "idempotency-key": randomUUID() },
       body: JSON.stringify({
@@ -497,7 +568,7 @@ async function main() {
     sphericalUploadPublicId = sphericalIntent.payload.data.uploadPublicId;
     await uploadDirect(sphericalBytes, sphericalIntent.payload.data, sphericalFingerprint);
     const sphericalComplete = await api<{ data?: { transferStatus: string } }>(
-      env.siteUrl, `/api/uploads/${sphericalUploadPublicId}/complete`, { method: "POST", jar },
+      env.participantSiteUrl, `/api/uploads/${sphericalUploadPublicId}/complete`, { method: "POST", jar },
     );
     assert(sphericalComplete.response.ok && sphericalComplete.payload.data?.transferStatus === "verified", "360 object reconciliation failed");
     const sphericalMetadata = await api<{ data?: {
@@ -505,7 +576,7 @@ async function main() {
       containerFormat: string | null;
       projectionType: string | null;
       is360: boolean | null;
-    } }>(env.siteUrl, `/api/uploads/${sphericalUploadPublicId}/extract-metadata`, { method: "POST", jar });
+    } }>(env.participantSiteUrl, `/api/uploads/${sphericalUploadPublicId}/extract-metadata`, { method: "POST", jar });
     assert(sphericalMetadata.response.ok && sphericalMetadata.payload.data?.containerFormat === "MPEG-4", "360 container parsing failed");
     assert(sphericalMetadata.payload.data.projectionType === "equirectangular" && sphericalMetadata.payload.data.is360 === true, "360 projection normalization failed");
     const [sphericalEvidence] = await db<{ projectionType: string | null; is360: boolean | null; evidenceCount: number }[]>`
@@ -519,10 +590,10 @@ async function main() {
     `;
     assert(sphericalEvidence.projectionType === "equirectangular" && sphericalEvidence.is360 === true && sphericalEvidence.evidenceCount === 2, "360 normalized evidence was not persisted");
 
-    const duplicateBatch = await api<{ data?: { batchPublicId: string } }>(env.siteUrl, "/api/upload-batches", {
+    const duplicateBatch = await api<{ data?: { batchPublicId: string } }>(env.participantSiteUrl, "/api/upload-batches", {
       method: "POST", jar, headers: { "idempotency-key": randomUUID() },
     });
-    const duplicateIntent = await api<{ data?: UploadCredential & { duplicateCandidate: boolean } }>(env.siteUrl, "/api/upload-intents", {
+    const duplicateIntent = await api<{ data?: UploadCredential & { duplicateCandidate: boolean } }>(env.participantSiteUrl, "/api/upload-intents", {
       method: "POST", jar,
       headers: { "content-type": "application/json", "idempotency-key": randomUUID() },
       body: JSON.stringify({
@@ -541,7 +612,7 @@ async function main() {
     duplicateUploadPublicId = duplicateIntent.payload.data.uploadPublicId;
     await uploadDirect(bytes, duplicateIntent.payload.data, fingerprint);
     const duplicateComplete = await api<{ data?: { transferStatus: string } }>(
-      env.siteUrl, `/api/uploads/${duplicateUploadPublicId}/complete`, { method: "POST", jar },
+      env.participantSiteUrl, `/api/uploads/${duplicateUploadPublicId}/complete`, { method: "POST", jar },
     );
     assert(duplicateComplete.response.ok && duplicateComplete.payload.data?.transferStatus === "verified", "Duplicate candidate transfer was incorrectly rejected");
     const [duplicateEvidence] = await db<{ reviewCount: number; activeAssetCount: number }[]>`
@@ -553,15 +624,15 @@ async function main() {
             and review.case_type = 'duplicate_candidate' and review.status = 'open') as review_count,
         (select count(*)::integer from egocapture.video_assets asset
           join egocapture.upload_intents intent on intent.id = asset.upload_intent_id
-          where intent.study_id = ${studyId}::uuid and intent.size_bytes = ${fileSize}
+          where intent.participant_id = ${participantId}::uuid and intent.size_bytes = ${fileSize}
             and intent.fingerprint_v1 = ${fingerprint} and asset.status = 'active') as active_asset_count
     `;
     assert(duplicateEvidence.reviewCount === 1 && duplicateEvidence.activeAssetCount >= 2, "Duplicate candidate did not preserve both assets for review");
 
-    const missingBatch = await api<{ data?: { batchPublicId: string } }>(env.siteUrl, "/api/upload-batches", {
+    const missingBatch = await api<{ data?: { batchPublicId: string } }>(env.participantSiteUrl, "/api/upload-batches", {
       method: "POST", jar, headers: { "idempotency-key": randomUUID() },
     });
-    const missingIntent = await api<{ data?: UploadCredential }>(env.siteUrl, "/api/upload-intents", {
+    const missingIntent = await api<{ data?: UploadCredential }>(env.participantSiteUrl, "/api/upload-intents", {
       method: "POST", jar,
       headers: { "content-type": "application/json", "idempotency-key": randomUUID() },
       body: JSON.stringify({
@@ -578,15 +649,15 @@ async function main() {
     });
     assert(missingIntent.response.status === 201 && missingIntent.payload.data, "Storage-missing intent creation failed");
     const missingComplete = await api<{ error?: { code: string } }>(
-      env.siteUrl, `/api/uploads/${missingIntent.payload.data.uploadPublicId}/complete`, { method: "POST", jar },
+      env.participantSiteUrl, `/api/uploads/${missingIntent.payload.data.uploadPublicId}/complete`, { method: "POST", jar },
     );
     assert(missingComplete.response.status === 409 && missingComplete.payload.error?.code === "STORAGE_MISSING", "Missing object reconciliation did not fail safely");
 
     const mismatchBytes = Buffer.from("object smaller than declared intent");
-    const mismatchBatch = await api<{ data?: { batchPublicId: string } }>(env.siteUrl, "/api/upload-batches", {
+    const mismatchBatch = await api<{ data?: { batchPublicId: string } }>(env.participantSiteUrl, "/api/upload-batches", {
       method: "POST", jar, headers: { "idempotency-key": randomUUID() },
     });
-    const mismatchIntent = await api<{ data?: UploadCredential }>(env.siteUrl, "/api/upload-intents", {
+    const mismatchIntent = await api<{ data?: UploadCredential }>(env.participantSiteUrl, "/api/upload-intents", {
       method: "POST", jar,
       headers: { "content-type": "application/json", "idempotency-key": randomUUID() },
       body: JSON.stringify({
@@ -604,7 +675,7 @@ async function main() {
     assert(mismatchIntent.response.status === 201 && mismatchIntent.payload.data, "Size-mismatch intent creation failed");
     await uploadDirect(mismatchBytes, mismatchIntent.payload.data, "c".repeat(64));
     const mismatchComplete = await api<{ error?: { code: string } }>(
-      env.siteUrl, `/api/uploads/${mismatchIntent.payload.data.uploadPublicId}/complete`, { method: "POST", jar },
+      env.participantSiteUrl, `/api/uploads/${mismatchIntent.payload.data.uploadPublicId}/complete`, { method: "POST", jar },
     );
     assert(mismatchComplete.response.status === 409 && mismatchComplete.payload.error?.code === "SIZE_MISMATCH", "Size mismatch reconciliation did not fail safely");
     const [reconciliationEvidence] = await db<{ missingFailures: number; sizeFailures: number; reviewCount: number }[]>`
@@ -612,10 +683,11 @@ async function main() {
         count(*) filter (where intent.failure_code = 'storage_missing')::integer as missing_failures,
         count(*) filter (where intent.failure_code = 'size_mismatch')::integer as size_failures,
         (select count(*)::integer from egocapture.review_cases review
-          where review.study_id = ${studyId}::uuid and review.case_type = 'upload_failed'
+          join egocapture.upload_intents failed_intent on failed_intent.id = review.upload_intent_id
+          where failed_intent.participant_id = ${participantId}::uuid and review.case_type = 'upload_failed'
             and review.status = 'open') as review_count
       from egocapture.upload_intents intent
-      where intent.study_id = ${studyId}::uuid
+      where intent.participant_id = ${participantId}::uuid
     `;
     assert(reconciliationEvidence.missingFailures >= 1 && reconciliationEvidence.sizeFailures >= 1 && reconciliationEvidence.reviewCount >= 2, "Reconciliation failure evidence is incomplete");
 
@@ -625,11 +697,11 @@ async function main() {
       new Uint8Array(damagedBytes),
       new Uint8Array(damagedBytes),
     );
-    const damagedBatch = await api<{ data?: { batchPublicId: string } }>(env.siteUrl, "/api/upload-batches", {
+    const damagedBatch = await api<{ data?: { batchPublicId: string } }>(env.participantSiteUrl, "/api/upload-batches", {
       method: "POST", jar, headers: { "idempotency-key": randomUUID() },
     });
     assert(damagedBatch.response.status === 201 && damagedBatch.payload.data, "Damaged fixture batch creation failed");
-    const damagedIntent = await api<{ data?: typeof credential }>(env.siteUrl, "/api/upload-intents", {
+    const damagedIntent = await api<{ data?: typeof credential }>(env.participantSiteUrl, "/api/upload-intents", {
       method: "POST", jar,
       headers: { "content-type": "application/json", "idempotency-key": randomUUID() },
       body: JSON.stringify({
@@ -672,13 +744,13 @@ async function main() {
       upload.start();
     });
     const damagedComplete = await api<{ data?: { transferStatus: string } }>(
-      env.siteUrl,
+      env.participantSiteUrl,
       `/api/uploads/${damagedUploadPublicId}/complete`,
       { method: "POST", jar },
     );
     assert(damagedComplete.response.ok && damagedComplete.payload.data?.transferStatus === "verified", "Damaged fixture did not preserve transfer verification");
     const damagedMetadata = await api<{ error?: { code: string } }>(
-      env.siteUrl,
+      env.participantSiteUrl,
       `/api/uploads/${damagedUploadPublicId}/extract-metadata`,
       { method: "POST", jar },
     );

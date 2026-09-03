@@ -1,0 +1,30 @@
+{
+  "id": "vercel-supabase-production",
+  "name": "vercel-supabase-production",
+  "title": "Vercel Supabase 真实部署",
+  "description": "预检并部署两个 Vercel 应用和独立 Supabase 项目，完成公网烟雾验收",
+  "status": "completed",
+  "dev_type": null,
+  "scope": null,
+  "package": "core",
+  "priority": "P1",
+  "creator": "LienJack",
+  "assignee": "LienJack",
+  "createdAt": "2026-09-02",
+  "completedAt": "2026-09-03",
+  "branch": null,
+  "base_branch": "main",
+  "worktree_path": null,
+  "commit": "a69858e33a5a027331e7c55b274d96e00142b93f",
+  "pr_url": null,
+  "subtasks": [],
+  "children": [],
+  "parent": "09-02-state-machine-i18n-demo-deploy",
+  "relatedFiles": [
+    "README.md",
+    "docs/acceptance/2026-09-03-public-deployment.md",
+    "docs/deployment/vercel-dual-app.md"
+  ],
+  "notes": "GO at a69858e: dedicated us-west-1 Supabase and final Participant/Admin deployments dpl_9sxt527Z3n3vPsZEdFREQAnTKhZP / dpl_9ZpY84UREL6263KbjUrwRTapHxpU passed public 4/4, signed direct-Storage TUS, genuine MP4 Range metadata, review/audit, healthy-cn regression, redacted log audit, and deterministic baseline restoration. Demo credentials were rotated and temporary refresh access removed. Defensive database-password rotation is a scoped HOLD requiring Supabase management authority; US-side independent latency remains SKIP.",
+  "meta": {}
+}

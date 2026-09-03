@@ -23,17 +23,6 @@ begin
 end;
 $$;
 
-create table if not exists egocapture.studies (
-  id uuid primary key default gen_random_uuid(),
-  public_id text not null unique check (public_id ~ '^ST-[23456789ABCDEFGHJKLMNPQRSTUVWXYZ]{6,16}$'),
-  slug text not null unique check (slug ~ '^[a-z0-9][a-z0-9-]{2,62}$'),
-  name text not null check (char_length(name) between 2 and 120),
-  serial_hmac_salt text not null,
-  is_demo boolean not null default false,
-  created_at timestamptz not null default now(),
-  updated_at timestamptz not null default now()
-);
-
 create table if not exists egocapture.profiles (
   id uuid primary key default gen_random_uuid(),
   auth_user_id uuid not null unique references auth.users(id) on delete restrict,
@@ -44,28 +33,16 @@ create table if not exists egocapture.profiles (
   updated_at timestamptz not null default now()
 );
 
-create table if not exists egocapture.study_memberships (
-  id uuid primary key default gen_random_uuid(),
-  study_id uuid not null references egocapture.studies(id) on delete restrict,
-  profile_id uuid not null references egocapture.profiles(id) on delete restrict,
-  role text not null check (role in ('owner', 'admin', 'reviewer')),
-  status text not null default 'active' check (status in ('active', 'suspended')),
-  created_at timestamptz not null default now(),
-  updated_at timestamptz not null default now(),
-  unique (study_id, profile_id)
-);
-
 create table if not exists egocapture.participants (
   id uuid primary key default gen_random_uuid(),
   public_id text not null unique check (public_id ~ '^PT-[23456789ABCDEFGHJKLMNPQRSTUVWXYZ]{6,16}$'),
-  study_id uuid not null references egocapture.studies(id) on delete restrict,
   auth_user_id uuid unique references auth.users(id) on delete restrict,
   display_alias text not null check (char_length(display_alias) between 1 and 120),
   management_email text,
   locale text not null default 'zh-CN' check (char_length(locale) between 2 and 20),
   timezone text not null default 'Asia/Shanghai' check (char_length(timezone) between 3 and 64),
   country_region text check (country_region is null or char_length(country_region) <= 80),
-  status text not null default 'draft' check (status in ('draft', 'invited', 'active', 'suspended', 'withdrawn')),
+  status text not null default 'draft' check (status in ('draft', 'invited', 'active', 'suspended', 'withdrawn', 'expired')),
   consent_status text not null default 'pending' check (consent_status in ('pending', 'valid', 'expired', 'withdrawn')),
   notes text check (notes is null or char_length(notes) <= 500),
   is_fixture boolean not null default false,
@@ -76,8 +53,8 @@ create table if not exists egocapture.participants (
   check ((status = 'withdrawn') = (withdrawn_at is not null))
 );
 
-create index if not exists participants_study_status_idx
-  on egocapture.participants (study_id, status, public_id);
+create index if not exists participants_status_idx
+  on egocapture.participants (status, public_id);
 
 create table if not exists egocapture.participant_invitations (
   id uuid primary key default gen_random_uuid(),
@@ -116,7 +93,6 @@ create index if not exists consent_participant_created_idx
 create table if not exists egocapture.devices (
   id uuid primary key default gen_random_uuid(),
   public_id text not null unique check (public_id ~ '^DEV-[23456789ABCDEFGHJKLMNPQRSTUVWXYZ]{6,16}$'),
-  study_id uuid not null references egocapture.studies(id) on delete restrict,
   manufacturer text not null check (char_length(manufacturer) between 1 and 80),
   model text not null check (char_length(model) between 1 and 120),
   device_type text not null check (device_type in ('phone', 'action_camera', 'camera', 'other')),
@@ -126,8 +102,7 @@ create table if not exists egocapture.devices (
   is_fixture boolean not null default false,
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now(),
-  retired_at timestamptz,
-  unique nulls not distinct (study_id, serial_hmac)
+  retired_at timestamptz
 );
 
 create table if not exists egocapture.device_assignments (
@@ -148,7 +123,6 @@ create unique index if not exists device_one_current_assignment_idx
 create table if not exists egocapture.tasks (
   id uuid primary key default gen_random_uuid(),
   public_id text not null unique check (public_id ~ '^TSK-[23456789ABCDEFGHJKLMNPQRSTUVWXYZ]{6,16}$'),
-  study_id uuid not null references egocapture.studies(id) on delete restrict,
   title text not null check (char_length(title) between 2 and 160),
   lifecycle text not null default 'draft' check (lifecycle in ('draft', 'active', 'archived')),
   draft_instructions jsonb not null,
@@ -161,20 +135,17 @@ create table if not exists egocapture.tasks (
 create table if not exists egocapture.task_versions (
   id uuid primary key default gen_random_uuid(),
   task_id uuid not null references egocapture.tasks(id) on delete restrict,
-  study_id uuid not null references egocapture.studies(id) on delete restrict,
   version integer not null check (version > 0),
   instructions jsonb not null,
   content_hash text not null check (content_hash ~ '^[a-f0-9]{64}$'),
   published_by uuid not null references egocapture.profiles(id) on delete restrict,
   published_at timestamptz not null default now(),
-  unique (task_id, version),
-  unique (id, study_id)
+  unique (task_id, version)
 );
 
 create table if not exists egocapture.assignments (
   id uuid primary key default gen_random_uuid(),
   public_id text not null unique check (public_id ~ '^AS-[23456789ABCDEFGHJKLMNPQRSTUVWXYZ]{6,16}$'),
-  study_id uuid not null references egocapture.studies(id) on delete restrict,
   participant_id uuid not null references egocapture.participants(id) on delete restrict,
   task_version_id uuid not null references egocapture.task_versions(id) on delete restrict,
   preferred_device_id uuid references egocapture.devices(id) on delete restrict,
@@ -199,15 +170,14 @@ create unique index if not exists assignment_one_active_task_version_idx
   on egocapture.assignments (participant_id, task_version_id)
   where status not in ('accepted', 'expired', 'canceled');
 
-create index if not exists assignments_study_status_due_idx
-  on egocapture.assignments (study_id, status, due_at, public_id);
+create index if not exists assignments_status_due_idx
+  on egocapture.assignments (status, due_at, public_id);
 
 create table if not exists egocapture.recording_sessions (
   id uuid primary key default gen_random_uuid(),
   public_id text not null unique check (public_id ~ '^RS-[23456789ABCDEFGHJKLMNPQRSTUVWXYZ]{6,16}$'),
   assignment_id uuid not null references egocapture.assignments(id) on delete restrict,
   participant_id uuid not null references egocapture.participants(id) on delete restrict,
-  study_id uuid not null references egocapture.studies(id) on delete restrict,
   task_version_id uuid not null references egocapture.task_versions(id) on delete restrict,
   declared_device_id uuid not null references egocapture.devices(id) on delete restrict,
   timezone text not null check (char_length(timezone) between 3 and 64),
@@ -239,7 +209,6 @@ create table if not exists egocapture.session_markers (
 create table if not exists egocapture.upload_batches (
   id uuid primary key default gen_random_uuid(),
   public_id text not null unique check (public_id ~ '^UB-[23456789ABCDEFGHJKLMNPQRSTUVWXYZ]{6,16}$'),
-  study_id uuid not null references egocapture.studies(id) on delete restrict,
   participant_id uuid not null references egocapture.participants(id) on delete restrict,
   status text not null default 'open' check (status in ('open', 'completed', 'aborted', 'expired')),
   created_at timestamptz not null default now(),
@@ -250,14 +219,13 @@ create table if not exists egocapture.upload_intents (
   id uuid primary key default gen_random_uuid(),
   public_id text not null unique check (public_id ~ '^UP-[23456789ABCDEFGHJKLMNPQRSTUVWXYZ]{6,16}$'),
   batch_id uuid not null references egocapture.upload_batches(id) on delete restrict,
-  study_id uuid not null references egocapture.studies(id) on delete restrict,
   participant_id uuid not null references egocapture.participants(id) on delete restrict,
   original_filename text not null check (char_length(original_filename) between 1 and 255),
   size_bytes bigint not null check (size_bytes between 1 and 50000000),
   content_type text not null check (content_type in ('video/mp4', 'video/quicktime', 'application/octet-stream')),
   extension text not null check (extension in ('mp4', 'mov', 'insv')),
   local_modified_at timestamptz,
-  object_key text not null unique check (object_key ~ '^study/[0-9a-f-]+/participant/[0-9a-f-]+/upload/[0-9a-f-]+/[0-9a-f-]+\.(mp4|mov|insv)$'),
+  object_key text not null unique check (object_key ~ '^participant/[0-9a-f-]+/upload/[0-9a-f-]+/[0-9a-f-]+\.(mp4|mov|insv)$'),
   claimed_session_id uuid references egocapture.recording_sessions(id) on delete restrict,
   unable_to_determine boolean not null default false,
   participant_note text check (participant_note is null or char_length(participant_note) <= 500),
@@ -276,7 +244,7 @@ create table if not exists egocapture.upload_intents (
 create index if not exists upload_intents_participant_created_idx
   on egocapture.upload_intents (participant_id, created_at desc);
 create index if not exists upload_duplicate_candidate_idx
-  on egocapture.upload_intents (study_id, size_bytes, fingerprint_v1);
+  on egocapture.upload_intents (participant_id, size_bytes, fingerprint_v1);
 
 create table if not exists egocapture.upload_attempts (
   id uuid primary key default gen_random_uuid(),
@@ -313,7 +281,6 @@ create table if not exists egocapture.video_assets (
   id uuid primary key default gen_random_uuid(),
   public_id text not null unique check (public_id ~ '^VA-[23456789ABCDEFGHJKLMNPQRSTUVWXYZ]{6,16}$'),
   upload_intent_id uuid not null unique references egocapture.upload_intents(id) on delete restrict,
-  study_id uuid not null references egocapture.studies(id) on delete restrict,
   participant_id uuid not null references egocapture.participants(id) on delete restrict,
   status text not null default 'active' check (status in ('active', 'rejected', 'deleted')),
   is_fixture boolean not null default false,
@@ -408,7 +375,6 @@ create unique index if not exists match_one_current_decision_idx
 create table if not exists egocapture.review_cases (
   id uuid primary key default gen_random_uuid(),
   public_id text not null unique check (public_id ~ '^RV-[23456789ABCDEFGHJKLMNPQRSTUVWXYZ]{6,16}$'),
-  study_id uuid not null references egocapture.studies(id) on delete restrict,
   video_asset_id uuid references egocapture.video_assets(id) on delete restrict,
   assignment_id uuid references egocapture.assignments(id) on delete restrict,
   case_type text not null check (case_type in ('missing', 'upload_failed', 'metadata_failed', 'duplicate_candidate', 'unmatched', 'device_mismatch', 'needs_review')),
@@ -423,11 +389,10 @@ create table if not exists egocapture.review_cases (
 );
 
 create index if not exists review_queue_idx
-  on egocapture.review_cases (study_id, status, case_type, created_at);
+  on egocapture.review_cases (status, case_type, created_at);
 
 create table if not exists egocapture.audit_events (
   id uuid primary key default gen_random_uuid(),
-  study_id uuid references egocapture.studies(id) on delete restrict,
   actor_profile_id uuid references egocapture.profiles(id) on delete restrict,
   actor_auth_user_id uuid references auth.users(id) on delete restrict,
   action text not null check (action ~ '^[a-z][a-z0-9_.]{2,120}$'),
@@ -441,8 +406,8 @@ create table if not exists egocapture.audit_events (
   created_at timestamptz not null default now()
 );
 
-create index if not exists audit_study_created_idx
-  on egocapture.audit_events (study_id, created_at desc);
+create index if not exists audit_created_idx
+  on egocapture.audit_events (created_at desc);
 
 create table if not exists egocapture.command_receipts (
   id uuid primary key default gen_random_uuid(),
@@ -473,14 +438,8 @@ begin
 end;
 $$;
 
-drop trigger if exists studies_touch_updated_at on egocapture.studies;
-create trigger studies_touch_updated_at before update on egocapture.studies
-for each row execute function egocapture.touch_updated_at();
 drop trigger if exists profiles_touch_updated_at on egocapture.profiles;
 create trigger profiles_touch_updated_at before update on egocapture.profiles
-for each row execute function egocapture.touch_updated_at();
-drop trigger if exists memberships_touch_updated_at on egocapture.study_memberships;
-create trigger memberships_touch_updated_at before update on egocapture.study_memberships
 for each row execute function egocapture.touch_updated_at();
 drop trigger if exists participants_touch_updated_at on egocapture.participants;
 create trigger participants_touch_updated_at before update on egocapture.participants

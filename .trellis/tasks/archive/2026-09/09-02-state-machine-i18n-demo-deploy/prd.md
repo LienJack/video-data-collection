@@ -1,0 +1,119 @@
+# 状态机、国际化、演示数据与真实部署
+
+## Goal
+
+把 EgoCapture 从可本地演示的 MVP 升级为结构一致、可切换三种语言、具备可信演示数据并可部署到真实 Vercel/Supabase 环境的公开演示系统。
+
+用户价值是：业务状态变化有统一且可验证的规则；管理员和参与者可以使用中文、英文、日语；首次打开即可看到自然可信的业务数据；最终能够通过真实公网地址完成核心演示流程。
+
+## Background
+
+- 当前仓库已实现管理员、参与者、任务版本、分配、录制会话、上传、审核与审计链路。
+- 用户明确允许删除全部现有业务数据；无需兼容当前脏数据，但数据库结构和部署迁移必须可重复执行。
+- 当前工作区存在其他未提交功能改动与多个 Trellis 任务，本任务必须保留并隔离这些改动，禁止清理或覆盖非本任务文件。
+- 既有本地验收不等于真实 Vercel/Supabase 部署证明；云端登录和项目状态必须重新实时检测。
+- 2026-09-02 只读预检确认：Vercel CLI 53.1.0 已登录 `lienjoe96-9694`，当前团队可见 7 个非 EgoCapture 项目；Supabase CLI 2.116.0 已登录组织 `lien`，仅可见无关且为 `INACTIVE` 的 `text2sql Platform Design` 项目；仓库根目录和两个 App 均未关联 Vercel 项目，也未关联 Supabase 项目。
+- 不得复用、删除、恢复或修改现有无关的 Text2SQL Supabase 项目；EgoCapture 需要独立云项目。
+- 用户最终决定优先保证美国 Leader 的演示体验，同时尽量照顾中国大陆访问。选定 Supabase `us-west-1`（北加州）和 Vercel `sfo1`（旧金山）：部署权威位于美国，函数与数据库同区域；相较美国东部节点，中国访问少一次美国大陆横穿，静态内容继续由 Vercel 全球 CDN 提供。
+
+## Confirmed State Inventory
+
+需要统一为持久化业务状态机的字段：
+
+- `participants.status`
+- `participants.consent_status`（作为 Consent 记录的当前投影）
+- `participant_invitations.status`
+- `consent_records.status`
+- `devices.status`
+- `tasks.lifecycle`
+- `assignments.status`
+- `recording_sessions.status`
+- `upload_batches.status`
+- `upload_intents.transfer_status`
+- `upload_intents.metadata_status`
+- `upload_attempts.status`
+- `video_assets.status`
+- `metadata_attempts.status`
+- `review_cases.status`
+
+参与者上传队列的 `QueueStatus` 是存在迁移行为的浏览器瞬时工作流，也需要显式客户端状态机。`ParticipantCredentialStatus`、`device_consistency`、`capture_time_confidence`、HTTP 状态码、系统指南展示标签等是由事实计算出的分类值或展示值，不允许伪装成可迁移的持久化生命周期；它们应使用纯派生函数与穷尽类型检查。
+
+## Child Task Map
+
+- `09-02-unified-state-machines`：状态集合、迁移图、守卫、数据库并发保护、客户端上传队列与状态机测试。
+- `09-02-zh-en-ja-i18n`：跨两个应用的语言解析、字典、切换、格式化、错误码映射与翻译完整性测试。
+- `09-02-deterministic-demo-data`：受保护的数据清理、固定演示目录、Auth/Storage 清理与确定性种子验收。
+- `09-02-vercel-supabase-production`：云端项目创建/关联、变量配置、迁移、种子、双应用部署与公网验收。
+- `09-03-state-machine-registry-rls`：状态机注册表的数据库权限收口与 RLS 验证。
+
+执行顺序为状态机 → i18n → 演示数据 → 部署；父任务负责最终跨子任务集成验收，不直接承载实现。
+
+## Requirements
+
+### R1 — 状态机
+
+- 盘点所有包含生命周期状态的领域实体及其写入入口。
+- 采用稳定版 XState v5：领域状态机使用 framework-agnostic core，Participant 上传队列使用 React adapter；服务端不保留跨请求常驻 actor。
+- 每类生命周期必须由显式状态机定义：状态集合、允许迁移、终态、守卫条件与迁移动作。
+- API、Server Action、后台处理和测试不得各自维护互相漂移的状态判断。
+- 非法迁移必须被拒绝，并返回稳定、可国际化的错误标识；合法迁移必须保留审计证据。
+- 并发或重复请求不得越过迁移规则；需要支持幂等或原子条件更新。
+
+### R2 — 国际化
+
+- 管理员端和参与者端支持简体中文、英文、日语。
+- 所有面向用户的导航、表单、表格、状态、校验、空状态、错误和主要操作文案均进入统一消息目录。
+- 支持语言切换、持久化和合理的首次语言选择；不得把数据库状态值翻译后持久化。
+- 页面元数据、日期、时间和数字使用当前语言环境格式化。
+- 缺失翻译必须在开发或测试阶段可检测，不得静默留下混合语言核心流程。
+
+### R3 — 演示数据
+
+- 可以删除现有业务数据，并提供可重复运行的重置与种子流程。
+- 演示人物、国家/地区、设备、任务、分配、会话、上传与审核记录使用真实常见但虚构组合的数据，不冒充真实个人。
+- 数据覆盖管理员与参与者核心页面、主要状态、空状态之外的典型操作和至少一个需审核/异常案例。
+- 固定随机种子或确定性工厂保证截图、E2E 和演示环境可复现。
+- 演示数据不得包含真实凭据、访问令牌、私人联系方式或大型媒体文件。
+
+### R4 — 真实环境预检与部署
+
+- 在写入云端前只读检测 Vercel、Supabase CLI 登录、目标组织/项目、环境变量、数据库和 Storage 可用性。
+- 预检通过后，将应用、数据库迁移、私有 Storage 与必要环境变量发布到真实环境。
+- 公网环境必须执行一次管理员到参与者核心链路烟雾验收，并明确区分代码完成、本地验收、部署成功与公网业务验收。
+- 若账号、配额、组织权限或域名等外部条件阻塞，保留本地完成结果并输出精确的 `WAITING_EXTERNAL` 阻塞项，不伪造部署成功。
+
+### R5 — 交付与隔离
+
+- 每个独立子任务完成聚焦验证并创建一个范围明确的提交。
+- 显式暂存本任务拥有的文件，排除现有并行改动、生成物、测试媒体和秘密。
+- 最终执行跨子任务集成检查，并记录部署地址、环境、提交和验收证据。
+
+## Acceptance Criteria
+
+- [x] AC1：仓库中每个被盘点为生命周期字段的状态变更都通过对应状态机；单元测试覆盖允许迁移、拒绝迁移、终态、重复请求和至少一个并发保护场景。
+- [x] AC2：管理员端与参与者端核心路径可在 `zh-CN`、`en`、`ja` 间切换并持久化，三种语言不存在核心文案缺失，语言切换不改变业务状态值。
+- [x] AC3：一条命令可安全清理业务数据并生成确定性演示数据；重复运行结果一致，三种语言下页面能展示自然的人名、国家/地区和完整业务链路。
+- [x] AC4：现有聚焦测试、类型检查、Lint、生产构建及关键 E2E 通过；状态机和 i18n 均有新增自动化测试。
+- [x] AC5：Vercel/Supabase 预检结果有记录；成功时提供真实公网 URL 及公网烟雾验收，失败时提供可复现的外部阻塞证据和未执行写操作说明。
+- [x] AC6：所有本任务提交范围清晰，未覆盖当前工作区中其他任务的未提交改动。
+
+## Final Outcome
+
+- 固定应用提交：`a69858e33a5a027331e7c55b274d96e00142b93f`；部署收据提交：`98ee875`。
+- Participant：<https://egocapture-participant.vercel.app>（deployment `dpl_9sxt527Z3n3vPsZEdFREQAnTKhZP`）。
+- Admin：<https://egocapture-admin.vercel.app>（deployment `dpl_9ZpY84UREL6263KbjUrwRTapHxpU`）。
+- Supabase：`egocapture-demo` / `phchhsatgoxlqqhpnnfk` / `us-west-1`；Vercel Functions：`sfo1`。
+- 最终公网 Playwright `4/4 PASS`；固定 demo digest、24 migrations、28/28 RLS、Storage 对象 `0` 和演示 Auth 基线均在写入验收后恢复。
+- 数据库主密码的额外防御性轮换因 Supabase 管理权限边界记为 scoped `HOLD`；密码未泄露且现有 Production 连接有效，不改变本任务 GO。美国侧独立延迟继续记为 `SKIP`。
+
+## Out of Scope
+
+- 二维码自动识别/自动分类、抽帧、黑屏/隐私/任务合规检测和代理视频生成。
+- 为生产级跨天超大文件上传重新设计存储协议；本任务保留现有直传边界。
+- 购买付费套餐、修改组织所有权或绕过云平台权限策略。
+
+## Risks and Deferred Items
+
+- 北加州优先美国体验，不代表中国大陆能达到本地网络延迟；公网验收必须记录中国侧观测，并在可获得条件下补充美国侧观测，不能用地理推断替代实测。
+- 项目创建时的实际免费额度/计费要求只能在创建流程中确认；一旦要求购买套餐，部署进入 `WAITING_EXTERNAL`，不得自动付费。
+- 当前 `participant-view-edit-drawer` 任务的未提交代码与 i18n 改造存在文件重叠。实施前必须先按原任务验收并单独提交，或确认其不再需要后建立隔离工作树；禁止把它混入本任务提交。

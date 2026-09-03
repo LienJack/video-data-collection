@@ -8,7 +8,7 @@ as $$
   select id from egocapture.profiles where auth_user_id = auth.uid() limit 1
 $$;
 
-create or replace function egocapture.has_study_access(target_study_id uuid)
+create or replace function egocapture.is_admin()
 returns boolean
 language sql
 stable
@@ -16,12 +16,8 @@ security definer
 set search_path = pg_catalog, egocapture
 as $$
   select exists (
-    select 1
-    from egocapture.study_memberships membership
-    join egocapture.profiles profile on profile.id = membership.profile_id
-    where membership.study_id = target_study_id
-      and membership.status = 'active'
-      and profile.auth_user_id = auth.uid()
+    select 1 from egocapture.profiles profile
+    where profile.auth_user_id = auth.uid() and profile.role = 'admin'
   )
 $$;
 
@@ -39,32 +35,14 @@ as $$
   )
 $$;
 
-create or replace function egocapture.can_read_study(target_study_id uuid)
-returns boolean
-language sql
-stable
-security definer
-set search_path = pg_catalog, egocapture
-as $$
-  select egocapture.has_study_access(target_study_id) or exists (
-    select 1 from egocapture.participants participant
-    where participant.study_id = target_study_id
-      and participant.auth_user_id = auth.uid()
-  )
-$$;
-
 revoke all on function egocapture.current_profile_id() from public;
-revoke all on function egocapture.has_study_access(uuid) from public;
+revoke all on function egocapture.is_admin() from public;
 revoke all on function egocapture.is_own_participant(uuid) from public;
-revoke all on function egocapture.can_read_study(uuid) from public;
 grant execute on function egocapture.current_profile_id() to authenticated, service_role;
-grant execute on function egocapture.has_study_access(uuid) to authenticated, service_role;
+grant execute on function egocapture.is_admin() to authenticated, service_role;
 grant execute on function egocapture.is_own_participant(uuid) to authenticated, service_role;
-grant execute on function egocapture.can_read_study(uuid) to authenticated, service_role;
 
-alter table egocapture.studies enable row level security;
 alter table egocapture.profiles enable row level security;
-alter table egocapture.study_memberships enable row level security;
 alter table egocapture.participants enable row level security;
 alter table egocapture.participant_invitations enable row level security;
 alter table egocapture.consent_records enable row level security;
@@ -89,47 +67,26 @@ alter table egocapture.review_cases enable row level security;
 alter table egocapture.audit_events enable row level security;
 alter table egocapture.command_receipts enable row level security;
 
-drop policy if exists studies_select on egocapture.studies;
-create policy studies_select on egocapture.studies for select to authenticated
-using (egocapture.can_read_study(id));
-
 drop policy if exists profiles_select_self on egocapture.profiles;
 create policy profiles_select_self on egocapture.profiles for select to authenticated
 using (auth_user_id = auth.uid());
 
-drop policy if exists memberships_select on egocapture.study_memberships;
-create policy memberships_select on egocapture.study_memberships for select to authenticated
-using (profile_id = egocapture.current_profile_id() or egocapture.has_study_access(study_id));
-
 drop policy if exists participants_select on egocapture.participants;
 create policy participants_select on egocapture.participants for select to authenticated
-using (auth_user_id = auth.uid() or egocapture.has_study_access(study_id));
+using (auth_user_id = auth.uid() or egocapture.is_admin());
 
 drop policy if exists invitations_admin_select on egocapture.participant_invitations;
 create policy invitations_admin_select on egocapture.participant_invitations for select to authenticated
-using (
-  exists (
-    select 1 from egocapture.participants participant
-    where participant.id = participant_id
-      and egocapture.has_study_access(participant.study_id)
-  )
-);
+using (egocapture.is_admin());
 
 drop policy if exists consent_select on egocapture.consent_records;
 create policy consent_select on egocapture.consent_records for select to authenticated
-using (
-  egocapture.is_own_participant(participant_id)
-  or exists (
-    select 1 from egocapture.participants participant
-    where participant.id = participant_id
-      and egocapture.has_study_access(participant.study_id)
-  )
-);
+using (egocapture.is_own_participant(participant_id) or egocapture.is_admin());
 
 drop policy if exists devices_select on egocapture.devices;
 create policy devices_select on egocapture.devices for select to authenticated
 using (
-  egocapture.has_study_access(study_id)
+  egocapture.is_admin()
   or exists (
     select 1 from egocapture.device_assignments assignment
     join egocapture.participants participant on participant.id = assignment.participant_id
@@ -141,18 +98,12 @@ using (
 
 drop policy if exists device_assignments_select on egocapture.device_assignments;
 create policy device_assignments_select on egocapture.device_assignments for select to authenticated
-using (
-  egocapture.is_own_participant(participant_id)
-  or exists (
-    select 1 from egocapture.devices device
-    where device.id = device_id and egocapture.has_study_access(device.study_id)
-  )
-);
+using (egocapture.is_admin() or egocapture.is_own_participant(participant_id));
 
 drop policy if exists tasks_select on egocapture.tasks;
 create policy tasks_select on egocapture.tasks for select to authenticated
 using (
-  egocapture.has_study_access(study_id)
+  egocapture.is_admin()
   or exists (
     select 1
     from egocapture.task_versions version
@@ -165,138 +116,117 @@ using (
 drop policy if exists task_versions_select on egocapture.task_versions;
 create policy task_versions_select on egocapture.task_versions for select to authenticated
 using (
-  egocapture.has_study_access(study_id)
+  egocapture.is_admin()
   or exists (
     select 1
     from egocapture.assignments assignment
     join egocapture.participants participant on participant.id = assignment.participant_id
-    where assignment.task_version_id = task_versions.id and participant.auth_user_id = auth.uid()
+    where assignment.task_version_id = task_versions.id
+      and participant.auth_user_id = auth.uid()
   )
 );
 
 drop policy if exists assignments_select on egocapture.assignments;
 create policy assignments_select on egocapture.assignments for select to authenticated
-using (egocapture.has_study_access(study_id) or egocapture.is_own_participant(participant_id));
+using (egocapture.is_admin() or egocapture.is_own_participant(participant_id));
 
 drop policy if exists sessions_select on egocapture.recording_sessions;
 create policy sessions_select on egocapture.recording_sessions for select to authenticated
-using (egocapture.has_study_access(study_id) or egocapture.is_own_participant(participant_id));
+using (egocapture.is_admin() or egocapture.is_own_participant(participant_id));
 
 drop policy if exists markers_select on egocapture.session_markers;
 create policy markers_select on egocapture.session_markers for select to authenticated
 using (
-  exists (
+  egocapture.is_admin()
+  or exists (
     select 1 from egocapture.recording_sessions session
     where session.id = session_id
-      and (
-        egocapture.has_study_access(session.study_id)
-        or egocapture.is_own_participant(session.participant_id)
-      )
+      and egocapture.is_own_participant(session.participant_id)
   )
 );
 
 drop policy if exists upload_batches_select on egocapture.upload_batches;
 create policy upload_batches_select on egocapture.upload_batches for select to authenticated
-using (egocapture.has_study_access(study_id) or egocapture.is_own_participant(participant_id));
+using (egocapture.is_admin() or egocapture.is_own_participant(participant_id));
 
 drop policy if exists upload_intents_select on egocapture.upload_intents;
 create policy upload_intents_select on egocapture.upload_intents for select to authenticated
-using (egocapture.has_study_access(study_id) or egocapture.is_own_participant(participant_id));
+using (egocapture.is_admin() or egocapture.is_own_participant(participant_id));
 
 drop policy if exists upload_attempts_select on egocapture.upload_attempts;
 create policy upload_attempts_select on egocapture.upload_attempts for select to authenticated
 using (
-  exists (
+  egocapture.is_admin()
+  or exists (
     select 1 from egocapture.upload_intents intent
     where intent.id = upload_intent_id
-      and (
-        egocapture.has_study_access(intent.study_id)
-        or egocapture.is_own_participant(intent.participant_id)
-      )
+      and egocapture.is_own_participant(intent.participant_id)
   )
 );
 
 drop policy if exists stored_objects_select on egocapture.stored_objects;
 create policy stored_objects_select on egocapture.stored_objects for select to authenticated
 using (
-  exists (
+  egocapture.is_admin()
+  or exists (
     select 1 from egocapture.upload_intents intent
     where intent.id = upload_intent_id
-      and (
-        egocapture.has_study_access(intent.study_id)
-        or egocapture.is_own_participant(intent.participant_id)
-      )
+      and egocapture.is_own_participant(intent.participant_id)
   )
 );
 
 drop policy if exists video_assets_select on egocapture.video_assets;
 create policy video_assets_select on egocapture.video_assets for select to authenticated
-using (egocapture.has_study_access(study_id) or egocapture.is_own_participant(participant_id));
+using (egocapture.is_admin() or egocapture.is_own_participant(participant_id));
 
 drop policy if exists asset_files_select on egocapture.asset_files;
 create policy asset_files_select on egocapture.asset_files for select to authenticated
 using (
-  exists (
+  egocapture.is_admin()
+  or exists (
     select 1 from egocapture.video_assets asset
     where asset.id = video_asset_id
-      and (
-        egocapture.has_study_access(asset.study_id)
-        or egocapture.is_own_participant(asset.participant_id)
-      )
+      and egocapture.is_own_participant(asset.participant_id)
   )
 );
 
 drop policy if exists file_metadata_select on egocapture.video_file_metadata;
 create policy file_metadata_select on egocapture.video_file_metadata for select to authenticated
 using (
-  exists (
+  egocapture.is_admin()
+  or exists (
     select 1 from egocapture.video_assets asset
     where asset.id = video_asset_id
-      and (
-        egocapture.has_study_access(asset.study_id)
-        or egocapture.is_own_participant(asset.participant_id)
-      )
+      and egocapture.is_own_participant(asset.participant_id)
   )
 );
 
 drop policy if exists metadata_evidence_admin_select on egocapture.metadata_evidence;
 create policy metadata_evidence_admin_select on egocapture.metadata_evidence for select to authenticated
-using (
-  exists (
-    select 1 from egocapture.video_assets asset
-    where asset.id = video_asset_id and egocapture.has_study_access(asset.study_id)
-  )
-);
+using (egocapture.is_admin());
 
 drop policy if exists metadata_attempts_admin_select on egocapture.metadata_attempts;
 create policy metadata_attempts_admin_select on egocapture.metadata_attempts for select to authenticated
-using (
-  exists (
-    select 1 from egocapture.video_assets asset
-    where asset.id = video_asset_id and egocapture.has_study_access(asset.study_id)
-  )
-);
+using (egocapture.is_admin());
 
 drop policy if exists match_decisions_select on egocapture.match_decisions;
 create policy match_decisions_select on egocapture.match_decisions for select to authenticated
 using (
-  exists (
+  egocapture.is_admin()
+  or exists (
     select 1 from egocapture.video_assets asset
     where asset.id = video_asset_id
-      and (
-        egocapture.has_study_access(asset.study_id)
-        or egocapture.is_own_participant(asset.participant_id)
-      )
+      and egocapture.is_own_participant(asset.participant_id)
   )
 );
 
 drop policy if exists review_cases_admin_select on egocapture.review_cases;
 create policy review_cases_admin_select on egocapture.review_cases for select to authenticated
-using (egocapture.has_study_access(study_id));
+using (egocapture.is_admin());
 
 drop policy if exists audit_events_admin_select on egocapture.audit_events;
 create policy audit_events_admin_select on egocapture.audit_events for select to authenticated
-using (study_id is not null and egocapture.has_study_access(study_id));
+using (egocapture.is_admin());
 
 create or replace view egocapture.current_match_decisions
 with (security_invoker = true)
@@ -311,7 +241,6 @@ as
 select
   assignment.id,
   assignment.public_id,
-  assignment.study_id,
   assignment.participant_id,
   assignment.task_version_id,
   assignment.status,

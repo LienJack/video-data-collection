@@ -1,0 +1,5 @@
+{"file":".trellis/spec/core/frontend/index.md","reason":"Core data and existing test contracts."}
+{"file":".trellis/spec/guides/cross-layer-thinking-guide.md","reason":"Reset and seed span database, Auth, Storage, APIs and UI."}
+{"file":".trellis/spec/guides/code-reuse-thinking-guide.md","reason":"Fixture identities and builders need one deterministic source."}
+{"file":".trellis/tasks/09-02-deterministic-demo-data/research/demo-data-inventory.md","reason":"Current seed/reset limitations and fixture coupling."}
+{"file":".trellis/spec/core/frontend/demo-data-refresh-contract.md","reason":"Exact target, purge, catalog, verification, and E2E contract."}

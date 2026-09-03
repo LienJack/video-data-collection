@@ -1,0 +1,5 @@
+{"file":".trellis/spec/admin-web/frontend/quality-guidelines.md","reason":"Review Admin pages and localized iframe security contract."}
+{"file":".trellis/spec/participant-web/frontend/quality-guidelines.md","reason":"Review Participant language and upload UI behavior."}
+{"file":".trellis/spec/ui/frontend/quality-guidelines.md","reason":"Review shared client provider/component behavior."}
+{"file":".trellis/spec/core/frontend/i18n-contract.md","reason":"Verify locale precedence, catalog parity, stable state keys and three-language acceptance."}
+{"file":".trellis/tasks/09-02-zh-en-ja-i18n/research/i18n-inventory.md","reason":"Check coverage against the observed multilingual surface."}
