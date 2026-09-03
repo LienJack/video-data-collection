@@ -37,4 +37,15 @@ The main checkout contains pre-existing uncommitted participant UI, CSS, unit/E2
 
 ## Known release blocker
 
-`git diff --check origin/main...HEAD` currently reports trailing/newline whitespace in four committed paths. These are mechanical release-hygiene fixes and must be corrected before the clean validation gate.
+`git diff --check origin/main...HEAD` initially reported trailing/newline whitespace in four committed paths. Commit `86388c6` corrected only those paths and added the reviewed release task artifacts. A detached worktree at exact commit `86388c6b26509127f7feae726b7a937df8140f10` then passed:
+
+- `pnpm install --frozen-lockfile`
+- `git diff --check origin/main...HEAD`
+- `pnpm check`: lint, strict TypeScript, 36 Vitest files / 152 tests, Participant build, Admin build
+- `pnpm repo:safety`: no large tracked media or obvious committed secrets
+
+The original working checkout's pre-existing uncommitted paths remained outside the release worktree and commit.
+
+## Independent final check
+
+The required Trellis full-scope check reviewed the committed diff across `admin-web`, `participant-web`, `core`, and `ui` on the same detached snapshot. It found no verified release-blocking defect and made no changes. In addition to rerunning the local gates, it spot-checked `sfo1` configuration, production database pool size, serialized server queries, shared auth-cookie options, cloud NAS-mode rejection, signed TUS headers, and guarded exact-ref refresh. Verdict: **GO** to push and create the PR; GitHub CI and post-merge public acceptance remain mandatory later gates.

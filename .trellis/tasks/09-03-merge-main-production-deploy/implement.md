@@ -2,18 +2,18 @@
 
 ## 1. Freeze and prepare the release snapshot
 
-- [ ] Record the current PR head candidate and re-check `origin/main...HEAD` divergence.
-- [ ] Fix only the whitespace errors reported by `git diff --check origin/main...HEAD`.
-- [ ] Commit this task's planning/context files and scoped release fixes without staging pre-existing dirty paths.
-- [ ] Create a temporary detached worktree at the resulting candidate SHA.
+- [x] Record the current PR head candidate and re-check `origin/main...HEAD` divergence.
+- [x] Fix only the whitespace errors reported by `git diff --check origin/main...HEAD`.
+- [x] Commit this task's planning/context files and scoped release fixes without staging pre-existing dirty paths.
+- [x] Create a temporary detached worktree at the resulting candidate SHA.
 
 ## 2. Validate before remote mutation
 
-- [ ] In the clean worktree run `pnpm install --frozen-lockfile`.
-- [ ] Run `git diff --check origin/main...HEAD`.
-- [ ] Run `pnpm check` (lint, strict typecheck, unit tests, both production builds).
-- [ ] Run `pnpm repo:safety`.
-- [ ] Inspect the final staged/committed path set and confirm no ignored env/media or pre-existing dirty paths are included.
+- [x] In the clean worktree run `pnpm install --frozen-lockfile`.
+- [x] Run `git diff --check origin/main...HEAD`.
+- [x] Run `pnpm check` (lint, strict typecheck, unit tests, both production builds).
+- [x] Run `pnpm repo:safety`.
+- [x] Inspect the final staged/committed path set and confirm no ignored env/media or pre-existing dirty paths are included.
 
 ## 3. Push, create PR, and pass CI
 
