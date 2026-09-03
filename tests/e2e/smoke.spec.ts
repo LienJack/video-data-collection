@@ -4,6 +4,8 @@ import { DEMO_CATALOG } from "@/scripts/fixtures/demo-catalog";
 
 const participantOrigin = process.env.PARTICIPANT_SITE_URL || "http://localhost:3000";
 const adminOrigin = process.env.ADMIN_SITE_URL || "http://localhost:3001";
+const historicalScenario = DEMO_CATALOG.scenarios.find((scenario) => scenario.key === "healthy-cn")!;
+const historicalTask = DEMO_CATALOG.tasks.find((task) => task.key === historicalScenario.taskKey)!;
 
 test("landing page exposes the product boundary", async ({ page }) => {
   await page.goto("/");
@@ -26,6 +28,19 @@ test("participant and admin deployments stay isolated on mobile", async ({ page 
 
   expect((await page.request.get(`${participantOrigin}/api/admin/audit-events`)).status()).toBe(404);
   expect((await page.request.get(`${adminOrigin}/api/participant/assignments`)).status()).toBe(404);
+});
+
+test("a completed demo assignment stays readable without a live session marker", async ({ page }) => {
+  const env = integrationEnvironment();
+  await page.goto("/login");
+  await page.getByLabel("参与者 ID").fill(DEMO_CATALOG.people.find((person) => person.key === "cn-lin-xiaoyu")!.publicId);
+  await page.getByLabel("密码").fill(env.demoParticipantPassword);
+  await page.getByRole("button", { name: "进入我的任务" }).click();
+  await expect(page).toHaveURL(/\/tasks$/);
+  await page.goto(`/tasks/${historicalScenario.assignmentPublicId}`);
+  await expect(page.getByRole("heading", { name: historicalTask.instructions.title })).toBeVisible();
+  await expect(page.getByText("MARKER_NOT_FOUND", { exact: false })).toHaveCount(0);
+  await expect(page.getByRole("heading", { name: "展示二维码" })).toHaveCount(0);
 });
 
 test("WebKit can send a file directly to the Storage TUS data plane", async ({ page, browserName }) => {
