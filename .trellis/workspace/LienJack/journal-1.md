@@ -305,3 +305,25 @@ Closed AC1-AC6 after final repository, NAS and public integration gates; validat
 ### Status
 
 [OK] **Completed**
+
+
+## Session 14: 重写 EgoCapture 架构与大文件上传 README
+
+**Date**: 2026-09-03
+**Task**: 重写 EgoCapture 架构与大文件上传 README
+**Package**: admin-web
+**Branch**: `codex/egocapture-mvp`
+
+### Summary
+
+删除交付状态与部署流水，将 README 重写为面向工程师和项目 Leader 的系统设计文档；补充 8 张 Mermaid 图、完整采集业务流程、身份匹配证据链、TUS 断点续传细节与生产级 Multipart 演进，并通过 Mermaid 渲染、仓库安全和完整 pnpm check。
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `72ba72c` | (see git log) |
+
+### Status
+
+[OK] **Completed**
