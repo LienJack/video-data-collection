@@ -14,13 +14,14 @@ import { ArrowDownIcon, ArrowUpIcon, InfoIcon, PlusIcon, TrashIcon } from "@phos
 import { useRouter } from "next/navigation";
 import { useEffect, useState, type ReactNode } from "react";
 import { Controller, useFieldArray, useForm } from "react-hook-form";
-import { FieldError, TagSelectField, TextListField } from "@/app/(console)/tasks/task-form-fields";
+import { FieldError, TagSelectField, TextListField } from "./task-form-fields";
 import { useI18n } from "@egocapture/ui/lib/i18n";
 import type { Translator } from "@egocapture/core/i18n";
 
 const resolutionPresets = ["360p", "1080p", "2K", "4K"];
 const fpsPresets = [24, 25, 30, 60];
 type ModuleId = "environment" | "steps" | "objects" | "mustShow" | "mustAvoid" | "constraints" | "completion" | "upload" | "privacy";
+type CreateAction = "draft" | "publish";
 
 function errorMessage(error: unknown, i18n: Translator, key: "adminUi.validationInvalid" | "adminUi.validationTolerance" | "adminUi.validationStepOrder" | "adminUi.validationCodeUnique" | "adminUi.validationOverlap" = "adminUi.validationInvalid"): string | undefined {
   if (!error) return undefined;
@@ -88,6 +89,7 @@ export function TaskEditor({ mode, taskPublicId, initialInstructions, initialUpd
   ];
   const [updatedAt, setUpdatedAt] = useState(initialUpdatedAt || "");
   const [publishing, setPublishing] = useState(false);
+  const [createAction, setCreateAction] = useState<CreateAction | null>(null);
   const [status, setStatus] = useState("");
   const [enabledModules, setEnabledModules] = useState(() => initialModules(initialInstructions));
   const {
@@ -146,7 +148,10 @@ export function TaskEditor({ mode, taskPublicId, initialInstructions, initialUpd
     stepArray.replace(next.map((step, index) => ({ ...step, order: index + 1 })));
   }
 
-  async function save(instructions: TaskInstructions) {
+  async function save(instructions: TaskInstructions, action: CreateAction = "draft") {
+    const publishAfterCreate = mode === "create" && action === "publish";
+    let createdTaskPublicId: string | undefined;
+    if (mode === "create") setCreateAction(action);
     clearErrors("root.server");
     setStatus("");
     try {
@@ -167,7 +172,21 @@ export function TaskEditor({ mode, taskPublicId, initialInstructions, initialUpd
         return;
       }
       if (mode === "create" && payload.data.taskPublicId) {
-        router.push(`/tasks/${payload.data.taskPublicId}`);
+        createdTaskPublicId = payload.data.taskPublicId;
+        if (publishAfterCreate) {
+          const publishResponse = await fetch(`/api/admin/tasks/${createdTaskPublicId}/publish`, {
+            method: "POST",
+            headers: { "idempotency-key": crypto.randomUUID() },
+          });
+          const publishPayload = await publishResponse.json() as {
+            data?: { version: number; contentHash: string; updatedAt: string };
+          };
+          if (!publishResponse.ok || !publishPayload.data) {
+            router.push(`/tasks/${createdTaskPublicId}?tab=instructions&publish=failed`);
+            return;
+          }
+        }
+        router.push(`/tasks/${createdTaskPublicId}`);
         return;
       }
       if (payload.data.updatedAt) setUpdatedAt(payload.data.updatedAt);
@@ -175,7 +194,13 @@ export function TaskEditor({ mode, taskPublicId, initialInstructions, initialUpd
       setStatus(i18n.t("adminUi.taskDraftSaved"));
       router.refresh();
     } catch {
-      setError("root.server", { type: "server", message: i18n.t("adminUi.serverConnectionFailed") });
+      if (publishAfterCreate && createdTaskPublicId) {
+        router.push(`/tasks/${createdTaskPublicId}?tab=instructions&publish=failed`);
+      } else {
+        setError("root.server", { type: "server", message: i18n.t("adminUi.serverConnectionFailed") });
+      }
+    } finally {
+      if (mode === "create") setCreateAction(null);
     }
   }
 
@@ -208,7 +233,7 @@ export function TaskEditor({ mode, taskPublicId, initialInstructions, initialUpd
   }
 
   return (
-    <form onSubmit={handleSubmit(save)} className="mt-8 space-y-8" noValidate>
+    <form onSubmit={handleSubmit((instructions) => save(instructions, "draft"))} className="mt-8 space-y-8" noValidate>
       <section aria-labelledby="task-basic-heading" className="rounded-xl border bg-card/70 p-5 shadow-xs sm:p-7">
         <h2 id="task-basic-heading" className="text-2xl font-semibold">{i18n.t("adminUi.basicInformation")}</h2>
         <p className="mt-2 text-sm leading-6 text-muted-foreground">{i18n.t("adminUi.basicInformationHelp")}</p>
@@ -425,7 +450,8 @@ export function TaskEditor({ mode, taskPublicId, initialInstructions, initialUpd
       {errors.root?.server ? <Alert role="alert" className="border-l-4 border-destructive px-4 py-3 text-sm"><AlertDescription>{errors.root.server.message}</AlertDescription></Alert> : null}
       <p role="status" aria-live="polite" className="min-h-6 text-sm font-medium text-primary">{status}</p>
       <div className="flex flex-wrap gap-3 border-t pt-6">
-        <Button type="submit" disabled={busy} size="lg">{isSubmitting ? (mode === "create" ? i18n.t("adminUi.creatingDraft") : i18n.t("adminUi.savingDraft")) : mode === "create" ? i18n.t("adminUi.createDraft") : i18n.t("adminUi.saveDraft")}</Button>
+        <Button type="submit" disabled={busy} size="lg">{isSubmitting && (mode === "edit" || createAction === "draft") ? (mode === "create" ? i18n.t("adminUi.creatingDraft") : i18n.t("adminUi.savingDraft")) : mode === "create" ? i18n.t("adminUi.createDraft") : i18n.t("adminUi.saveDraft")}</Button>
+        {mode === "create" ? <Button type="button" onClick={handleSubmit((instructions) => save(instructions, "publish"))} disabled={busy} variant="secondary" size="lg">{isSubmitting && createAction === "publish" ? i18n.t("adminUi.publishingPlan") : i18n.t("adminUi.publishPlan")}</Button> : null}
         {mode === "edit" ? <Button type="button" onClick={publish} disabled={busy || isDirty} variant="secondary" size="lg">{publishing ? i18n.t("adminUi.publishingVersion") : isDirty ? i18n.t("adminUi.saveDraftFirst") : i18n.t("adminUi.publishNewVersion")}</Button> : null}
       </div>
     </form>

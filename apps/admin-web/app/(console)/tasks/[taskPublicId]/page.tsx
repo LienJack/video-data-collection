@@ -1,3 +1,4 @@
+import { Alert, AlertDescription } from "@egocapture/ui/components/alert";
 import { Badge } from "@egocapture/ui/components/badge";
 import { Card } from "@egocapture/ui/components/card";
 import { CaretLeft, CheckCircle, UsersThree, VideoCamera, WarningCircle } from "@phosphor-icons/react/dist/ssr";
@@ -45,6 +46,8 @@ export default async function TaskDetailPage({ params, searchParams }: { params:
         <h1 className="page-title max-w-5xl">{task.title}</h1>
         <p className="mt-4 max-w-3xl text-sm leading-6 text-[var(--muted)]">{i18n.t("adminUi.taskHistorySafe")}</p>
       </header>
+
+      {search.publish === "failed" ? <Alert role="alert" className="mt-6 border-l-4 border-destructive px-4 py-3 text-sm"><AlertDescription>{i18n.t("adminUi.taskCreatedPublishFailed")}</AlertDescription></Alert> : null}
 
       <section className="mt-8 grid grid-cols-2 gap-3 lg:grid-cols-4" aria-label={i18n.t("adminUi.taskSummary")}>
         <Link href={`?tab=participants`} className="rounded-2xl bg-white/82 p-4 shadow-[var(--shadow-soft)] backdrop-blur-xl transition-transform active:scale-[0.98] sm:p-5"><div className="flex items-center justify-between gap-3"><p className="text-xs font-semibold text-[var(--muted)]">{i18n.t("adminUi.participants")}</p><UsersThree className="size-5 text-[var(--signal)]" weight="duotone" /></div><p className="mt-3 text-3xl font-semibold tracking-[-0.04em] tabular-nums">{summary.participantCount}</p></Link>
