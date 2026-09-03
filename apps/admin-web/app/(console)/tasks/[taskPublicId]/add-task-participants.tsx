@@ -184,9 +184,17 @@ export function AddTaskParticipants({
     if (!response.ok || !payload.data) {
       setError(payload.error?.code ? i18n.error(payload.error.code) : i18n.t("adminUi.addParticipantFailed"));
     } else {
-      setResult(payload.data);
-      setSelected(payload.data.skipped.map((item) => item.participantPublicId));
-      setStep("participants");
+      if (payload.data.skipped.length === 0) {
+        setSelected([]);
+        setDevices({});
+        setNote("");
+        setStep("participants");
+        close();
+      } else {
+        setResult(payload.data);
+        setSelected(payload.data.skipped.map((item) => item.participantPublicId));
+        setStep("participants");
+      }
       router.refresh();
     }
     setBusy(false);

@@ -17,7 +17,7 @@ export default async function SessionMarkerPage({ params }: { params: Promise<{ 
   const marker = await getMarker(viewer, sessionPublicId);
   return (
     <main className="content-page max-w-3xl">
-      <div className="flex justify-between gap-4"><Link href="/tasks" className={buttonVariants({ variant: "outline", className: "" })}>← {i18n.t("participantUi.myTasks")}</Link><Link href="/uploads" className={buttonVariants({ className: "" })}>{i18n.t("participantUi.uploadFiles")} → <UploadSimple className="size-4" /></Link></div>
+      <div className="flex justify-between gap-4"><Link href="/tasks" className={buttonVariants({ variant: "outline", className: "" })}>← {i18n.t("participantUi.myTasks")}</Link><Link href={{ pathname: "/uploads", query: { session: marker.sessionPublicId } }} className={buttonVariants({ className: "" })}>{i18n.t("participantUi.uploadFiles")} → <UploadSimple className="size-4" /></Link></div>
       <header className="mt-10 text-left">
         <div className="flex items-center gap-2"><LockKey className="size-5 text-[var(--signal)]" weight="duotone" /><p className="page-kicker">{i18n.t("participantUi.signedMarker")} · {marker.keyId}</p></div>
         <h1 className="page-title">{marker.sessionPublicId}</h1>

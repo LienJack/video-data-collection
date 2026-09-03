@@ -185,10 +185,8 @@ test("草稿任务可以维护发布前参与者名单", async ({ page }) => {
     const submitRoster = page.getByRole("button", { name: "加入发布名单" });
     await expect(submitRoster).toBeEnabled();
     await submitRoster.click();
-    await expect(page.getByText("已加入发布名单")).toBeVisible();
-    expect(participantPostCount).toBe(1);
-    await page.keyboard.press("Escape");
     await expect(dialog).not.toBeVisible();
+    expect(participantPostCount).toBe(1);
 
     await expect(page.getByText(`${participantPublicId} · 草稿名单`, { exact: true })).toBeVisible();
     await expect(page.getByText("待发布", { exact: true })).toBeVisible();
@@ -201,8 +199,6 @@ test("草稿任务可以维护发布前参与者名单", async ({ page }) => {
     await page.getByRole("button", { name: "下一步：设备与设置" }).click();
     await expect(submitRoster).toBeEnabled();
     await submitRoster.click();
-    await expect(page.getByText("已加入发布名单")).toBeVisible();
-    await page.keyboard.press("Escape");
     await expect(dialog).not.toBeVisible();
 
     const publishResponse = await page.request.post(

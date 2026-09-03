@@ -171,6 +171,10 @@ test("Admin 建档到 Participant 上传与不可变纠正的完整闭环", asyn
 
     await page.goto(`${participantOrigin}/sessions/${sessionPublicId}`);
     await page.getByRole("link", { name: "上传文件 →" }).click();
+    await expect(page).toHaveURL(`/uploads?session=${sessionPublicId}`);
+    await expect(page.getByLabel("已绑定录制会话")).toContainText(sessionPublicId);
+
+    await page.goto(`${participantOrigin}/uploads`);
     await page.locator('input[type="file"]').setInputFiles({ name: `e2e-${suffix}.mp4`, mimeType: "video/mp4", buffer: tinyMp4 });
     const uploadCard = page.getByRole("article").filter({ hasText: `e2e-${suffix}.mp4` });
     await uploadCard.getByLabel("录制会话").selectOption("unable");
